@@ -25,5 +25,6 @@ jobs:
         run: |
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
+          git add output/genstart/feed.xml
           git commit -m "Update feed.xml" || echo "No changes to commit"
           git push
