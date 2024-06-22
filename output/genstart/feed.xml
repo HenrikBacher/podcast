@@ -9444,19 +9444,6 @@ Vært: Knud Brix.</description>
             <enclosure length="38146059" type="audio/mpeg" url="https://api.dr.dk/radio/v1/assetlinks/urn:dr:radio:episode:6089ed17e05759e0dc493071/88661c3ea368ccb8a71bf30f98dc9798d98321bbfbcc5c0c5e542050a1c30a29"/>
         </item>
         <item>
-            <guid isPermalink="false">11802150123</guid>
-            <link>https://www.dr.dk/lyd/special-radio/genstart/genstart-2021/genstart-manden-med-de-mange-liv-11802150123</link>
-            <title>Manden med de mange liv</title>
-            <description>Lederen af den nigerianske terrorgruppe Boko Haram er igen og igen blevet meldt dræbt for så at genopstå og recirkulere i videoer, hvor han udspyr flammetaler mod vesten og sine fjender i Nigeria. Nu er han igen meldt død, men denne gang tyder meget på, at Boko Haram-lederens niende liv faktisk er udrundet. Hvem var den mytiske lederfigur Abubakar Shekaus, og hvilken betydning får hans angivelige endeligt? Historiker Niels Kastfelt, der har rejst i Nigeria siden 1978, fortæller om manden med de mange liv.
-Vært: Knud Brix.</description>
-            <pubDate>Tue, 22 Jun 2021 04:00:00 +0200</pubDate>
-            <explicit>no</explicit>
-            <itunes:author>DR</itunes:author>
-            <itunes:duration>00:25:21</itunes:duration>
-            <media:restriction relationship="allow" type="country">dk</media:restriction>
-            <enclosure length="36525196" type="audio/mpeg" url="https://api.dr.dk/radio/v1/assetlinks/urn:dr:radio:episode:6089ed1be05759e0dc493091/7abd322a000649effd2e69c67fda491bce56cb0b0655ab2f7258817021dea198"/>
-        </item>
-        <item>
             <guid isPermalink="false">11802050164</guid>
             <link>https://www.dr.dk/lyd/special-radio/genstart/genstart-2020/genstart-de-stjaalne-boern-11802050164</link>
             <title>De stjålne børn</title>
