@@ -29,11 +29,7 @@ jobs:
           distribution: 'adopt'
       
       - name: Execute ommer.jar
-        run: java -jar ommer.jar $SLUG $URN $FEEDURL ${{ secrets.API_KEY }}
-        env:
-          SLUG: ${{ matrix.podcast[0] }}
-          URN: ${{ matrix.podcast[1] }}
-          FEEDURL: ${{ matrix.podcast[2] }}
+        run: java -jar ommer.jar ${{ matrix.podcast[0] }} ${{ matrix.podcast[1] }} ${{ matrix.podcast[2] }} ${{ secrets.API_KEY }}
       
       - name: Login to Azure
         uses: azure/login@v2
@@ -43,7 +39,7 @@ jobs:
       - name: Calculate MD5 of local feed.xml and base64 encode
         id: local_md5
         run: |
-          MD5_HASH=$(md5sum output/$SLUG | awk '{print $1}' | xxd -r -p | base64)
+          MD5_HASH=$(md5sum output/${{ matrix.podcast[0] }}| awk '{print $1}' | xxd -r -p | base64)
           echo "LOCAL_MD5=$MD5_HASH" >> $GITHUB_ENV
           echo "LOCAL_MD5=$MD5_HASH"
       
@@ -54,12 +50,10 @@ jobs:
       #      --account-name ${{ secrets.STORAGE_ACCOUNT }} \
       #      --container-name ${{ secrets.CONTAINER_NAME }} \
       #      --auth-mode login \
-      #      --name $SLUG \
+      #      --name ${{ matrix.podcast[0] }} \
       #      --query properties.contentSettings.contentMd5 -o tsv)
       #    echo "BLOB_MD5=$BLOB_PROPERTIES" >> $GITHUB_ENV
       #    echo "BLOB_MD5=$BLOB_PROPERTIES"
-      #  env:
-      #    AZURE_STORAGE_ACCOUNT: ${{ secrets.STORAGE_ACCOUNT }}
       
       - name: Upload feed.xml to Azure Blob Storage if different
       #  if: env.LOCAL_MD5 != env.BLOB_MD5
@@ -68,9 +62,6 @@ jobs:
             --account-name ${{ secrets.STORAGE_ACCOUNT }} \
             --container-name ${{ secrets.CONTAINER_NAME }} \
             --auth-mode login \
-            --name $SLUG \
-            --file output/$SLUG \
+            --name ${{ matrix.podcast[0] }} \
+            --file output/${{ matrix.podcast[0] }} \
             --overwrite
-        env:
-          AZURE_STORAGE_ACCOUNT: ${{ secrets.STORAGE_ACCOUNT }}
-          SLUG: ${{ matrix.podcast[0] }}
