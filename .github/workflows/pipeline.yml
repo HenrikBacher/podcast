@@ -32,6 +32,7 @@ jobs:
       
       - name: Build Kotlin app
         run: |
+          chmod +x ./gradlew
           ./gradlew build assemble
           cp ./ommer/build/libs/ommer.jar ./output/
       
