@@ -9,9 +9,6 @@ on:
       - main
 
 jobs:
-  build:
-
-
   update-feed:
     name: "Update ${{ matrix.podcast[0] }}"
     strategy:
