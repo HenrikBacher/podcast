@@ -34,7 +34,6 @@ jobs:
         run: |
           ./gradlew build assemble
           cp ./ommer/build/libs/ommer.jar ./output/
-        working-directory: ommer
       
       - name: Execute ommer.jar
         run: java -jar ./output/ommer.jar ${{ matrix.podcast[0] }} ${{ matrix.podcast[1] }} ${{ matrix.podcast[2] }} ${{ secrets.API_KEY }}
