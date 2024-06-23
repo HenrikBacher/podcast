@@ -7,6 +7,12 @@ on:
 
 jobs:
   update-feed:
+    strategy:
+      matrix:
+        runs-on: [ubuntu-24.04]
+        podcast: [
+          ["genstart", "urn:dr:radio:series:5fa25ef8330eac2f135b62d6", "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6593ba22846e9f8fc0338958.jpg"]
+        ]
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
@@ -19,7 +25,11 @@ jobs:
           distribution: 'adopt'
       
       - name: Execute ommer.jar
-        run: java -jar ommer.jar
+        run: java -jar ommer.jar $SLUG $URN $FEEDURL
+        env:
+          SLUG: ${{ matrix.compiler-version[0] }}
+          URN: ${{ matrix.compiler-version[1] }}
+          FEEDURL: ${{ matrix.compiler-version[2] }}
       
       - name: Login to Azure
         uses: azure/login@v2
@@ -29,7 +39,7 @@ jobs:
       - name: Calculate MD5 of local feed.xml and base64 encode
         id: local_md5
         run: |
-          MD5_HASH=$(md5sum output/genstart/feed.xml | awk '{print $1}' | xxd -r -p | base64)
+          MD5_HASH=$(md5sum output/genstart.xml | awk '{print $1}' | xxd -r -p | base64)
           echo "LOCAL_MD5=$MD5_HASH" >> $GITHUB_ENV
           echo "LOCAL_MD5=$MD5_HASH"
       
@@ -40,7 +50,7 @@ jobs:
             --account-name ${{ secrets.STORAGE_ACCOUNT }} \
             --container-name ${{ secrets.CONTAINER_NAME }} \
             --auth-mode login \
-            --name feed.xml \
+            --name genstart.xml \
             --query properties.contentSettings.contentMd5 -o tsv)
           echo "BLOB_MD5=$BLOB_PROPERTIES" >> $GITHUB_ENV
           echo "BLOB_MD5=$BLOB_PROPERTIES"
@@ -54,8 +64,8 @@ jobs:
             --account-name ${{ secrets.STORAGE_ACCOUNT }} \
             --container-name ${{ secrets.CONTAINER_NAME }} \
             --auth-mode login \
-            --name feed.xml \
-            --file output/genstart/feed.xml \
+            --name genstart.xml \
+            --file output/genstart.xml \
             --overwrite
         env:
           AZURE_STORAGE_ACCOUNT: ${{ secrets.STORAGE_ACCOUNT }}
