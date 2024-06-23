@@ -7,9 +7,6 @@ on:
 
 jobs:
   update-feed:
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -22,7 +19,7 @@ jobs:
           distribution: 'adopt'
 
       - name: Execute ommer.jar
-        run: java -jar ommer.jar -apiKey ${{ secrets.API_KEY }} -slug genstart -feedUrl https://genstartfeed.blob.core.windows.net/genstart/genstart.xml -imageUrl https://genstartfeed.blob.core.windows.net/genstart/
+        run: java -jar ommer.jar
 
       - name: Login to Azure
         uses: azure/login@v1
@@ -34,8 +31,8 @@ jobs:
           az storage blob upload \
             --account-name ${{ secrets.STORAGE_ACCOUNT }} \
             --container-name ${{ secrets.CONTAINER_NAME }} \
-            --name genstart.xml \
-            --file output/genstart.xml \
+            --name feed.xml \
+            --file output/genstart/feed.xml \
             --overwrite \
             --auth-mode login
         env:
