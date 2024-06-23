@@ -33,6 +33,7 @@ jobs:
             --container-name ${{ secrets.CONTAINER_NAME }} \
             --name feed.xml \
             --file output/genstart/feed.xml \
+            --overwrite \
             --auth-mode login
         env:
           AZURE_STORAGE_ACCOUNT: ${{ secrets.STORAGE_ACCOUNT }}
