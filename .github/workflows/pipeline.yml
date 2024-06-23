@@ -25,11 +25,7 @@ jobs:
           distribution: 'adopt'
       
       - name: Execute ommer.jar
-        run: java -jar ommer.jar $SLUG $URN $FEEDURL
-        env:
-          SLUG: ${{ matrix.compiler-version[0] }}
-          URN: ${{ matrix.compiler-version[1] }}
-          FEEDURL: ${{ matrix.compiler-version[2] }}
+        run: java -jar ommer.jar ${{ matrix.compiler-version[0] }} ${{ matrix.compiler-version[1] }} ${{ matrix.compiler-version[2] }}
       
       - name: Login to Azure
         uses: azure/login@v2
