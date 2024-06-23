@@ -39,36 +39,35 @@ jobs:
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
-      
-      - name: Calculate hash of local feed.xml
-        id: local_hash
+          
+      - name: Calculate MD5 of local feed.xml and base64 encode
+        id: local_md5
         run: |
-          echo "LOCAL_HASH=$(sha256sum output/genstart/feed.xml | cut -d ' ' -f 1)" >> $GITHUB_ENV
+          MD5_HASH=$(md5sum output/genstart/feed.xml | awk '{print $1}' | xxd -r -p | base64)
+          echo "LOCAL_MD5=$MD5_HASH" >> $GITHUB_ENV
+          echo "LOCAL_MD5=$MD5_HASH"
       
-      - name: Download current feed.xml from Azure Blob Storage
+      - name: Get contentMd5 of the blob in Azure Blob Storage
+        id: blob_md5
         run: |
-          az storage blob download \
+          BLOB_PROPERTIES=$(az storage blob show \
             --account-name ${{ secrets.STORAGE_ACCOUNT }} \
             --container-name ${{ secrets.CONTAINER_NAME }} \
             --name feed.xml \
-            --file temp_feed.xml \
-            --auth-mode login || echo "File not found, proceeding with upload."
+            --query properties.contentSettings.contentMd5 -o tsv)
+          echo "BLOB_MD5=$BLOB_PROPERTIES" >> $GITHUB_ENV
+          echo "BLOB_MD5=$BLOB_PROPERTIES"
         env:
           AZURE_STORAGE_ACCOUNT: ${{ secrets.STORAGE_ACCOUNT }}
       
-      - name: Calculate hash of downloaded feed.xml
-        id: remote_hash
-        run: |
-          if [ -f temp_feed.xml ]; then
-            echo "REMOTE_HASH=$(sha256sum temp_feed.xml | cut -d ' ' -f 1)" >> $GITHUB_ENV
-          else
-            echo "REMOTE_HASH=NO_FILE" >> $GITHUB_ENV
-          fi
-      
       - name: Upload feed.xml to Azure Blob Storage if different
-        if: env.LOCAL_HASH != env.REMOTE_HASH
+        if: env.LOCAL_MD5 != env.BLOB_MD5
         run: |
           az storage blob upload \
             --account-name ${{ secrets.STORAGE_ACCOUNT }} \
             --container-name ${{ secrets.CONTAINER_NAME }} \
             --name feed.xml \
+            --file output/genstart/feed.xml \
+            --overwrite
+        env:
+          AZURE_STORAGE_ACCOUNT: ${{ secrets.STORAGE_ACCOUNT }}
