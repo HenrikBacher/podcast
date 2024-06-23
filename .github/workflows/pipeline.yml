@@ -17,7 +17,7 @@ jobs:
         podcast: [
           ["genstart", "urn:dr:radio:series:5fa25ef8330eac2f135b62d6", "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6593ba22846e9f8fc0338958.jpg"],
           ["sara-og-monopolet", "urn:dr:radio:series:5fa15704da351264f87b46ce", "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6523bd03443243f95e2c39b0.jpg"],
-          ["hjernekassen", "urn8=urn:dr:radio:series:5fa2684c330eac2f135b9254", "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6523bd76443243f95e2c4866.jpg"]
+          ["hjernekassen", "urn:dr:radio:series:5fa2684c330eac2f135b9254", "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6523bd76443243f95e2c4866.jpg"]
         ]
     runs-on: ubuntu-24.04
     steps:
