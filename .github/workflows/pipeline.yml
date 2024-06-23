@@ -28,3 +28,19 @@ jobs:
           git add output/genstart/feed.xml
           git commit -m "Update feed.xml" || echo "No changes to commit"
           git push
+
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Upload feed.xml to Azure Blob Storage
+        run: |
+          az storage blob upload \
+            --account-name ${{ secrets.STORAGE_ACCOUNT }} \
+            --container-name ${{ secrets.CONTAINER_NAME }} \
+            --name feed.xml \
+            --file output/genstart/feed.xml \
+            --auth-mode login
+        env:
+          AZURE_STORAGE_ACCOUNT: ${{ secrets.STORAGE_ACCOUNT }}
