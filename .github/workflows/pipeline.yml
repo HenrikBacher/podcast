@@ -39,8 +39,8 @@ jobs:
           BLOB_PROPERTIES=$(az storage blob show \
             --account-name ${{ secrets.STORAGE_ACCOUNT }} \
             --container-name ${{ secrets.CONTAINER_NAME }} \
-            --name feed.xml \
             --auth-mode login \
+            --name feed.xml \
             --query properties.contentSettings.contentMd5 -o tsv)
           echo "BLOB_MD5=$BLOB_PROPERTIES" >> $GITHUB_ENV
           echo "BLOB_MD5=$BLOB_PROPERTIES"
@@ -53,8 +53,8 @@ jobs:
           az storage blob upload \
             --account-name ${{ secrets.STORAGE_ACCOUNT }} \
             --container-name ${{ secrets.CONTAINER_NAME }} \
-            --name feed.xml \
             --auth-mode login \
+            --name feed.xml \
             --file output/genstart/feed.xml \
             --overwrite
         env:
