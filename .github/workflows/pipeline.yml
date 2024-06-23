@@ -40,6 +40,7 @@ jobs:
             --account-name ${{ secrets.STORAGE_ACCOUNT }} \
             --container-name ${{ secrets.CONTAINER_NAME }} \
             --name feed.xml \
+            --auth-mode login \
             --query properties.contentSettings.contentMd5 -o tsv)
           echo "BLOB_MD5=$BLOB_PROPERTIES" >> $GITHUB_ENV
           echo "BLOB_MD5=$BLOB_PROPERTIES"
@@ -53,6 +54,7 @@ jobs:
             --account-name ${{ secrets.STORAGE_ACCOUNT }} \
             --container-name ${{ secrets.CONTAINER_NAME }} \
             --name feed.xml \
+            --auth-mode login \
             --file output/genstart/feed.xml \
             --overwrite
         env:
