@@ -25,7 +25,7 @@ jobs:
           distribution: 'adopt'
       
       - name: Execute ommer.jar
-        run: java -jar ommer.jar $SLUG $URN $FEEDURL
+        run: java -jar ommer.jar $SLUG $URN $FEEDURL ${{ secrets.API_KEY }}
         env:
           SLUG: ${{ matrix.podcast[0] }}
           URN: ${{ matrix.podcast[1] }}
