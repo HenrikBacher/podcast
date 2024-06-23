@@ -16,7 +16,8 @@ jobs:
         runs-on: [ubuntu-24.04]
         podcast: [
           ["genstart", "urn:dr:radio:series:5fa25ef8330eac2f135b62d6", "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6593ba22846e9f8fc0338958.jpg"],
-          ["sara-og-monopolet", "urn:dr:radio:series:5fa15704da351264f87b46ce", "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6523bd03443243f95e2c39b0.jpg"]
+          ["sara-og-monopolet", "urn:dr:radio:series:5fa15704da351264f87b46ce", "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6523bd03443243f95e2c39b0.jpg"],
+          ["hjernekassen", "urn8=urn:dr:radio:series:5fa2684c330eac2f135b9254", "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6523bd76443243f95e2c4866.jpg"]
         ]
     runs-on: ubuntu-24.04
     steps:
@@ -44,20 +45,21 @@ jobs:
           echo "LOCAL_MD5=$MD5_HASH" >> $GITHUB_ENV
           echo "LOCAL_MD5=$MD5_HASH"
       
-      #- name: Get contentMd5 of the blob in Azure Blob Storage
-      #  id: blob_md5
-      #  run: |
-      #    BLOB_PROPERTIES=$(az storage blob show \
-      #      --account-name ${{ secrets.STORAGE_ACCOUNT }} \
-      #      --container-name ${{ secrets.CONTAINER_NAME }} \
-      #      --auth-mode login \
-      #      --name ${{ matrix.podcast[0] }}.xml \
-      #      --query properties.contentSettings.contentMd5 -o tsv)
-      #    echo "BLOB_MD5=$BLOB_PROPERTIES" >> $GITHUB_ENV
-      #    echo "BLOB_MD5=$BLOB_PROPERTIES"
+      - name: Get contentMd5 of the blob in Azure Blob Storage
+        id: blob_md5
+        continue-on-error: true
+        run: |
+          BLOB_PROPERTIES=$(az storage blob show \
+            --account-name ${{ secrets.STORAGE_ACCOUNT }} \
+            --container-name ${{ secrets.CONTAINER_NAME }} \
+            --auth-mode login \
+            --name ${{ matrix.podcast[0] }}.xml \
+            --query properties.contentSettings.contentMd5 -o tsv)
+          echo "BLOB_MD5=$BLOB_PROPERTIES" >> $GITHUB_ENV
+          echo "BLOB_MD5=$BLOB_PROPERTIES"
       
       - name: Upload feed.xml to Azure Blob Storage if different
-      #  if: env.LOCAL_MD5 != env.BLOB_MD5
+        if: env.LOCAL_MD5 != env.BLOB_MD5
         run: |
           az storage blob upload \
             --account-name ${{ secrets.STORAGE_ACCOUNT }} \
