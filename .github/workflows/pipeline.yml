@@ -26,7 +26,33 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Upload feed.xml to Azure Blob Storage
+      - name: Calculate hash of local feed.xml
+        id: local_hash
+        run: |
+          echo "LOCAL_HASH=$(CertUtil -hashfile output/genstart/feed.xml SHA256 | findstr /v "hash of file CertUtil")" >> $GITHUB_ENV
+
+      - name: Download current feed.xml from Azure Blob Storage
+        run: |
+          az storage blob download \
+            --account-name ${{ secrets.STORAGE_ACCOUNT }} \
+            --container-name ${{ secrets.CONTAINER_NAME }} \
+            --name feed.xml \
+            --file temp_feed.xml \
+            --auth-mode login || echo "File not found, proceeding with upload."
+        env:
+          AZURE_STORAGE_ACCOUNT: ${{ secrets.STORAGE_ACCOUNT }}
+
+      - name: Calculate hash of downloaded feed.xml
+        id: remote_hash
+        run: |
+          if [ -f temp_feed.xml ]; then
+            echo "REMOTE_HASH=$(CertUtil -hashfile temp_feed.xml SHA256 | findstr /v "hash of file CertUtil")" >> $GITHUB_ENV
+          else
+            echo "REMOTE_HASH=NO_FILE" >> $GITHUB_ENV
+          fi
+
+      - name: Upload feed.xml to Azure Blob Storage if different
+        if: env.LOCAL_HASH != env.REMOTE_HASH
         run: |
           az storage blob upload \
             --account-name ${{ secrets.STORAGE_ACCOUNT }} \
