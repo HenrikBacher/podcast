@@ -24,11 +24,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set JAVA_HOME to JAVA_HOME_21_X64 and update PATH
-        run: |
-          echo "JAVA_HOME=${{ env.JAVA_HOME_21_X64 }}" >> $GITHUB_ENV
-          echo "${{ env.JAVA_HOME_21_X64 }}/bin" >> $GITHUB_PATH
-        
       - name: Execute ommer.jar
         run: java -jar ./ommer.jar ${{ matrix.podcast[0] }} ${{ matrix.podcast[1] }} ${{ matrix.podcast[2] }} ${{ secrets.API_KEY }}
       
