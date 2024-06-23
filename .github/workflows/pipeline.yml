@@ -29,15 +29,9 @@ jobs:
         with:
           java-version: '17'
           distribution: 'adopt'
-      
-      - name: Build Kotlin app
-        run: |
-          chmod +x ./gradlew
-          ./gradlew build assemble
-          cp ./ommer/build/libs/ommer.jar ./output/
-      
+
       - name: Execute ommer.jar
-        run: java -jar ./output/ommer.jar ${{ matrix.podcast[0] }} ${{ matrix.podcast[1] }} ${{ matrix.podcast[2] }} ${{ secrets.API_KEY }}
+        run: java -jar ./ommer.jar ${{ matrix.podcast[0] }} ${{ matrix.podcast[1] }} ${{ matrix.podcast[2] }} ${{ secrets.API_KEY }}
       
       - name: Login to Azure
         uses: azure/login@v2
