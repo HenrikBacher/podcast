@@ -21,9 +21,7 @@ jobs:
         with:
           path: |
             ./ommer/build/libs/ommer.jar
-          key: ${{ runner.os }}-gradle-${{ hashFiles('ommer/**') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**') }}
       
       - name: Build Kotlin app
         if: steps.cache-ommer.outputs.cache-hit != 'true'
