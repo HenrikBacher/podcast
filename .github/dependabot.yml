@@ -13,6 +13,6 @@ updates:
 
   # Enable updates for GitHub Actions
   - package-ecosystem: "github-actions"
-    directory: "/" # GitHub Actions are configured in the .github/workflows directory
+    directory: ".github/workflows" # GitHub Actions are configured in the .github/workflows directory
     schedule:
       interval: "daily" # How often to check for updates

@@ -30,7 +30,7 @@ jobs:
           ./gradlew build assemble
 
       - name: Upload ommer.jar artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: ommer-jar
           path: ./ommer/build/libs/ommer.jar
