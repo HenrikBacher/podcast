@@ -1,0 +1,56 @@
+name: Build app
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-app:
+    name: "Build ommer"
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    - uses: actions/cache@v4
+      id: cache-ommer
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+          ./ommer/build/libs/ommer.jar
+        key: ${{ runner.os }}-${{ hashFiles('./build.gradle.kts', './settings.gradle.kts', './ommer/**') }}
+      
+    - name: Build Kotlin app
+      if: steps.cache-ommer.outputs.cache-hit != 'true'
+      run: |
+        chmod +x ./gradlew
+        ./gradlew build assemble
+  
+    - name: Set the date
+      id: set_date
+      run: echo "RELEASE_DATE=$(Get-Date -Format 'yyyyMMdd-HHmmss')" >> $GITHUB_ENV
+      shell: pwsh
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: release-${{ env.RELEASE_DATE }}
+        release_name: Release ${{ env.RELEASE_DATE }}
+        draft: false
+        prerelease: false
+        body: "New release of ommer.jar on ${{ env.RELEASE_DATE }}"
+    
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./ommer/build/libs/ommer.jar
+        asset_name: ommer.jar
+        asset_content_type: application/java-archive

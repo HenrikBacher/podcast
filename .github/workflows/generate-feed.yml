@@ -1,46 +1,14 @@
-name: Execute Ommer and Update Feed
+name: Update feeds
 
 on:
   schedule:
     - cron: '0 * * * *'
   workflow_dispatch:
-  push:
-    branches:
-      - main
 
 jobs:
-  build-app:
-    name: "Build ommer"
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - uses: actions/cache@v4
-        id: cache-ommer
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-            ./ommer/build/libs/ommer.jar
-          key: ${{ runner.os }}-${{ hashFiles('./build.gradle.kts', './settings.gradle.kts', './ommer/**') }}
-
-      
-      - name: Build Kotlin app
-        if: steps.cache-ommer.outputs.cache-hit != 'true'
-        run: |
-          chmod +x ./gradlew
-          ./gradlew build assemble
-
-      - name: Upload ommer.jar artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ommer-jar
-          path: ./ommer/build/libs/ommer.jar
-
   update-feed:
     name: "Update ${{ matrix.podcast[0] }} feed"
-    needs: build-app
+
     strategy:
       matrix:
         runs-on: [ubuntu-24.04]
@@ -51,11 +19,15 @@ jobs:
         ]
     runs-on: ubuntu-24.04
     steps:
-      - name: Download ommer.jar artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: ommer-jar
-          path: ./
+      - name: Get latest release
+        id: get_latest_release
+        run: |
+          LATEST_RELEASE_URL=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/latest" | jq -r '.assets[0].browser_download_url')
+          echo "Downloading latest release from $LATEST_RELEASE_URL"
+          curl -L $LATEST_RELEASE_URL -o ommer.jar
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Execute ommer.jar
         run: java -jar ./ommer.jar ${{ matrix.podcast[0] }} ${{ matrix.podcast[1] }} ${{ matrix.podcast[2] }} ${{ secrets.API_KEY }}
