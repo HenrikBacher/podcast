@@ -9,8 +9,34 @@ on:
       - main
 
 jobs:
+  build-app:
+    name: "Build Ommer"
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'adopt'
+      
+      - name: Build Kotlin app
+        run: |
+          chmod +x ./gradlew
+          ./gradlew build assemble
+          cp ./ommer/build/libs/ommer.jar ./output/
+
+      - name: Upload ommer.jar artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ommer-jar
+          path: ./output/ommer.jar
+
   update-feed:
     name: "Update ${{ matrix.podcast[0] }}"
+    needs: build-app
     strategy:
       matrix:
         runs-on: [ubuntu-24.04]
@@ -21,8 +47,11 @@ jobs:
         ]
     runs-on: ubuntu-24.04
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Download ommer.jar artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: ommer-jar
+          path: ./
 
       - name: Execute ommer.jar
         run: java -jar ./ommer.jar ${{ matrix.podcast[0] }} ${{ matrix.podcast[1] }} ${{ matrix.podcast[2] }} ${{ secrets.API_KEY }}
