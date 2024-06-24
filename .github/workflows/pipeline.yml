@@ -27,11 +27,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
   
-      - name: Set up JDK 17
+      - name: Set up JDK 21
         if: steps.cache-ommer.outputs.cache-hit != 'true'
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'adopt'
       
       - name: Build Kotlin app
@@ -64,6 +64,13 @@ jobs:
         with:
           name: ommer-jar
           path: ./
+
+      - name: Set up JDK 21
+        if: steps.cache-ommer.outputs.cache-hit != 'true'
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'adopt'
 
       - name: Execute ommer.jar
         run: java -jar ./ommer.jar ${{ matrix.podcast[0] }} ${{ matrix.podcast[1] }} ${{ matrix.podcast[2] }} ${{ secrets.API_KEY }}
