@@ -102,7 +102,6 @@ fun main(args: Array<String>) {
                     items = fetchEpisodes(client, apiUri / "series", podcast.urn, apiKey).mapNotNull { item ->
                         with(item) {
                             val audioAsset = audioAssets
-                                .filter { it.target == "Progressive" }
                                 .filter { it.format == "mp3" }
                                 // Select asset which is closest to bitrate 192
                                 .minByOrNull { abs(it.bitrate - 192) } ?: run {

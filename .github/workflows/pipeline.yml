@@ -10,7 +10,7 @@ on:
 
 jobs:
   build-app:
-    name: "Build Ommer"
+    name: "Build ommer"
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
@@ -47,7 +47,7 @@ jobs:
           path: ./ommer/build/libs/ommer.jar
 
   update-feed:
-    name: "Update ${{ matrix.podcast[0] }}"
+    name: "Update ${{ matrix.podcast[0] }} feed"
     needs: build-app
     strategy:
       matrix:
