@@ -4,9 +4,10 @@ Utility for gathering all episodes for a select subset of podcasts from dr.dk an
 
 Usage:
 ```bash
-$ java -jar ommer.jar <config>
+$ java -jar ommer.jar SLUG SERIESURN IMAGEURL APIKEY
 ```
-where `<config>` is a configuration file like the `config.example` file in the root of this repository.
+
+SLUG SERIESURN IMAGEURL can be sniffed on dr.dk/lyd
 
 Note that you will need to fill in the API key in the config file. This can easily be obtained by enabling developer
 tools in Firefox and inspecting the requests on dr.dk/lyd.
