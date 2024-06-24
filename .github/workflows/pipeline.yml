@@ -16,19 +16,32 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - uses: actions/cache@v3
+        id: cache-ommer
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            ./ommer/build/libs/ommer.jar
+          key: ${{ runner.os }}-gradle-${{ hashFiles('ommer/**') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+  
       - name: Set up JDK 17
+        if: steps.cache-ommer.outputs.cache-hit != 'true'
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'adopt'
       
       - name: Build Kotlin app
+        if: steps.cache-ommer.outputs.cache-hit != 'true'
         run: |
           chmod +x ./gradlew
           ./gradlew build assemble
 
       - name: Upload ommer.jar artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ommer-jar
           path: ./ommer/build/libs/ommer.jar
@@ -47,7 +60,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Download ommer.jar artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: ommer-jar
           path: ./
