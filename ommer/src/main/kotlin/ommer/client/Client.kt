@@ -70,8 +70,8 @@ fun main(args: Array<String>) {
             Podcast(
                 urn = urn,
                 slug = slug,
-                titleSuffix = "(Genudgivet mp3 feed)",
-                descriptionSuffix = "Genudgivet RSS-feed uden tre dages forsinkelse.",
+                titleSuffix = "(Reproduceret feed)",
+                descriptionSuffix = "",
                 feedUrl = feedUrl,
                 imageUrl = imageUrl
             ),
