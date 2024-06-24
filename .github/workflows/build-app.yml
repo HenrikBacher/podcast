@@ -34,7 +34,7 @@ jobs:
         echo "TAG_NAME=${TAG_NAME}" >> $GITHUB_ENV
 
     - name: Create Release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ env.TAG_NAME }}
         body: "New release of ommer.jar on ${{ env.TAG_NAME }}"
