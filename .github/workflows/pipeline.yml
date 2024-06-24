@@ -26,13 +26,12 @@ jobs:
         run: |
           chmod +x ./gradlew
           ./gradlew build assemble
-          cp ./ommer/build/libs/ommer.jar ./output/
 
       - name: Upload ommer.jar artifact
         uses: actions/upload-artifact@v3
         with:
           name: ommer-jar
-          path: ./output/ommer.jar
+          path: ./ommer/build/libs/ommer.jar
 
   update-feed:
     name: "Update ${{ matrix.podcast[0] }}"
