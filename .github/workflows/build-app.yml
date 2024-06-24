@@ -23,7 +23,6 @@ jobs:
         key: ${{ runner.os }}-${{ hashFiles('./build.gradle.kts', './settings.gradle.kts', './ommer/**') }}
       
     - name: Build Kotlin app
-      if: steps.cache-ommer.outputs.cache-hit != 'true'
       run: |
         chmod +x ./gradlew
         ./gradlew build assemble
