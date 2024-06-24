@@ -60,7 +60,7 @@ fun main(args: Array<String>) {
     val imageUrl = args[2]
     val apiKey = args[3]
 
-    val feedUrl = "https://genstartfeed.blob.core.windows.net/${slug}.xml"
+    val feedUrl = "https://drpodcasts.blob.core.windows.net/feeds/${slug}.xml"
 
     val apiUri = Uri.of("https://api.dr.dk/radio/v2")
     val outputDirectory = File("output")
