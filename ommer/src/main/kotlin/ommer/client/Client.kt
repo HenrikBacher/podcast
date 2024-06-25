@@ -55,11 +55,11 @@ fun Duration.formatHMS(): String =
 data class Podcast(val urn: String, val slug: String, val titleSuffix: String?, val descriptionSuffix: String?, val feedUrl: String?, val imageUrl: String?)
 
 fun main(args: Array<String>) {  
-    val slug = args[0] ?: System.getenv("slug")
-    val urn = args[1] ?: System.getenv("urn")
-    val imageUrl = args[2] ?: System.getenv("imageUrl")
-    val apiKey = args[3] ?: System.getenv("apiKey")
-    val baseUrl = args[4] ?: System.getenv("hostUrl")
+    val slug = args[0]
+    val urn = args[1]
+    val imageUrl = args[2]
+    val apiKey = args[3]
+    val baseUrl = args[4]
 
     val feedUrl = "https://${baseUrl}/feeds/${slug}.xml"
 
