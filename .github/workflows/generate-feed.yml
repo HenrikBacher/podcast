@@ -78,9 +78,6 @@ jobs:
     runs-on: ubuntu-24.04
     needs: update-feed
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-
       - name: Login to Azure
         uses: azure/login@v2
         with:
