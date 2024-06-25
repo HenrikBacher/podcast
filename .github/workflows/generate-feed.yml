@@ -72,3 +72,18 @@ jobs:
             --name ${{ matrix.podcast[0] }}.xml \
             --file output/${{ matrix.podcast[0] }}.xml \
             --overwrite
+            
+  generate-feedlist:
+    runs-on: ubuntu-24.04
+    needs: update-feed
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: List blobs
+        run: |
+          az storage blob list \
+            --account-name ${{ secrets.STORAGE_ACCOUNT }} \
+            --container-name "drpodcasts" \
+            --query "[].{name: name, url: properties.contentSettings.contentUri}" \
+            --output table
