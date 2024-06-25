@@ -14,6 +14,7 @@ jobs:
         runs-on: [ubuntu-24.04]
         podcast: [
           ["genstart", "urn:dr:radio:series:5fa25ef8330eac2f135b62d6", "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6593ba22846e9f8fc0338958.jpg"],
+          ["genstart-dox", "urn:dr:radio:season:6633466bf358fdf526cb1aef", "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:65cdea4b0a12f7722ca250a4.jpg"],
           ["sara-og-monopolet", "urn:dr:radio:series:5fa15704da351264f87b46ce", "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6523bd03443243f95e2c39b0.jpg"],
           ["hjernekassen", "urn:dr:radio:series:5fa2684c330eac2f135b9254", "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6523bd76443243f95e2c4866.jpg"],
           ["tiden", "urn:dr:radio:series:6303281409585a83f19bfae0", "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6593b98a846e9f8fc03386f8.jpg"],
