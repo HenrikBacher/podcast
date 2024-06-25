@@ -72,7 +72,7 @@ jobs:
             --name ${{ matrix.podcast[0] }}.xml \
             --file output/${{ matrix.podcast[0] }}.xml \
             --overwrite
-            
+
   generate-feedlist:
     runs-on: ubuntu-24.04
     needs: update-feed
@@ -84,6 +84,7 @@ jobs:
         run: |
           az storage blob list \
             --account-name ${{ secrets.STORAGE_ACCOUNT }} \
-            --container-name "drpodcasts" \
+            --container-name ${{ secrets.CONTAINER_NAME }} \
+            --auth-mode login \
             --query "[].{name: name, url: properties.contentSettings.contentUri}" \
             --output table
