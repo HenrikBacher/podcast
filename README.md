@@ -4,7 +4,7 @@ Utility for gathering all episodes for a select subset of podcasts from dr.dk an
 
 Usage:
 ```bash
-$ java -jar ommer.jar SLUG SERIESURN IMAGEURL APIKEY
+$ java -jar ommer.jar SLUG SERIESURN IMAGEURL APIKEY HOSTURL
 ```
 
 SLUG SERIESURN IMAGEURL can be sniffed on dr.dk/lyd
