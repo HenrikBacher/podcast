@@ -79,7 +79,7 @@ jobs:
     needs: update-feed
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Login to Azure
         uses: azure/login@v2
