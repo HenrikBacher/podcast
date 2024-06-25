@@ -5,9 +5,9 @@ plugins {
 dependencies {
     implementation("org.slf4j:slf4j-api:2.0.7")
     implementation("ch.qos.logback:logback-classic:1.4.6")
-    implementation("org.http4k:http4k-core:3.0.0")
-    implementation("org.http4k:http4k-client-jetty:3.0.0")
-    implementation("org.http4k:http4k-format-gson:3.0.0")
+    implementation("org.http4k:http4k-core:5.23.0.0")
+    implementation("org.http4k:http4k-client-jetty:5.23.0.0")
+    implementation("org.http4k:http4k-format-gson:5.23.0.0")
 }
 
 val mainClass = "ommer.client.ClientKt"
