@@ -86,7 +86,7 @@ fun Feed.generate(feedFile: File) {
                 text("lastBuildDate", lastBuildDate)
                 text("itunes:explicit", if (explicit) "yes" else "no")
                 text("itunes:author", author)
-                text("itunes:block", yes)
+                text("itunes:block", "yes")
                 element("itunes:owner") {
                     text("itunes:email", email)
                     text("itunes:name", ownerName)
