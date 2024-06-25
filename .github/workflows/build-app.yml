@@ -17,6 +17,7 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+
     - uses: actions/cache@v4
       id: cache-ommer
       with:
@@ -24,7 +25,8 @@ jobs:
           ~/.gradle/caches
           ~/.gradle/wrapper
           ./ommer/build/libs/ommer.jar
-        key: ${{ runner.os }}-${{ hashFiles('./build.gradle.kts', './settings.gradle.kts', './ommer/**') }}
+        key: ${{ runner.os }}-gradle-${{ hashFiles('./build.gradle.kts', './settings.gradle.kts', '**/gradle-wrapper.properties', './ommer/**') }}
+        restore-keys: ${{ runner.os }}-gradle-
       
     - name: Build Kotlin app
       run: |
