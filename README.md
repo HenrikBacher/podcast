@@ -7,7 +7,5 @@ Usage:
 $ java -jar ommer.jar SLUG SERIESURN IMAGEURL APIKEY HOSTURL
 ```
 
-SLUG SERIESURN IMAGEURL can be sniffed on dr.dk/lyd
-
-Note that you will need to fill in the API key in the config file. This can easily be obtained by enabling developer
-tools in Firefox and inspecting the requests on dr.dk/lyd.
+SLUG SERIESURN IMAGEURL APIKEY can be sniffed on dr.dk/lyd
+HOSTURL, is the domain the generated feed will be hosted on
