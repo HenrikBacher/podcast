@@ -7,7 +7,7 @@ dependencies {
     implementation("ch.qos.logback:logback-classic:1.5.6")
     implementation("org.http4k:http4k-core:5.23.0.0")
     implementation("org.http4k:http4k-client-jetty:5.24.0.0")
-    implementation("org.http4k:http4k-format-gson:5.23.0.0")
+    implementation("org.http4k:http4k-format-gson:5.24.0.0")
 }
 
 val mainClass = "ommer.client.ClientKt"
