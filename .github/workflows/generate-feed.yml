@@ -54,7 +54,7 @@ jobs:
       - name: Calculate MD5 of local feed.xml and base64 encode
         id: local_md5
         run: |
-          MD5_HASH=$(md5sum output/${{ matrix.podcast[0] }}.xml | awk '{print $1}' | xxd -r -p | base64)
+          MD5_HASH=$(md5sum output/${{ matrix.podcasts.slug }}.xml | awk '{print $1}' | xxd -r -p | base64)
           echo "LOCAL_MD5=$MD5_HASH" >> $GITHUB_ENV
           echo "LOCAL_MD5=$MD5_HASH"
       
