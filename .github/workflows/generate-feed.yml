@@ -9,20 +9,28 @@ on:
   workflow_dispatch:
 
 jobs:
-  update-feed:
-    name: "Update ${{ matrix.podcasts.slug }} feed"
-    runs-on: [ubuntu-24.04]
-
-    strategy:
-      matrix:
-        include: ${{fromJson(steps.load-podcasts.outputs.podcasts)}}
-
+  load-podcasts:
+    name: Load podcasts
+    runs-on: ubuntu-24.04
     steps:
-      - name: Load podcasts data
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Load podcasts
         id: load-podcasts
         run: |
-          echo "::set-output name=podcasts::$(jq -c . podcasts.json)"
-        shell: bash
+          echo "::set-output name=podcasts::$(cat podcasts.json)"
+        continue-on-error: true
+  update-feed:
+    name: "Update ${{ matrix.podcasts.slug }} feed"
+    needs: load-podcasts
+    runs-on: [ubuntu-24.04]
+  
+    strategy:
+      matrix:
+        include: ${{fromJson(needs.load-podcasts.outputs)}}
+
+    steps:
       - name: Get latest release
         id: get_latest_release
         run: |
