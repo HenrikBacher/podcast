@@ -16,7 +16,7 @@ jobs:
       matrix:
         runs-on: [ubuntu-24.04]
         podcasts: [
-          {slug: "genstart", urnurn: "urn:dr:radio:series:5fa25ef8330eac2f135b62d6", image: "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6593ba22846e9f8fc0338958.jpg"},
+          {slug: "genstart", urn: "urn:dr:radio:series:5fa25ef8330eac2f135b62d6", image: "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6593ba22846e9f8fc0338958.jpg"},
           {slug: "genstart-dox", urn: "urn:dr:radio:series:65cb475de80d2a267cd12ae9", image: "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:65cdea4b0a12f7722ca250a4.jpg"},
           {slug: "sara-og-monopolet", urn: "urn:dr:radio:series:5fa15704da351264f87b46ce", image: "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6523bd03443243f95e2c39b0.jpg"},
           {slug: "hjernekassen", urn: "urn:dr:radio:series:5fa2684c330eac2f135b9254", image: "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6523bd76443243f95e2c4866.jpg"},
@@ -40,7 +40,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Execute ommer.jar
-        run: java -jar ./ommer.jar ${{ matrix.podcasts.slug }} ${{ matrix.podcasts.urn }} ${{ matrix.podcasts.image }} ${{ secrets.API_KEY }} ${{ secrets.HOST_URL }}
+        run: java -jar ./ommer.jar ${SLUG} ${URN} ${IMAGE} ${{ secrets.API_KEY }} ${{ secrets.HOST_URL }}
+        env:
+          SLUG: ${{ matrix.podcasts.slug }}
+          URN: ${{ matrix.podcasts.urn }}
+          IMAGE: ${{ matrix.podcasts.image }}
       
       - name: Login to Azure
         uses: azure/login@v2
