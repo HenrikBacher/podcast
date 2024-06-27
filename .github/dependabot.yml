@@ -1,15 +1,14 @@
 version: 2
 updates:
-  # Enable updates for Gradle
-  - package-ecosystem: "gradle"
-    directory: "/" # Location of the root project where your build.gradle resides
-    schedule:
-      interval: "daily" # How often to check for updates
-      
+  # Enable updates for Gradle      
   - package-ecosystem: "gradle"
     directory: "/ommer" # Location of the root project where your build.gradle resides
     schedule:
       interval: "daily" # How often to check for updates
+    groups:
+    http4k:
+      patterns:
+        - org.http4k*
 
   # Enable updates for GitHub Actions
   - package-ecosystem: "github-actions"
