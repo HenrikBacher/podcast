@@ -40,11 +40,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Execute ommer.jar
-        run: java -jar ./ommer.jar ${SLUG} ${URN} ${IMAGE} ${{ secrets.API_KEY }} ${{ secrets.HOST_URL }}
-        env:
-          SLUG: ${{ matrix.podcasts.slug }}
-          URN: ${{ matrix.podcasts.urn }}
-          IMAGE: ${{ matrix.podcasts.image }}
+        run: java -jar ./ommer.jar ${{ matrix.podcasts.slug }} ${{ matrix.podcasts.urn }} ${{ matrix.podcasts.image }} ${{ secrets.API_KEY }} ${{ secrets.HOST_URL }}
       
       - name: Login to Azure
         uses: azure/login@v2
