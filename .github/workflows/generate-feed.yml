@@ -28,7 +28,7 @@ jobs:
   
     strategy:
       matrix:
-        include: ${{fromJson(needs.load-podcasts.outputs)}}
+        include: ${{fromJson(needs.load-podcasts.outputs.podcast)}}
 
     steps:
       - name: Get latest release
