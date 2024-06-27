@@ -11,76 +11,70 @@ on:
 jobs:
   update-feed:
     name: "Update ${{ matrix.podcasts.slug }} feed"
+    runs-on: [ubuntu-24.04]
 
-    strategy:
-      matrix:
-        runs-on: [ubuntu-24.04]
-        podcasts: [
-          {slug: "genstart", urn: "urn:dr:radio:series:5fa25ef8330eac2f135b62d6", image: "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6593ba22846e9f8fc0338958.jpg"},
-          {slug: "genstart-dox", urn: "urn:dr:radio:series:65cb475de80d2a267cd12ae9", image: "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:65cdea4b0a12f7722ca250a4.jpg"},
-          {slug: "sara-og-monopolet", urn: "urn:dr:radio:series:5fa15704da351264f87b46ce", image: "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6523bd03443243f95e2c39b0.jpg"},
-          {slug: "hjernekassen", urn: "urn:dr:radio:series:5fa2684c330eac2f135b9254", image: "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6523bd76443243f95e2c4866.jpg"},
-          {slug: "tiden", urn: "urn:dr:radio:series:6303281409585a83f19bfae0", image: "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6593b98a846e9f8fc03386f8.jpg"},
-          {slug: "kampen-om-historien", urn: "urn:dr:radio:series:610bd147214d9c8f19f2e2d2", image: "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6523bd0e443243f95e2c3b00.jpg"},
-          {slug: "prompt", urn: "urn:dr:radio:series:64a66bcdc7644ff3cc5147a0", image: "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6523c17c7d0c1a140697e108.jpg"},
-          {slug: "slotsholmen", urn: "urn:dr:radio:series:5fa15f17da351264f87b7455", image: "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6523c1317d0c1a140697dfe0.jpg"},
-          {slug: "udsyn", urn: "urn:dr:radio:series:5fa269fc330eac2f135b9b9f", image: "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6593ba97a838f3bbb32a050f.jpg"},
-          {slug: "ubegribeligt", urn: "urn:dr:radio:series:626931758679fdf8af8a0e26", image: "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6523bf677d0c1a140697cae5.jpg"}
-        ]
-    runs-on: ubuntu-24.04
+strategy:
+    matrix:
+      include: ${{fromJson(steps.load-podcasts.outputs.podcasts)}}
+
     steps:
-      - name: Get latest release
-        id: get_latest_release
-        run: |
-          LATEST_RELEASE_URL=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-          "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/latest" | jq -r '.assets[0].browser_download_url')
-          echo "Downloading latest release from $LATEST_RELEASE_URL"
-          curl -L $LATEST_RELEASE_URL -o ommer.jar
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Load podcasts data
+      id: load-podcasts
+      run: |
+        echo "::set-output name=podcasts::$(jq -c . podcasts.json)"
+      shell: bash
+    - name: Get latest release
+      id: get_latest_release
+      run: |
+        LATEST_RELEASE_URL=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+        "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/latest" | jq -r '.assets[0].browser_download_url')
+        echo "Downloading latest release from $LATEST_RELEASE_URL"
+        curl -L $LATEST_RELEASE_URL -o ommer.jar
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Execute ommer.jar
-        run: java -jar ./ommer.jar ${SLUG} ${URN} ${IMAGE} ${{ secrets.API_KEY }} ${{ secrets.HOST_URL }}
-        env:
-          SLUG: ${{ matrix.podcasts.slug }}
-          URN: ${{ matrix.podcasts.urn }}
-          IMAGE: ${{ matrix.podcasts.image }}
-      
-      - name: Login to Azure
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-          
-      - name: Calculate MD5 of local feed.xml and base64 encode
-        id: local_md5
-        run: |
-          MD5_HASH=$(md5sum output/${{ matrix.podcast[0] }}.xml | awk '{print $1}' | xxd -r -p | base64)
-          echo "LOCAL_MD5=$MD5_HASH" >> $GITHUB_ENV
-          echo "LOCAL_MD5=$MD5_HASH"
-      
-      - name: Get contentMd5 of the blob in Azure Blob Storage
-        id: blob_md5
-        continue-on-error: true
-        run: |
-          BLOB_PROPERTIES=$(az storage blob show \
-            --account-name ${{ secrets.STORAGE_ACCOUNT }} \
-            --container-name ${{ secrets.CONTAINER_NAME }} \
-            --auth-mode login \
-            --name ${{ matrix.podcasts.slug }}.xml \
-            --query properties.contentSettings.contentMd5 -o tsv)
-          echo "BLOB_MD5=$BLOB_PROPERTIES" >> $GITHUB_ENV
-          echo "BLOB_MD5=$BLOB_PROPERTIES"
-      
-      - name: Upload feed.xml to Azure Blob Storage if different
-        if: env.LOCAL_MD5 != env.BLOB_MD5
-        run: |
-          az storage blob upload \
-            --account-name ${{ secrets.STORAGE_ACCOUNT }} \
-            --container-name ${{ secrets.CONTAINER_NAME }} \
-            --auth-mode login \
-            --name ${{ matrix.podcasts.slug }}.xml \
-            --file output/${{ matrix.podcasts.slug }}.xml \
-            --overwrite
+    - name: Execute ommer.jar
+      run: java -jar ./ommer.jar ${SLUG} ${URN} ${IMAGE} ${{ secrets.API_KEY }} ${{ secrets.HOST_URL }}
+      env:
+        SLUG: ${{ matrix.podcasts.slug }}
+        URN: ${{ matrix.podcasts.urn }}
+        IMAGE: ${{ matrix.podcasts.image }}
+    
+    - name: Login to Azure
+      uses: azure/login@v2
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+        
+    - name: Calculate MD5 of local feed.xml and base64 encode
+      id: local_md5
+      run: |
+        MD5_HASH=$(md5sum output/${{ matrix.podcast[0] }}.xml | awk '{print $1}' | xxd -r -p | base64)
+        echo "LOCAL_MD5=$MD5_HASH" >> $GITHUB_ENV
+        echo "LOCAL_MD5=$MD5_HASH"
+    
+    - name: Get contentMd5 of the blob in Azure Blob Storage
+      id: blob_md5
+      continue-on-error: true
+      run: |
+        BLOB_PROPERTIES=$(az storage blob show \
+          --account-name ${{ secrets.STORAGE_ACCOUNT }} \
+          --container-name ${{ secrets.CONTAINER_NAME }} \
+          --auth-mode login \
+          --name ${{ matrix.podcasts.slug }}.xml \
+          --query properties.contentSettings.contentMd5 -o tsv)
+        echo "BLOB_MD5=$BLOB_PROPERTIES" >> $GITHUB_ENV
+        echo "BLOB_MD5=$BLOB_PROPERTIES"
+    
+    - name: Upload feed.xml to Azure Blob Storage if different
+      if: env.LOCAL_MD5 != env.BLOB_MD5
+      run: |
+        az storage blob upload \
+          --account-name ${{ secrets.STORAGE_ACCOUNT }} \
+          --container-name ${{ secrets.CONTAINER_NAME }} \
+          --auth-mode login \
+          --name ${{ matrix.podcasts.slug }}.xml \
+          --file output/${{ matrix.podcasts.slug }}.xml \
+          --overwrite
 
   generate-feedlist:
     runs-on: ubuntu-24.04
