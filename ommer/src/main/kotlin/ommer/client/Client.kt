@@ -55,14 +55,6 @@ fun Duration.formatHMS(): String =
 
 data class Podcast(val urn: String, val slug: String, val titleSuffix: String?, val descriptionSuffix: String?, val feedUrl: String?, val imageUrl: String?)
 
-data class CommandLineArgs(
-    val slug: String = "",
-    val urn: String = "",
-    val imageUrl: String = "",
-    val apiKey: String = "",
-    val baseUrl: String = ""
-)
-
 fun main(args: Array<String>) {  
     val parser = ArgParser("ommer", strictSubcommandOptionsOrder = false)
     val slug by parser.option(ArgType.String, fullName = "slug", description = "Podcast slug").required()
