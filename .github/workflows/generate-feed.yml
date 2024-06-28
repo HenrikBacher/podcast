@@ -3,7 +3,7 @@ name: Update feeds
 on:
   push:
     paths:
-      - 'generate-feed.yml'
+      - '**/generate-feed.yml'
   schedule:
     - cron: '0 * * * *'
   workflow_dispatch:
