@@ -40,7 +40,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Execute ommer.jar
-        run: java -jar ./ommer.jar --slug=${SLUG} --urn=${URN} --imageUrl=${IMAGE} --apiKey=${{ secrets.API_KEY }} --baseUrl=${{ secrets.HOST_URL }}
+        run: java -jar ./ommer.jar --slug ${SLUG} --urn ${URN} --imageUrl ${IMAGE} --apiKey ${{ secrets.API_KEY }} --baseUrl ${{ secrets.HOST_URL }}
         env:
           SLUG: ${{ matrix.podcasts.slug }}
           URN: ${{ matrix.podcasts.urn }}

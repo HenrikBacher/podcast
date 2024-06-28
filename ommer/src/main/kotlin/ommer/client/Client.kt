@@ -64,7 +64,7 @@ data class CommandLineArgs(
 )
 
 fun main(args: Array<String>) {  
-    val parser = ArgParser("ommer")
+    val parser = ArgParser("ommer", strictSubcommandOptionsOrder = false)
     val slug by parser.option(ArgType.String, fullName = "slug", description = "Podcast slug").required()
     val urn by parser.option(ArgType.String, fullName = "urn", description = "Podcast URN").required()
     val imageUrl by parser.option(ArgType.String, fullName = "imageUrl", description = "Podcast image URL").required()
