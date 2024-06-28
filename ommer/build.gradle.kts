@@ -8,7 +8,7 @@ dependencies {
     implementation("org.http4k:http4k-core:5.24.0.0")
     implementation("org.http4k:http4k-client-jetty:5.24.0.0")
     implementation("org.http4k:http4k-format-gson:5.24.0.0")
-    implementation "org.jetbrains.kotlinx:kotlinx-cli:0.3.4"
+    implementation("org.jetbrains.kotlinx:kotlinx-cli:0.3.4")
 }
 
 val mainClass = "ommer.client.ClientKt"
