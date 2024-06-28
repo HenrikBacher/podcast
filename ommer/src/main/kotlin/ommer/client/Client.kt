@@ -68,7 +68,7 @@ fun main(args: Array<String>) {
     val slug by parser.option(ArgType.String, fullName = "slug", description = "Podcast slug").required()
     val urn by parser.option(ArgType.String, fullName = "urn", description = "Podcast URN").required()
     val imageUrl by parser.option(ArgType.String, fullName = "imageUrl", description = "Podcast image URL").required()
-    
+
     val apiKey by parser.option(ArgType.String, fullName = "apiKey", description = "API key").required()
     val baseUrl by parser.option(ArgType.String, fullName = "baseUrl", description = "Base URL").required()
 
@@ -86,7 +86,7 @@ fun main(args: Array<String>) {
                 slug = slug,
                 titleSuffix = "(Reproduceret feed)",
                 descriptionSuffix = "",
-                feedUrl = ,
+                feedUrl = feedUrl,
                 imageUrl = imageUrl
             ),
         )
