@@ -66,11 +66,11 @@ data class CommandLineArgs(
 fun main(args: Array<String>) {  
     val parser = ArgParser("ommer", strictSubcommandOptionsOrder = false)
     val slug by parser.option(ArgType.String, fullName = "slug", description = "Podcast slug").required()
-    val urn by parser.option(ArgType.String, fullName = "urn", description = "Podcast URN").required()
-    val imageUrl by parser.option(ArgType.String, fullName = "imageUrl", description = "Podcast image URL").required()
+    val urn by parser.option(ArgType.String, fullName = "urn", description = "Podcast URN, id format used by dr").required()
+    val imageUrl by parser.option(ArgType.String, fullName = "imageUrl", description = "Podcast image URL, found in the rss feed on dr.dk/lyd").required()
 
-    val apiKey by parser.option(ArgType.String, fullName = "apiKey", description = "API key").required()
-    val baseUrl by parser.option(ArgType.String, fullName = "baseUrl", description = "Base URL").required()
+    val apiKey by parser.option(ArgType.String, fullName = "apiKey", description = "API key for dr api").required()
+    val baseUrl by parser.option(ArgType.String, fullName = "baseUrl", description = "Base URL for hosting").required()
 
     parser.parse(args)
 
