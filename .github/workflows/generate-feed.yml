@@ -51,17 +51,21 @@ jobs:
         run: |
           $xmlPath = "output/${{ matrix.podcasts.slug }}.xml"
           [xml]$xmlContent = Get-Content $xmlPath
-          $lastBuildDateStr = $xmlContent.channel.lastBuildDate
+          $lastBuildDateStr = $xmlContent.rss.channel.lastBuildDate
           Write-Host "Latest update: $lastBuildDateStr"
           
-          $lastBuildDate = [datetime]::ParseExact($lastBuildDateStr, "r", $null)
+          $format = 'ddd, dd MMM yyyy HH:mm:ss zzz'
+          $culture = [System.Globalization.CultureInfo]::InvariantCulture
+          $lastBuildDate = [datetime]::ParseExact($lastBuildDateStr, $format, $culture)
           $currentUtcTime = [datetime]::UtcNow
           $twoHoursAgo = $currentUtcTime.AddHours(-2)
           
           if ($lastBuildDate -gt $twoHoursAgo) {
             echo "BUILD_WITHIN_LAST_HOURS=true" | Out-File -FilePath $Env:GITHUB_ENV -Append
+            echo "Podcast updated within the last 2 hours, uploading to Azure Blob Storage"
           } else {
             echo "BUILD_WITHIN_LAST_HOURS=false" | Out-File -FilePath $Env:GITHUB_ENV -Append
+            echo "Podcast not updated, skipping upload to Azure Blob Storage"
           }
         shell: pwsh
       
