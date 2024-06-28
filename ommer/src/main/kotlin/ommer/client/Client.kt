@@ -68,13 +68,13 @@ fun main(args: Array<String>) {
     val slug by parser.option(ArgType.String, fullName = "slug", description = "Podcast slug").required()
     val urn by parser.option(ArgType.String, fullName = "urn", description = "Podcast URN").required()
     val imageUrl by parser.option(ArgType.String, fullName = "imageUrl", description = "Podcast image URL").required()
+    
     val apiKey by parser.option(ArgType.String, fullName = "apiKey", description = "API key").required()
     val baseUrl by parser.option(ArgType.String, fullName = "baseUrl", description = "Base URL").required()
 
     parser.parse(args)
 
     val apiUri = Uri.of("https://api.dr.dk/radio/v2")
-    val apiKey = apiKey
 
     val feedUrl = "https://${baseUrl}/feeds/${slug}.xml"
     val outputDirectory = File("output")
