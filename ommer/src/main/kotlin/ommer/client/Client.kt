@@ -24,6 +24,7 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Properties
 import kotlin.math.abs
+import kotlinx.cli.*
 
 private val log = LoggerFactory.getLogger("ommer")
 
@@ -55,45 +56,38 @@ fun Duration.formatHMS(): String =
 data class Podcast(val urn: String, val slug: String, val titleSuffix: String?, val descriptionSuffix: String?, val feedUrl: String?, val imageUrl: String?)
 
 data class CommandLineArgs(
-    val slug: String,
-    val urn: String,
-    val imageUrl: String,
-    val apiKey: String,
-    val baseUrl: String
+    val slug: String = "",
+    val urn: String = "",
+    val imageUrl: String = "",
+    val apiKey: String = "",
+    val baseUrl: String = ""
 )
 
-fun parseArgs(args: Array<String>): CommandLineArgs {
-    if (args.size < 5) {
-        println("Usage: <slug> <urn> <imageUrl> <apiKey> <baseUrl>")
-        exitProcess(1)
-    }
-    return CommandLineArgs(
-        slug = args[0],
-        urn = args[1],
-        imageUrl = args[2],
-        apiKey = args[3],
-        baseUrl = args[4]
-    )
-}
-
 fun main(args: Array<String>) {  
-    val parsedArgs = parseArgs(args)
+    val parser = ArgParser("ommer")
+    val slug by parser.option(ArgType.String, fullName = "slug", description = "Podcast slug").required()
+    val urn by parser.option(ArgType.String, fullName = "urn", description = "Podcast URN").required()
+    val imageUrl by parser.option(ArgType.String, fullName = "imageUrl", description = "Podcast image URL").required()
+
+    val apiKey by parser.option(ArgType.String, fullName = "apiKey", description = "API key").required()
+    val baseUrl by parser.option(ArgType.String, fullName = "baseUrl", description = "Base URL").required()
+
+    parser.parse(args)
 
     val apiUri = Uri.of("https://api.dr.dk/radio/v2")
-    val apiKey = parsedArgs.apiKey
 
-    val feedUrl = "https://${parsedArgs.baseUrl}/feeds/${parsedArgs.slug}.xml"
+    val feedUrl = "https://${baseUrl}/feeds/${slug}.xml"
     val outputDirectory = File("output")
 
     val podcasts = mutableListOf<Podcast>()
         podcasts.add(
             Podcast(
-                urn = parsedArgs.urn,
-                slug = parsedArgs.slug,
+                urn = urn,
+                slug = slug,
                 titleSuffix = "(Reproduceret feed)",
                 descriptionSuffix = "",
-                feedUrl = ,
-                imageUrl = parsedArgs.imageUrl
+                feedUrl = feedUrl,
+                imageUrl = imageUrl
             ),
         )
  
