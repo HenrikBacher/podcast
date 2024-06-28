@@ -45,13 +45,29 @@ jobs:
           SLUG: ${{ matrix.podcasts.slug }}
           URN: ${{ matrix.podcasts.urn }}
           IMAGE: ${{ matrix.podcasts.image }}
+
+      - name: Check lastBuildDate
+        id: check_date
+        run: |
+          LAST_BUILD_DATE=$(xmllint --xpath "string(//channel/lastBuildDate)" output/${{ matrix.podcasts.slug }}.xml)
+          echo "Latest update: $LAST_BUILD_DATE"
+          CURRENT_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          HOURS_AGO=$(date -u -d '2 hours ago' +"%Y-%m-%dT%H:%M:%SZ")
+          if [[ "$LAST_BUILD_DATE" > "$HOURS_AGO" ]]; then
+            echo "BUILD_WITHIN_LAST_HOURS=true" >> $GITHUB_ENV
+          else
+            echo "BUILD_WITHIN_LAST_HOURS=false" >> $GITHUB_ENV
+          fi
+        shell: bash
       
       - name: Login to Azure
+        if: env.BUILD_WITHIN_LAST_HOURS == 'true'
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
           
       - name: Calculate MD5 of local feed.xml and base64 encode
+        if: env.BUILD_WITHIN_LAST_HOURS == 'true'
         id: local_md5
         run: |
           MD5_HASH=$(md5sum output/${{ matrix.podcasts.slug }}.xml | awk '{print $1}' | xxd -r -p | base64)
@@ -59,6 +75,7 @@ jobs:
           echo "LOCAL_MD5=$MD5_HASH"
       
       - name: Get contentMd5 of the blob in Azure Blob Storage
+        if: env.BUILD_WITHIN_LAST_HOURS == 'true'
         id: blob_md5
         continue-on-error: true
         run: |
@@ -72,7 +89,7 @@ jobs:
           echo "BLOB_MD5=$BLOB_PROPERTIES"
       
       - name: Upload feed.xml to Azure Blob Storage if different
-        if: env.LOCAL_MD5 != env.BLOB_MD5
+        if: env.BUILD_WITHIN_LAST_HOURS == 'true' && env.LOCAL_MD5 != env.BLOB_MD5
         run: |
           az storage blob upload \
             --account-name ${{ secrets.STORAGE_ACCOUNT }} \
