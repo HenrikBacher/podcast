@@ -54,27 +54,46 @@ fun Duration.formatHMS(): String =
 
 data class Podcast(val urn: String, val slug: String, val titleSuffix: String?, val descriptionSuffix: String?, val feedUrl: String?, val imageUrl: String?)
 
-fun main(args: Array<String>) {  
-    val slug = args[0]
-    val urn = args[1]
-    val imageUrl = args[2]
-    val apiKey = args[3]
-    val baseUrl = args[4]
+data class CommandLineArgs(
+    val slug: String,
+    val urn: String,
+    val imageUrl: String,
+    val apiKey: String,
+    val baseUrl: String
+)
 
-    val feedUrl = "https://${baseUrl}/feeds/${slug}.xml"
+fun parseArgs(args: Array<String>): CommandLineArgs {
+    if (args.size < 5) {
+        println("Usage: <slug> <urn> <imageUrl> <apiKey> <baseUrl>")
+        exitProcess(1)
+    }
+    return CommandLineArgs(
+        slug = args[0],
+        urn = args[1],
+        imageUrl = args[2],
+        apiKey = args[3],
+        baseUrl = args[4]
+    )
+}
+
+fun main(args: Array<String>) {  
+    val parsedArgs = parseArgs(args)
 
     val apiUri = Uri.of("https://api.dr.dk/radio/v2")
+    val apiKey = parsedArgs.apiKey
+
+    val feedUrl = "https://${parsedArgs.baseUrl}/feeds/${parsedArgs.slug}.xml"
     val outputDirectory = File("output")
 
     val podcasts = mutableListOf<Podcast>()
         podcasts.add(
             Podcast(
-                urn = urn,
-                slug = slug,
+                urn = parsedArgs.urn,
+                slug = parsedArgs.slug,
                 titleSuffix = "(Reproduceret feed)",
                 descriptionSuffix = "",
-                feedUrl = feedUrl,
-                imageUrl = imageUrl
+                feedUrl = ,
+                imageUrl = parsedArgs.imageUrl
             ),
         )
  
