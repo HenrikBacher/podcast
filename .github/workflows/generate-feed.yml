@@ -34,8 +34,7 @@ jobs:
     name: "Update ${{ matrix.podcasts.slug }} feed"
     needs: load-podcasts
     strategy:
-      matrix:
-        include: ${{ fromJson(needs.load-podcasts.outputs.podcasts) }}
+      matrix: ${{ fromJson(needs.load-podcasts.outputs.podcasts) }}
     runs-on: ubuntu-latest
     steps:
       - name: Get latest release
