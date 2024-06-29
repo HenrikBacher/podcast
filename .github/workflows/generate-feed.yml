@@ -118,5 +118,5 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: ${{ matrix.podcasts.slug }}
-          path: ${{ matrix.podcasts.slug }}.xml
+          path: output/${{ matrix.podcasts.slug }}.xml
       
