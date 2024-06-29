@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.10.35013.160
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FeedGenerator", "FeedGenerator.csproj", "{EFBA7960-11EC-416F-A415-26C404743CDB}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{EFBA7960-11EC-416F-A415-26C404743CDB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EFBA7960-11EC-416F-A415-26C404743CDB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EFBA7960-11EC-416F-A415-26C404743CDB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EFBA7960-11EC-416F-A415-26C404743CDB}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {494B8B4B-E7FB-4186-84C7-630C3D900A81}
+	EndGlobalSection
+EndGlobal
