@@ -20,9 +20,7 @@ jobs:
       - name: Load Podcasts Data
         id: load_data
         run: |
-          PODCASTS_JSON=$(cat ./podcasts.json | jq -c .)
-          echo $PODCASTS_JSON
-          echo "name=podcasts::$PODCASTS_JSON" >> $GITHUB_OUTPUT
+          echo "::set-output name=podcasts::$(jq -c . < podcasts.json)"
   check-output: 
     needs: load-podcasts
     runs-on: ubuntu-latest  
