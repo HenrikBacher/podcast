@@ -96,7 +96,7 @@ fun main(args: Array<String>) {
                 email = "podcast@dr.dk",
                 lastBuildDate = ZonedDateTime
                     .parse(latestEpisodeStartTime)
-                    .atOffset( ZoneOffset.UTC )
+                    .withZoneSameInstant(ZoneId.of("Europe/Copenhagen"))
                     .format(rssDateTimeFormatter),
                 feedUrl = "${podcast.feedUrl}",
                 imageUrl = "${podcast.imageUrl}",
@@ -117,7 +117,7 @@ fun main(args: Array<String>) {
                             description = description,
                             pubDate = ZonedDateTime
                                 .parse(publishTime)
-                                .atOffset( ZoneOffset.UTC )
+                                .withZoneSameInstant(ZoneId.of("Europe/Copenhagen"))
                                 .format(rssDateTimeFormatter),
                             duration = Duration.of(durationMilliseconds, ChronoUnit.MILLIS).formatHMS(),
                             enclosureUrl = audioAsset.url.toString(),
