@@ -57,9 +57,8 @@ jobs:
           [xml]$xmlContent = Get-Content $xmlPath
 
           $format = "ddd, dd MMM yyyy HH:mm:ss zzz"
-          $culture = [System.Globalization.CultureInfo]::InvariantCulture
 
-          $lastBuildDate = [datetime]::ParseExact($xmlContent.rss.channel.lastBuildDate, $format, $culture)
+          $lastBuildDate = [datetime]::ParseExact($xmlContent.rss.channel.lastBuildDate, $format, $null)
           $utcNow = Get-Date -Format 'ddd, dd MMM yyyy HH:mm:ss zzz' -AsUTC
     
           Write-Host "Latest update to feed: $lastBuildDate" 
