@@ -21,7 +21,7 @@ jobs:
         run: |
           PODCASTS_JSON=$(cat ./podcasts.json)
           PODCASTS_ESCAPED=$(echo "$PODCASTS" | sed 's/"/\\"/g')
-          echo "name=PODCASTS::$PODCASTS_ESCAPED" >> $GITHUB_ENV
+          echo "name=PODCASTS::$PODCASTS_ESCAPED" >> $GITHUB_OUTPUT
 
   update-feed:
     name: "Update ${{ matrix.podcasts.slug }} feed"
