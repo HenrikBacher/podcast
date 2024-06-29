@@ -3,54 +3,54 @@ name: Build app
 on:
   workflow_dispatch:
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
   push:
     branches:
       - main
     paths-ignore:
-      - '.github/**'
+      - ".github/**"
 
 jobs:
   build-app:
     name: "Build ommer"
     runs-on: ubuntu-24.04
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - uses: actions/cache@v4
-      id: cache-ommer
-      with:
-        path: |
-          ~/.gradle/caches
-          ~/.gradle/wrapper
-          ./ommer/build/libs/ommer.jar
-        key: ${{ runner.os }}-${{ hashFiles('./build.gradle.kts', './settings.gradle.kts', '**/gradle-wrapper.properties', './ommer/**') }}
-        restore-keys: ${{ runner.os }}-
-    
-    - name: Set up JDK 21
-      uses: actions/setup-java@v4
-      with:
-        java-version: '21'
-        distribution: 'adopt'
+      - uses: actions/cache@v4
+        id: cache-ommer
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            ./ommer/build/libs/ommer.jar
+          key: ${{ runner.os }}-${{ hashFiles('./build.gradle.kts', './settings.gradle.kts', '**/gradle-wrapper.properties', './ommer/**') }}
+          restore-keys: ${{ runner.os }}-
 
-    - name: Build Kotlin app
-      run: |
-        chmod +x ./gradlew
-        ./gradlew build assemble
-  
-    - name: Set the date
-      if: github.ref == 'refs/heads/main'
-      id: set_date
-      run: |
-        TAG_NAME=$(date +'%Y%m%d-%H%M%S')
-        echo "TAG_NAME=${TAG_NAME}" >> $GITHUB_ENV
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: "adopt"
 
-    - name: Create Release
-      uses: softprops/action-gh-release@v2
-      if: github.ref == 'refs/heads/main'
-      with:
-        tag_name: ${{ env.TAG_NAME }}
-        body: "New release of ommer.jar on ${{ env.TAG_NAME }}"
-        files: |
-          ./ommer/build/libs/ommer.jar
+      - name: Build Kotlin app
+        run: |
+          chmod +x ./gradlew
+          ./gradlew build assemble
+
+      - name: Set the date
+        if: github.ref == 'refs/heads/main'
+        id: set_date
+        run: |
+          TAG_NAME=$(date +'%Y%m%d-%H%M%S')
+          echo "TAG_NAME=${TAG_NAME}" >> $GITHUB_ENV
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/main'
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          body: "New release of ommer.jar on ${{ env.TAG_NAME }}"
+          files: |
+            ./ommer/build/libs/ommer.jar

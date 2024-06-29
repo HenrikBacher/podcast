@@ -1,47 +1,47 @@
 package ommer.rss
 
-import org.w3c.dom.Document
-import org.w3c.dom.Element
-import org.w3c.dom.Node
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
 import javax.xml.transform.OutputKeys
 import javax.xml.transform.TransformerFactory
 import javax.xml.transform.dom.DOMSource
 import javax.xml.transform.stream.StreamResult
+import org.w3c.dom.Document
+import org.w3c.dom.Element
+import org.w3c.dom.Node
 
 data class Feed(
-    val link: String,
-    val title: String,
-    val description: String,
-    val language: String = "da",
-    val copyright: String = "DR",
-    val email: String,
-    val lastBuildDate: String,
-    val explicit: Boolean = false,
-    val author: String = "DR",
-    val ownerName: String = "DR",
-    // atom:link, new-feed-url
-    val feedUrl: String,
-    val imageUrl: String,
-    val imageLink: String,
-    val category: String = "News",
-    val mediaRestrictionCountry: String = "dk",
-    val items: List<FeedItem>,
+        val link: String,
+        val title: String,
+        val description: String,
+        val language: String = "da",
+        val copyright: String = "DR",
+        val email: String,
+        val lastBuildDate: String,
+        val explicit: Boolean = false,
+        val author: String = "DR",
+        val ownerName: String = "DR",
+        // atom:link, new-feed-url
+        val feedUrl: String,
+        val imageUrl: String,
+        val imageLink: String,
+        val category: String = "News",
+        val mediaRestrictionCountry: String = "dk",
+        val items: List<FeedItem>,
 )
 
 data class FeedItem(
-    val guid: String,
-    val link: String,
-    val title: String,
-    val description: String,
-    val pubDate: String,
-    val explicit: Boolean = false,
-    val author: String = "DR",
-    val duration: String,
-    val mediaRestrictionCountry: String = "dk",
-    val enclosureUrl: String,
-    val enclosureByteLength: Long,
+        val guid: String,
+        val link: String,
+        val title: String,
+        val description: String,
+        val pubDate: String,
+        val explicit: Boolean = false,
+        val author: String = "DR",
+        val duration: String,
+        val mediaRestrictionCountry: String = "dk",
+        val enclosureUrl: String,
+        val enclosureByteLength: Long,
 )
 
 private class DSL(val document: Document) : Document by document {
@@ -51,12 +51,12 @@ private class DSL(val document: Document) : Document by document {
         return body(element)
     }
 
-    inline fun Node.text(name: String, contents: String, body: Element.() -> Unit = { }) =
-        appendChild(
-            document.createElement(name).apply {
-                appendChild(document.createTextNode(contents))
-            }.also(body),
-        )
+    inline fun Node.text(name: String, contents: String, body: Element.() -> Unit = {}) =
+            appendChild(
+                    document.createElement(name)
+                            .apply { appendChild(document.createTextNode(contents)) }
+                            .also(body),
+            )
 }
 
 fun Feed.generate(feedFile: File) {
@@ -129,9 +129,10 @@ fun Feed.generate(feedFile: File) {
         }
     }
     // Write the content into XML file
-    val transformer = TransformerFactory.newInstance().newTransformer().apply {
-        setOutputProperty(OutputKeys.INDENT, "yes")
-    }
+    val transformer =
+            TransformerFactory.newInstance().newTransformer().apply {
+                setOutputProperty(OutputKeys.INDENT, "yes")
+            }
     val source = DOMSource(document)
     transformer.transform(source, StreamResult(feedFile))
 }
