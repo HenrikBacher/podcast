@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - '**/generate-feed.yml'
+      - '**/podcasts.json'
   schedule:
     - cron: '10 * * * *'
   workflow_dispatch:
@@ -21,15 +22,6 @@ jobs:
         id: load_data
         run: |
           echo "podcasts=$(jq -c . < podcasts.json)" >> $GITHUB_OUTPUT
-
-  check-output: 
-    needs: load-podcasts
-    runs-on: ubuntu-latest  
-    steps:
-      - name: Check
-        run: |
-          PODCASTS='${{ needs.load-podcasts.outputs.podcasts }}'
-          echo $PODCASTS | jq .
 
   update-feed:
     name: "Update ${{ matrix.podcasts.slug }} feed"
