@@ -12,23 +12,24 @@ jobs:
   load-podcasts:
     runs-on: ubuntu-latest
     outputs:
-      podcasts: ${{ steps.set_matrix.outputs.PODCASTS }}
+      podcasts: ${{ steps.load_data.outputs.PODCASTS }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Load Podcasts Data
+        id: load_data
         run: |
           PODCASTS_JSON=$(cat ./podcasts.json)
           PODCASTS_ESCAPED=$(echo "$PODCASTS" | sed 's/"/\\"/g')
-          echo "name=PODCASTS::$PODCASTS_ESCAPED" >> $GITHUB_OUTPUT
+          echo "name=PODCASTS::$PODCASTS_ESCAPED" >> $GITHUB_ENV
 
   update-feed:
     name: "Update ${{ matrix.podcasts.slug }} feed"
     needs: load-podcasts
     strategy:
       matrix:
-        matrix: ${{fromJson(needs.load-podcasts.outputs.podcasts)}}
+        include: ${{fromJson(needs.load-podcasts.outputs.podcasts)}}
     runs-on: ubuntu-latest
     steps:
       - name: Get latest release
