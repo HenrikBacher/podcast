@@ -11,6 +11,7 @@ on:
 
 jobs:
   load-podcasts:
+    name: Load Podcasts
     runs-on: ubuntu-latest
     outputs:
       podcasts: ${{ steps.load_data.outputs.podcasts }}
