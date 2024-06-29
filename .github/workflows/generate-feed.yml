@@ -24,13 +24,16 @@ jobs:
           echo $PODCASTS_JSON
           echo "name=podcasts::$PODCASTS_JSON" >> $GITHUB_OUTPUT
           echo "::set-output name=podcasts::$PODCASTS_JSON"
+        
+      - name: Check
+        run: jq . <<< '${{ steps.load_data.outputs.podcasts }}'
 
   update-feed:
     name: "Update ${{ matrix.podcasts.slug }} feed"
     needs: load-podcasts
     strategy:
       matrix:
-        include: ${{fromJson(needs.load-podcasts.outputs.podcasts)}}
+        include: ${{ fromJson(needs.load-podcasts.outputs.podcasts) }}
     runs-on: ubuntu-latest
     steps:
       - name: Get latest release
