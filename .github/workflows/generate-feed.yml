@@ -6,7 +6,7 @@ on:
       - '**/generate-feed.yml'
       - '**/podcasts.json'
   schedule:
-    - cron: '25 * * * *'
+    - cron: '*/15 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -64,7 +64,7 @@ jobs:
           Write-Host "Latest update to feed: $lastBuildDate" 
           Write-Host "Current UTC time: $utcNow"
           
-          $recentEpisodeThresholdMinutes = 90
+          $recentEpisodeThresholdMinutes = 60
                 
           if ($lastBuildDate.AddMinutes($recentEpisodeThresholdMinutes) -gt $utcNow) {
             echo "PODCAST_RECENTLY_UPDATED=true" | Out-File -FilePath $Env:GITHUB_ENV -Append
