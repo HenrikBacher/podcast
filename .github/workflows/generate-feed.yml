@@ -51,24 +51,21 @@ jobs:
       - name: Execute parser for ${{ matrix.podcasts.slug }} feed
         run: java -jar ./ommer.jar --slug ${{ matrix.podcasts.slug }} --urn ${{ matrix.podcasts.urn }} --imageUrl ${{ matrix.podcasts.image }} --apiKey ${{ secrets.API_KEY }} --baseUrl ${{ secrets.HOST_URL }}
 
-      - name: Check if feed has beend updated
-        id: check_date
+      - name: Check if feed has been updated recently
         run: |
           $xmlPath = "output/${{ matrix.podcasts.slug }}.xml"
           [xml]$xmlContent = Get-Content $xmlPath
-          $lastBuildDateStr = $xmlContent.rss.channel.lastBuildDate
-          
+
           $format = "ddd, dd MMM yyyy HH:mm:ss zzz"
-          $lastBuildDate = [datetime]::ParseExact($lastBuildDateStr, $format, $null)
-    
-          Write-Host "Latest update to feed: $lastBuildDate"
+          $lastBuildDate = [datetime]::ParseExact($xmlContent.rss.channel.lastBuildDate, $format, $null)
           $utcNow = Get-Date -Format 'ddd, dd MMM yyyy HH:mm:ss zzz' -AsUTC
+    
+          Write-Host "Latest update to feed: $lastBuildDate" 
           Write-Host "Current UTC time: $utcNow"
           
-          $currentUtcTime = [datetime]::UtcNow
-          $recentlyThresholdMinutes = -90
+          $recentlyThresholdMinutes = 90
                 
-          if ($lastBuildDate -gt $currentUtcTime.AddMinutes($recentlyThresholdMinutes)) {
+          if ($lastBuildDate.AddMinutes($recentlyThresholdMinutes) -gt $utcNow) {
             echo "PODCAST_RECENTLY_UPDATED=true" | Out-File -FilePath $Env:GITHUB_ENV -Append
             echo "Podcast updated within the last $recentlyThresholdMinutes minutes, uploading to Azure Blob Storage"
           } else {
