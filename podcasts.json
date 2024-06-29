@@ -1,49 +1,49 @@
 {
-    "podcasts": [
-      {
-        "slug": "genstart",
-        "urn": "urn:dr:radio:series:5fa25ef8330eac2f135b62d6",
-        "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6593ba22846e9f8fc0338958.jpg"
-      },
-      {
-        "slug": "genstart-dox",
-        "urn": "urn:dr:radio:series:65cb475de80d2a267cd12ae9",
-        "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:65cdea4b0a12f7722ca250a4.jpg"
-      },
-      {
-        "slug": "sara-og-monopolet",
-        "urn": "urn:dr:radio:series:5fa15704da351264f87b46ce",
-        "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6523bd03443243f95e2c39b0.jpg"
-      },
-      {
-        "slug": "hjernekassen",
-        "urn": "urn:dr:radio:series:5fa2684c330eac2f135b9254",
-        "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6523bd76443243f95e2c4866.jpg"
-      },
-      {
-        "slug": "tiden",
-        "urn": "urn:dr:radio:series:6303281409585a83f19bfae0",
-        "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6593b98a846e9f8fc03386f8.jpg"
-      },
-      {
-        "slug": "kampen-om-historien",
-        "urn": "urn:dr:radio:series:610bd147214d9c8f19f2e2d2",
-        "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6523bd0e443243f95e2c3b00.jpg"
-      },
-      {
-        "slug": "prompt",
-        "urn": "urn:dr:radio:series:64a66bcdc7644ff3cc5147a0",
-        "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6523c17c7d0c1a140697e108.jpg"
-      },
-      {
-        "slug": "slotsholmen",
-        "urn": "urn:dr:radio:series:5fa15f17da351264f87b7455",
-        "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6523c1317d0c1a140697dfe0.jpg"
-      },
-      {
-        "slug": "udsyn",
-        "urn": "urn:dr:radio:series:5fa269fc330eac2f135b9b9f",
-        "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6593ba97a838f3bbb32a050f.jpg"
-      }
-    ]
-  }
+  "podcasts": [
+    {
+      "slug": "genstart",
+      "urn": "urn:dr:radio:series:5fa25ef8330eac2f135b62d6",
+      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6593ba22846e9f8fc0338958.jpg"
+    },
+    {
+      "slug": "genstart-dox",
+      "urn": "urn:dr:radio:series:65cb475de80d2a267cd12ae9",
+      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:65cdea4b0a12f7722ca250a4.jpg"
+    },
+    {
+      "slug": "sara-og-monopolet",
+      "urn": "urn:dr:radio:series:5fa15704da351264f87b46ce",
+      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6523bd03443243f95e2c39b0.jpg"
+    },
+    {
+      "slug": "hjernekassen",
+      "urn": "urn:dr:radio:series:5fa2684c330eac2f135b9254",
+      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6523bd76443243f95e2c4866.jpg"
+    },
+    {
+      "slug": "tiden",
+      "urn": "urn:dr:radio:series:6303281409585a83f19bfae0",
+      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6593b98a846e9f8fc03386f8.jpg"
+    },
+    {
+      "slug": "kampen-om-historien",
+      "urn": "urn:dr:radio:series:610bd147214d9c8f19f2e2d2",
+      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6523bd0e443243f95e2c3b00.jpg"
+    },
+    {
+      "slug": "prompt",
+      "urn": "urn:dr:radio:series:64a66bcdc7644ff3cc5147a0",
+      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6523c17c7d0c1a140697e108.jpg"
+    },
+    {
+      "slug": "slotsholmen",
+      "urn": "urn:dr:radio:series:5fa15f17da351264f87b7455",
+      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6523c1317d0c1a140697dfe0.jpg"
+    },
+    {
+      "slug": "udsyn",
+      "urn": "urn:dr:radio:series:5fa269fc330eac2f135b9b9f",
+      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6593ba97a838f3bbb32a050f.jpg"
+    }
+  ]
+}
