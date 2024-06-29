@@ -115,8 +115,8 @@ jobs:
             --overwrite
       
       - name: Upload ${{ matrix.podcasts.slug }}.xml to Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.podcasts.slug }}
+          name: feed
           path: output/${{ matrix.podcasts.slug }}.xml
       
