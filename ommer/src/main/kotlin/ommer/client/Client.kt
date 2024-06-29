@@ -117,7 +117,7 @@ fun main(args: Array<String>) {
                             description = description,
                             pubDate = ZonedDateTime
                                 .parse(publishTime)
-                                .withZoneSameInstant(ZoneId.of("Europe/Copenhagen"))
+                                .atOffset( ZoneOffset.UTC )
                                 .format(rssDateTimeFormatter),
                             duration = Duration.of(durationMilliseconds, ChronoUnit.MILLIS).formatHMS(),
                             enclosureUrl = audioAsset.url.toString(),
