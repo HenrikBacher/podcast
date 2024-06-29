@@ -12,7 +12,7 @@ jobs:
   load-podcasts:
     runs-on: ubuntu-latest
     outputs:
-      podcasts: ${{ steps.load_data.outputs.PODCASTS }}
+      podcasts: ${{ steps.load_data.outputs.podcasts }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -21,7 +21,7 @@ jobs:
         id: load_data
         run: |
           PODCASTS_JSON=$(cat ./podcasts.json | jq -c .)
-          echo "name=PODCASTS::$PODCASTS_JSON" >> $GITHUB_OUTPUT
+          echo "name=podcasts::$PODCASTS_JSON" >> $GITHUB_OUTPUT
 
   update-feed:
     name: "Update ${{ matrix.podcasts.slug }} feed"
