@@ -47,16 +47,17 @@ jobs:
           java-version: '21'
           distribution: 'adopt'
 
-      - name: Execute ommer.jar
+      - name: Execute parser for ${{ matrix.podcasts.slug }} feed
         run: java -jar ./ommer.jar --slug ${{ matrix.podcasts.slug }} --urn ${{ matrix.podcasts.urn }} --imageUrl ${{ matrix.podcasts.image }} --apiKey ${{ secrets.API_KEY }} --baseUrl ${{ secrets.HOST_URL }}
 
-      - name: Check lastBuildDate
+      - name: Check if feed has beend updated
         id: check_date
         run: |
           $xmlPath = "output/${{ matrix.podcasts.slug }}.xml"
           [xml]$xmlContent = Get-Content $xmlPath
           $lastBuildDateStr = $xmlContent.rss.channel.lastBuildDate
-          Write-Host "Latest update: $lastBuildDateStr"
+          Write-Host "Latest update to feed: $lastBuildDateStr"
+          Write-Host "Current time: $(Get-Date -Format 'ddd, dd MMM yyyy HH:mm:ss zzz')"
           
           $format = 'ddd, dd MMM yyyy HH:mm:ss zzz'
           $culture = [System.Globalization.CultureInfo]::InvariantCulture
@@ -79,7 +80,7 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
           
-      - name: Calculate MD5 of local feed.xml and base64 encode
+      - name: Get local MD5 hash of ${{ matrix.podcasts.slug }}.xml
         if: env.PODCAST_RECENTLY_UPDATED == 'true'
         id: local_md5
         run: |
@@ -87,7 +88,7 @@ jobs:
           echo "LOCAL_MD5=$MD5_HASH" >> $GITHUB_ENV
           echo "LOCAL_MD5=$MD5_HASH"
       
-      - name: Get contentMd5 of the blob in Azure Blob Storage
+      - name: Get blob MD5 hash of ${{ matrix.podcasts.slug }}.xml
         if: env.PODCAST_RECENTLY_UPDATED == 'true'
         id: blob_md5
         continue-on-error: true
@@ -101,7 +102,7 @@ jobs:
           echo "BLOB_MD5=$BLOB_PROPERTIES" >> $GITHUB_ENV
           echo "BLOB_MD5=$BLOB_PROPERTIES"
       
-      - name: Upload feed.xml to Azure Blob Storage if different
+      - name: Upload ${{ matrix.podcasts.slug }}.xml if it has been updated
         if: env.PODCAST_RECENTLY_UPDATED == 'true' && env.LOCAL_MD5 != env.BLOB_MD5
         run: |
           az storage blob upload \
