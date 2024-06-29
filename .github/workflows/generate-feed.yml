@@ -47,12 +47,7 @@ jobs:
           distribution: 'adopt'
 
       - name: Execute ommer.jar
-        run: java -jar ./ommer.jar \
-              --slug ${{ matrix.podcasts.slug }} \
-              --urn ${{ matrix.podcasts.urn }} \
-              --imageUrl ${{ matrix.podcasts.image }} \ 
-              --apiKey ${{ secrets.API_KEY }} \
-              --baseUrl ${{ secrets.HOST_URL }}
+        run: java -jar ./ommer.jar --slug ${{ matrix.podcasts.slug }} --urn ${{ matrix.podcasts.urn }} --imageUrl ${{ matrix.podcasts.image }} --apiKey ${{ secrets.API_KEY }} --baseUrl ${{ secrets.HOST_URL }}
 
       - name: Check lastBuildDate
         id: check_date
