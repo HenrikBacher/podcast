@@ -6,7 +6,7 @@ on:
       - '**/generate-feed.yml'
       - '**/podcasts.json'
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '*/20 * * * *'
   workflow_dispatch:
 
 jobs:
