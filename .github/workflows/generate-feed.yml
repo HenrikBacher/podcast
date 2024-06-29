@@ -112,11 +112,4 @@ jobs:
             --auth-mode login \
             --name ${{ matrix.podcasts.slug }}.xml \
             --file output/${{ matrix.podcasts.slug }}.xml \
-            --overwrite
-      
-      - name: Upload ${{ matrix.podcasts.slug }}.xml to Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.podcasts.slug }}-feed
-          path: output/${{ matrix.podcasts.slug }}.xml
-      
+            --overwrite      
