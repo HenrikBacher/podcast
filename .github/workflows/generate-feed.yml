@@ -21,6 +21,7 @@ jobs:
         id: load_data
         run: |
           PODCASTS_JSON=$(cat ./podcasts.json | jq -c .)
+          echo $PODCASTS_JSON
           echo "name=podcasts::$PODCASTS_JSON" >> $GITHUB_OUTPUT
 
   update-feed:
