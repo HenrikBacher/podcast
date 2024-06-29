@@ -66,11 +66,11 @@ jobs:
           Write-Host "Current UTC time: $utcNow"
           
           $currentUtcTime = [datetime]::UtcNow
-          $recentlyThresholdMinutes = -90
+          $recentlyThresholdMinutes = -10000
                 
           if ($lastBuildDate -gt $currentUtcTime.AddMinutes($recentlyThresholdMinutes)) {
             echo "PODCAST_RECENTLY_UPDATED=true" | Out-File -FilePath $Env:GITHUB_ENV -Append
-            echo "Podcast updated within the last $recentThreshold minutes, uploading to Azure Blob Storage"
+            echo "Podcast updated within the last $recentlyThresholdMinutes minutes, uploading to Azure Blob Storage"
           } else {
             echo "PODCAST_RECENTLY_UPDATED=false" | Out-File -FilePath $Env:GITHUB_ENV -Append
             echo "Podcast not updated recently, skipping upload to Azure Blob Storage"
