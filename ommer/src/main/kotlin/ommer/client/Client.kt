@@ -71,67 +71,62 @@ fun main(args: Array<String>) {
     val feedUrl = "https://${baseUrl}/feeds/${slug}.xml"
     val outputDirectory = File("output")
 
-    val podcasts = mutableListOf<Podcast>()
-        podcasts.add(
-            Podcast(
-                urn = urn,
-                slug = slug,
-                titleSuffix = "(Reproduceret feed)",
-                descriptionSuffix = "",
-                feedUrl = feedUrl,
-                imageUrl = imageUrl
-            ),
-        )
+    val podcast = Podcast(
+        urn = urn,
+        slug = slug,
+        titleSuffix = "(Reproduceret feed)",
+        descriptionSuffix = "",
+        feedUrl = feedUrl,
+        imageUrl = imageUrl
+    )
  
     val rssDateTimeFormatter = DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm:ss Z")
     JettyClient().use { client ->
-        podcasts.forEach { podcast ->
-            val feedDirectory = outputDirectory 
-            feedDirectory.mkdirs()
-            val feedFile = outputDirectory / "${podcast.slug}.xml"
-            log.info("Processing podcast ${podcast.slug}. Target feed: $feedFile")
-            val response = client(Request(GET, apiUri / "series" / podcast.urn).header("x-apikey", apiKey))
-            val showInfo = show(response)
-            val feed = with(showInfo) {
-                Feed(
-                    link = presentationUrl,
-                    title = "$title${podcast.titleSuffix?.let { s -> " $s" } ?: ""}",
-                    description = "$description${podcast.descriptionSuffix?.let { s -> "\n$s" } ?: ""}",
-                    email = "podcast@dr.dk",
-                    lastBuildDate = ZonedDateTime
-                        .parse(latestEpisodeStartTime)
-                        .withZoneSameInstant(ZoneId.of("Europe/Copenhagen"))
-                        .format(rssDateTimeFormatter),
-                    feedUrl = "${podcast.feedUrl}",
-                    imageUrl = "${podcast.imageUrl}",
-                    imageLink = presentationUrl,
-                    items = fetchEpisodes(client, apiUri / "series", podcast.urn, apiKey).mapNotNull { item ->
-                        with(item) {
-                            val audioAsset = audioAssets
-                                .filter { it.format == "mp3" }
-                                // Select asset which is closest to bitrate 192
-                                .minByOrNull { abs(it.bitrate - 192) } ?: run {
-                                log.warn("No audio asset for ${item.id} (${item.title})")
-                                return@mapNotNull null
-                            }
-                            FeedItem(
-                                guid = productionNumber,
-                                link = presentationUrl.toString(),
-                                title = title,
-                                description = description,
-                                pubDate = ZonedDateTime
-                                    .parse(publishTime)
-                                    .withZoneSameInstant(ZoneId.of("Europe/Copenhagen"))
-                                    .format(rssDateTimeFormatter),
-                                duration = Duration.of(durationMilliseconds, ChronoUnit.MILLIS).formatHMS(),
-                                enclosureUrl = audioAsset.url.toString(),
-                                enclosureByteLength = audioAsset.fileSize,
-                            )
+        val feedDirectory = outputDirectory 
+        feedDirectory.mkdirs()
+        val feedFile = outputDirectory / "${podcast.slug}.xml"
+        log.info("Processing podcast ${podcast.slug}. Target feed: $feedFile")
+        val response = client(Request(GET, apiUri / "series" / podcast.urn).header("x-apikey", apiKey))
+        val showInfo = show(response)
+        val feed = with(showInfo) {
+            Feed(
+                link = presentationUrl,
+                title = "$title${podcast.titleSuffix?.let { s -> " $s" } ?: ""}",
+                description = "$description${podcast.descriptionSuffix?.let { s -> "\n$s" } ?: ""}",
+                email = "podcast@dr.dk",
+                lastBuildDate = ZonedDateTime
+                    .parse(latestEpisodeStartTime)
+                    .withZoneSameInstant(ZoneId.of("Europe/Copenhagen"))
+                    .format(rssDateTimeFormatter),
+                feedUrl = "${podcast.feedUrl}",
+                imageUrl = "${podcast.imageUrl}",
+                imageLink = presentationUrl,
+                items = fetchEpisodes(client, apiUri / "series", podcast.urn, apiKey).mapNotNull { item ->
+                    with(item) {
+                        val audioAsset = audioAssets
+                            .filter { it.format == "mp3" }
+                            // Select asset which is closest to bitrate 192
+                            .minByOrNull { abs(it.bitrate - 192) } ?: run {
+                            log.warn("No audio asset for ${item.id} (${item.title})")
+                            return@mapNotNull null
                         }
-                    }.toList(),
-                )
-            }
-            feed.generate(feedFile)
+                        FeedItem(
+                            guid = productionNumber,
+                            link = presentationUrl.toString(),
+                            title = title,
+                            description = description,
+                            pubDate = ZonedDateTime
+                                .parse(publishTime)
+                                .withZoneSameInstant(ZoneId.of("Europe/Copenhagen"))
+                                .format(rssDateTimeFormatter),
+                            duration = Duration.of(durationMilliseconds, ChronoUnit.MILLIS).formatHMS(),
+                            enclosureUrl = audioAsset.url.toString(),
+                            enclosureByteLength = audioAsset.fileSize,
+                        )
+                    }
+                }.toList(),
+            )
         }
+        feed.generate(feedFile)
     }
 }
