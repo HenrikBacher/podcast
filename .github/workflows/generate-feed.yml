@@ -23,9 +23,14 @@ jobs:
           PODCASTS_JSON=$(cat ./podcasts.json | jq -c .)
           echo $PODCASTS_JSON
           echo "name=podcasts::$PODCASTS_JSON" >> $GITHUB_OUTPUT
-        
+  check-output: 
+    needs: load-podcasts
+    runs-on: ubuntu-latest  
+    steps:
       - name: Check
-        run: jq . <<< '${{ steps.load_data.outputs.podcasts }}'
+        run: |
+          PODCASTS='${{ needs.load-podcasts.outputs.podcasts }}'
+          echo $PODCASTS | jq .
 
   update-feed:
     name: "Update ${{ matrix.podcasts.slug }} feed"
