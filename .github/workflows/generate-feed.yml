@@ -46,6 +46,7 @@ jobs:
         with:
           java-version: '21'
           distribution: 'adopt'
+          java-package: 'jre'
 
       - name: Execute parser for ${{ matrix.podcasts.slug }} feed
         run: java -jar ./ommer.jar --slug ${{ matrix.podcasts.slug }} --urn ${{ matrix.podcasts.urn }} --imageUrl ${{ matrix.podcasts.image }} --apiKey ${{ secrets.API_KEY }} --baseUrl ${{ secrets.HOST_URL }}
