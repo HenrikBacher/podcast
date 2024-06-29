@@ -96,7 +96,7 @@ fun main(args: Array<String>) {
                 email = "podcast@dr.dk",
                 lastBuildDate = ZonedDateTime
                     .parse(latestEpisodeStartTime)
-                    .withZoneSameInstant(ZoneId.of("Europe/Copenhagen"))
+                    .atOffset( ZoneOffset.UTC )
                     .format(rssDateTimeFormatter),
                 feedUrl = "${podcast.feedUrl}",
                 imageUrl = "${podcast.imageUrl}",

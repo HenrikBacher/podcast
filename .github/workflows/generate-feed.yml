@@ -6,7 +6,7 @@ on:
       - '**/generate-feed.yml'
       - '**/podcasts.json'
   schedule:
-    - cron: '10 * * * *'
+    - cron: '25 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -59,14 +59,14 @@ jobs:
           $lastBuildDateStr = $xmlContent.rss.channel.lastBuildDate
           
           $format = "ddd, dd MMM yyyy HH:mm:ss zzz"
-          $lastBuildDate = [datetime]::ParseExact($lastBuildDateStr, $format, $null).ToUniversalTime()
+          $lastBuildDate = [datetime]::ParseExact($lastBuildDateStr, $format, $null)
     
           Write-Host "Latest update to feed: $lastBuildDate"
           $utcNow = Get-Date -Format 'ddd, dd MMM yyyy HH:mm:ss zzz' -AsUTC
           Write-Host "Current UTC time: $utcNow"
           
           $currentUtcTime = [datetime]::UtcNow
-          $recentlyThresholdMinutes = -10000
+          $recentlyThresholdMinutes = -90
                 
           if ($lastBuildDate -gt $currentUtcTime.AddMinutes($recentlyThresholdMinutes)) {
             echo "PODCAST_RECENTLY_UPDATED=true" | Out-File -FilePath $Env:GITHUB_ENV -Append
