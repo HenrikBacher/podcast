@@ -20,9 +20,8 @@ jobs:
       - name: Load Podcasts Data
         id: load_data
         run: |
-          PODCASTS_JSON=$(cat ./podcasts.json)
-          PODCASTS_ESCAPED=$(echo "$PODCASTS" | sed 's/"/\\"/g')
-          echo "name=PODCASTS::$PODCASTS_ESCAPED" >> $GITHUB_ENV
+          PODCASTS_JSON=$(cat ./podcasts.json | jq -c .)
+          echo "name=PODCASTS::$PODCASTS_JSON" >> $GITHUB_OUTPUT
 
   update-feed:
     name: "Update ${{ matrix.podcasts.slug }} feed"
