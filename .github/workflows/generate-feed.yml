@@ -15,7 +15,7 @@ jobs:
       podcasts: ${{ steps.set_matrix.outputs.PODCASTS }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Install jq
         run: sudo apt-get install jq
@@ -25,7 +25,7 @@ jobs:
         run: |
           PODCASTS_JSON=$(cat ./podcasts.json)
           PODCASTS=$(echo $PODCASTS_JSON | jq '.podcasts')
-          echo "::set-output name=PODCASTS::$PODCASTS"
+          echo "name=PODCASTS::$PODCASTS" >> $GITHUB_OUTPUT
 
   update-feed:
     name: "Update ${{ matrix.podcasts.slug }} feed"
