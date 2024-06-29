@@ -12,7 +12,7 @@ jobs:
   load-podcasts:
     runs-on: ubuntu-latest
     outputs:
-      podcasst: ${{ steps.set_matrix.outputs.matrix }}
+      podcasts: ${{ steps.set_matrix.outputs.PODCASTS }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -20,23 +20,19 @@ jobs:
       - name: Install jq
         run: sudo apt-get install jq
 
+
       - name: Load Podcasts Data
-        id: load_podcasts
         run: |
           PODCASTS_JSON=$(cat ./podcasts.json)
-          echo "::set-output name=podcasts::$PODCASTS_JSON"
-
-      - name: Use Podcasts Data
-        run: |
-          PODCASTS_JSON='${{ steps.load_podcasts.outputs.podcasts }}'
           PODCASTS=$(echo $PODCASTS_JSON | jq '.podcasts')
           echo "::set-output name=PODCASTS::$PODCASTS"
 
   update-feed:
     name: "Update ${{ matrix.podcasts.slug }} feed"
+    needs: load-podcasts
     strategy:
       matrix:
-        matrix: ${{fromJson(needs.load-podcasts.outputs.matrix)}}
+        matrix: ${{fromJson(needs.load-podcasts.outputs.podcasts)}}
     runs-on: ubuntu-latest
     steps:
       - name: Get latest release
