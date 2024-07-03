@@ -1,5 +1,3 @@
-# DR1ommer
-
 Utility for gathering all episodes for a select subset of podcasts from dr.dk and generating RSS feeds.
 
 Usage:
