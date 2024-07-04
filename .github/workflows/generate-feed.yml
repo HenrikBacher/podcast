@@ -113,3 +113,40 @@ jobs:
             --name ${{ matrix.podcasts.slug }}.xml \
             --file output/${{ matrix.podcasts.slug }}.xml \
             --overwrite
+
+  publish-github-pages:
+    name: Publish GitHub Pages Site
+    needs: update-feed
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0 # Fetch all history for .GitInfo and .Lastmod
+
+      - name: Setup Jekyll
+        uses: actions/setup-ruby@v1
+        with:
+          ruby-version: '2.7'
+
+      - name: Build and publish GitHub Pages
+        run: |
+          # Install dependencies
+          gem install bundler jekyll
+          # Generate HTML file with links to RSS feeds
+          echo "<html><body><h1>Published RSS Feeds</h1><ul>" > index.html
+          for slug in $(jq -r '.[].slug' podcasts.json); do
+            echo "<li><a href='${{ secrets.HOST_URL }}/${slug}.xml'>${slug} Feed</a></li>" >> index.html
+          done
+          echo "</ul></body></html>" >> index.html
+          # Setup Git
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          # Commit and push to gh-pages branch
+          git checkout -b gh-pages
+          git add index.html
+          git commit -m "Update GitHub Pages site with RSS feed links"
+          git push origin gh-pages --force
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
