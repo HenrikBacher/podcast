@@ -39,6 +39,11 @@
       "slug": "udsyn",
       "urn": "urn:dr:radio:series:5fa269fc330eac2f135b9b9f",
       "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6593ba97a838f3bbb32a050f.jpg"
+    },
+    {
+      "slug": "brinkmanns-briks",
+      "urn": "urn:dr:radio:series:5fa25a95330eac2f135b4a6c",
+      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6523bd6b7d0c1a140697a576.jpg"
     }
   ]
 }
