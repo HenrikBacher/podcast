@@ -44,6 +44,11 @@
       "slug": "brinkmanns-briks",
       "urn": "urn:dr:radio:series:5fa25a95330eac2f135b4a6c",
       "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6523bd6b7d0c1a140697a576.jpg"
+    },
+    {
+      "slug": "lottomysteriet-genfortalt",
+      "urn": "urn:dr:radio:series:6661bfaa7937d2cab8cad242",
+      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6674151f1420d5a648fb0240.jpg"
     }
   ]
 }
