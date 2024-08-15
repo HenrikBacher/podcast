@@ -49,6 +49,10 @@
       "slug": "tyvstart",
       "urn": "urn:dr:radio:series:63bc0839d2052f8a01353d1c",
       "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6523c1747d0c1a140697e0ef.jpg"
-    }
+    },
+    {
+      "slug": "ubegribeligt", 
+      "urn": "urn:dr:radio:series:626931758679fdf8af8a0e26", 
+      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6523bf677d0c1a140697cae5.jpg"}
   ]
 }
