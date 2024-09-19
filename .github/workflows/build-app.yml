@@ -23,9 +23,8 @@ jobs:
         with:
           path: |
             ~/.gradle/caches
-            ~/.gradle/wrapper
-            ./ommer/build/libs/ommer.jar
-          key: ${{ runner.os }}-${{ hashFiles('./build.gradle.kts', './settings.gradle.kts', '**/gradle-wrapper.properties', './ommer/**') }}
+            ~.gradle/configuration-cache
+          key: ${{ runner.os }}-${{ hashFiles('./build.gradle.kts', './settings.gradle.kts', './gradle.properties', '**/gradle-wrapper.properties') }}
           restore-keys: ${{ runner.os }}-
 
       - name: Set up JDK 21
