@@ -22,3 +22,9 @@ tasks.withType<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar> {
     manifest { attributes["Main-Class"] = mainClass }
     minimize()
 }
+
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
+    kotlinOptions {
+        incremental = true
+    }
+}
