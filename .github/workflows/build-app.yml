@@ -18,22 +18,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-
-      - name: Cache Gradle dependencies
-        uses: burrunan/gradle-cache-action@v2
-        with:
-          arguments: build assemble
-
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           java-version: "21"
           distribution: "adopt"
 
-      - name: Build Kotlin app
-        run: |
-          chmod +x ./gradlew
-          ./gradlew build assemble
+      - name: Cache Gradle dependencies
+        uses: burrunan/gradle-cache-action@v2
+        with:
+          arguments: build assemble
 
       - name: Set the date
         if: github.ref == 'refs/heads/main'
