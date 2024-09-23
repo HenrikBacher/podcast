@@ -24,10 +24,19 @@ jobs:
           java-version: "21"
           distribution: "adopt"
 
-      - name: Cache Gradle dependencies
-        uses: burrunan/gradle-cache-action@v2
+      - uses: actions/cache@v4
+        id: cache-ommer
         with:
-          arguments: build assemble
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/configuration-cache
+          key: ${{ runner.os }}-${{ hashFiles('./build.gradle.kts', './settings.gradle.kts', './gradle.properties', '**/gradle-wrapper.properties') }}
+          restore-keys: ${{ runner.os }}-gradle-
+
+      - name: Build Kotlin app
+        run: |
+          chmod +x ./gradlew
+          ./gradlew build assemble
 
       - name: Set the date
         if: github.ref == 'refs/heads/main'
