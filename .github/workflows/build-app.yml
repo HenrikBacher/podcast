@@ -24,7 +24,6 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/configuration-cache
-            ~/.gradle/wrapper
           key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
           restore-keys: ${{ runner.os }}-gradle-
 
