@@ -20,7 +20,7 @@ jobs:
 
 
       - name: Cache Gradle dependencies
-        uses: burrunan/gradle-cache-action@v1
+        uses: burrunan/gradle-cache-action@v2
         with:
           arguments: build assemble
 
