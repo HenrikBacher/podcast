@@ -24,7 +24,8 @@ jobs:
           java-version: "21"
           distribution: "adopt"
 
-      - uses: actions/cache@v4
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
         id: cache-ommer
         with:
           path: |
