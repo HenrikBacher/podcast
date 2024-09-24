@@ -10,6 +10,12 @@ updates:
         patterns:
           - org.http4k*
 
+  # Enable updates for the Gradle wrapper
+  - package-ecosystem: "gradle"
+    directory: "/" # Location of the gradle-wrapper.properties file
+    schedule:
+      interval: "daily" # How often to check for updates
+      
   # Enable updates for GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/" # GitHub Actions are configured in the .github/workflows directory
