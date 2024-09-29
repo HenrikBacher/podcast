@@ -59,6 +59,16 @@
       "slug": "sorte-tal", 
       "urn": "urn:dr:radio:series:5fa160a9da351264f87b7df0", 
       "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6617e347fc491910acd58311.jpg"
+    },
+    {
+      "slug": "krig", 
+      "urn": "urn:dr:radio:series:63bbfd20d2052f8a013504ce", 
+      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:66f2977eb75d19480fa4a3a3.jpg"
+    },
+    {
+      "slug": "kvinder-i-krig", 
+      "urn": "urn:dr:radio:series:600173506c12863ced19eb55", 
+      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:66f87c51075f9278990a9c2c.jpg"
     }
   ]
 }
