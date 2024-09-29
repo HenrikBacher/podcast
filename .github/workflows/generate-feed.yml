@@ -76,13 +76,13 @@ jobs:
         shell: pwsh
 
       - name: Login to Azure
-        # if: env.PODCAST_RECENTLY_UPDATED == 'true'
+        if: env.PODCAST_RECENTLY_UPDATED == 'true'
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Get local MD5 hash of ${{ matrix.podcasts.slug }}.xml
-        # if: env.PODCAST_RECENTLY_UPDATED == 'true'
+        if: env.PODCAST_RECENTLY_UPDATED == 'true'
         id: local_md5
         run: |
           MD5_HASH=$(md5sum output/${{ matrix.podcasts.slug }}.xml | awk '{print $1}' | xxd -r -p | base64)
@@ -90,7 +90,7 @@ jobs:
           echo "LOCAL_MD5=$MD5_HASH"
 
       - name: Get blob MD5 hash of ${{ matrix.podcasts.slug }}.xml
-        # if: env.PODCAST_RECENTLY_UPDATED == 'true'
+        if: env.PODCAST_RECENTLY_UPDATED == 'true'
         id: blob_md5
         continue-on-error: true
         run: |
@@ -104,7 +104,7 @@ jobs:
           echo "BLOB_MD5=$BLOB_PROPERTIES"
 
       - name: Upload ${{ matrix.podcasts.slug }}.xml if it has been updated
-        # if: env.PODCAST_RECENTLY_UPDATED == 'true' && env.LOCAL_MD5 != env.BLOB_MD5
+        if: env.PODCAST_RECENTLY_UPDATED == 'true' && env.LOCAL_MD5 != env.BLOB_MD5
         run: |
           az storage blob upload \
             --account-name ${{ secrets.STORAGE_ACCOUNT }} \
