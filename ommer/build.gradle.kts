@@ -4,7 +4,7 @@ dependencies {
     implementation("org.slf4j:slf4j-api:2.0.16")
     implementation("ch.qos.logback:logback-classic:1.5.8")
     implementation("org.http4k:http4k-core:5.31.1.0")
-    implementation("org.http4k:http4k-client-jetty:5.31.1.0")
+    implementation("org.http4k:http4k-client-jetty:5.32.1.0")
     implementation("org.http4k:http4k-format-gson:5.31.1.0")
     implementation("org.jetbrains.kotlinx:kotlinx-cli:0.3.6")
 }
