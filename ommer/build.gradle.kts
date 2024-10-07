@@ -3,9 +3,9 @@ plugins { id("com.github.johnrengelman.shadow") version "8.1.1" }
 dependencies {
     implementation("org.slf4j:slf4j-api:2.0.16")
     implementation("ch.qos.logback:logback-classic:1.5.8")
-    implementation("org.http4k:http4k-core:5.32.2.0")
-    implementation("org.http4k:http4k-client-jetty:5.32.2.0")
-    implementation("org.http4k:http4k-format-gson:5.32.2.0")
+    implementation("org.http4k:http4k-core:5.32.3.0")
+    implementation("org.http4k:http4k-client-jetty:5.32.3.0")
+    implementation("org.http4k:http4k-format-gson:5.32.3.0")
     implementation("org.jetbrains.kotlinx:kotlinx-cli:0.3.6")
 }
 
