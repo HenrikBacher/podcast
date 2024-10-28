@@ -2,7 +2,7 @@ plugins { id("com.github.johnrengelman.shadow") version "8.1.1" }
 
 dependencies {
     implementation("org.slf4j:slf4j-api:2.0.16")
-    implementation("ch.qos.logback:logback-classic:1.5.11")
+    implementation("ch.qos.logback:logback-classic:1.5.12")
     implementation("org.http4k:http4k-core:5.33.0.1")
     implementation("org.http4k:http4k-client-jetty:5.33.0.1")
     implementation("org.http4k:http4k-format-gson:5.33.0.1")
