@@ -1,12 +1,12 @@
 package ommer.drapi
 
-import org.http4k.core.Uri
+import io.ktor.http.*
 
 data class Group(
         val limit: Int,
         val offset: Int,
         val totalSize: Int,
-        val next: Uri?,
+        val next: Url?,
         val title: String,
         val groupId: String,
         val items: List<Item>,
@@ -58,9 +58,9 @@ data class Episodes(
         val items: List<Item>,
         val limit: Int,
         val offset: Int,
-        val previous: Uri?,
-        val next: Uri?,
-        val self: Uri?,
+        val previous: Url?,
+        val next: Url?,
+        val self: Url?,
         val totalSiz: Int,
 )
 
@@ -71,7 +71,7 @@ data class Item(
         val audioAssets: List<AudioAsset>,
         val title: String,
         val description: String,
-        val presentationUrl: Uri,
+        val presentationUrl: Url,
         val publishTime: String,
 )
 
@@ -81,5 +81,5 @@ data class AudioAsset(
         val format: String,
         val bitrate: Int,
         val fileSize: Long,
-        val url: Uri,
+        val url: Url,
 )
