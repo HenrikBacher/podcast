@@ -43,7 +43,7 @@ private fun fetchEpisodes(
                 header("x-apikey", apiKey)
             }
         }
-        val episodes = gson.fromJson(response.readText(), Episodes::class.java)
+        val episodes = runBlocking { gson.fromJson(response.bodyAsText(), Episodes::class.java) }
         log.info("Got ${episodes.items.size} items")
         episodes.items.forEach { yield(it) }
         currentUri = episodes.next?.toString() ?: break
@@ -121,7 +121,7 @@ fun main(args: Array<String>) {
             header("x-apikey", apiKey)
         }
     }
-    val showInfo = gson.fromJson(response.readText(), Show::class.java)
+    val showInfo = runBlocking { gson.fromJson(response.bodyAsText(), Show::class.java) }
     val feed =
             with(showInfo) {
                 Feed(
