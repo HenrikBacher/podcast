@@ -1,7 +1,6 @@
 plugins {
     kotlin("jvm") version "2.0.21"
     kotlin("plugin.serialization") version "2.0.21"
-    id("org.graalvm.buildtools.native") version "0.9.28"
 }
 
 group = "dr1ommer"
@@ -38,17 +37,6 @@ allprojects {
     }
 }
 
-graalvmNative {
-    binaries {
-        named("main") {
-            imageName.set("ommer")
-            mainClass.set("com.example.MainKt") // Replace with your actual main class
-            debug.set(false)
-            verbose.set(true)
-            fallback.set(false)
-        }
-    }
-}
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
     compilerOptions {
