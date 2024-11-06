@@ -18,6 +18,8 @@ import ommer.rss.Feed
 import ommer.rss.FeedItem
 import ommer.rss.generate
 import org.slf4j.LoggerFactory
+import okhttp3.ConnectionSpec
+import java.util.concurrent.TimeUnit
 
 private val log = LoggerFactory.getLogger("ommer")
 private val gson = Gson()
@@ -122,7 +124,10 @@ fun main(args: Array<String>) {
             )
 
     val rssDateTimeFormatter = DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm:ss Z")
-    val client = OkHttpClient.Builder().build()
+    val client = OkHttpClient.Builder()
+            .connectionSpecs(listOf(ConnectionSpec.MODERN_TLS))
+            .readTimeout(30, TimeUnit.SECONDS)
+            .build()
     
     val feedDirectory = outputDirectory
     feedDirectory.mkdirs()
