@@ -79,7 +79,7 @@ jobs:
         shell: bash
 
       - name: Login to Azure
-        if: env.PODCAST_RECENTLY_UPDATED == 'true' && env.NEEDS_UPLOAD == 'true'
+        if: env.PODCAST_RECENTLY_UPDATED == 'true'
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
