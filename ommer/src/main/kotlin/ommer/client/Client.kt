@@ -27,7 +27,7 @@ import org.slf4j.LoggerFactory
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.retry
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.single
 
 private val log = LoggerFactory.getLogger("ommer")
@@ -48,10 +48,14 @@ private suspend fun <T> withRetry(
     block: suspend () -> T
 ): T = flow {
     emit(block())
-}.retry(maxRetries) { cause ->
-    log.warn("$operation failed (attempt ${maxRetries - retryCount}/$maxRetries): ${cause.message}")
-    delay(initialRetryDelay * (maxRetries - retryCount)) // Exponential backoff
-    true
+}.retryWhen { cause, attempt ->
+    if (attempt < maxRetries) {
+        log.warn("$operation failed (attempt ${attempt + 1}/$maxRetries): ${cause.message}")
+        delay(initialRetryDelay * (attempt + 1)) // Exponential backoff
+        true
+    } else {
+        false
+    }
 }.single()
 
 private fun String.appendPath(suffix: String): String = if (endsWith("/")) "$this$suffix" else "$this/$suffix"
