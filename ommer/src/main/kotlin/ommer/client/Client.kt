@@ -26,6 +26,9 @@ import org.slf4j.LoggerFactory
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private val log = LoggerFactory.getLogger("ommer")
 private val gson = Gson()
@@ -52,7 +55,7 @@ private suspend fun fetchEpisodes(
     baseUri: String,
     urn: String,
     apiKey: String,
-): List<Item> {
+): List<Item> = coroutineScope {
     val items = mutableListOf<Item>()
     var currentUri = "${baseUri.appendPath(urn)}/episodes?limit=256"
     val uris = mutableListOf<String>()
@@ -74,20 +77,22 @@ private suspend fun fetchEpisodes(
     }
     
     // Then fetch all episodes in parallel
-    items.addAll(uris.map { uri ->
-        async {
-            val response = client.get(uri) {
-                header("x-apikey", apiKey)
+    withContext(Dispatchers.IO) {
+        items.addAll(uris.map { uri ->
+            async {
+                val response = client.get(uri) {
+                    header("x-apikey", apiKey)
+                }
+                if (response.status.isSuccess()) {
+                    gson.fromJson(response.bodyAsText(), Episodes::class.java).items
+                } else {
+                    emptyList()
+                }
             }
-            if (response.status.isSuccess()) {
-                gson.fromJson(response.bodyAsText(), Episodes::class.java).items
-            } else {
-                emptyList()
-            }
-        }
-    }.awaitAll().flatten())
+        }.awaitAll().flatten())
+    }
     
-    return items
+    items
 }
 
 fun Duration.formatHMS(): String =
