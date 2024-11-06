@@ -6,7 +6,7 @@ plugins {
 group = "dr1ommer"
 version = "0.1"
 
-val ktorVersion = "2.3.12"
+val ktorVersion = "3.0.1"
 
 allprojects {
     apply(plugin = "kotlin")
@@ -21,7 +21,6 @@ allprojects {
         implementation("io.ktor:ktor-client-content-negotiation:$ktorVersion")
         implementation("io.ktor:ktor-serialization-gson:$ktorVersion")
         implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
-        implementation("io.ktor:ktor-client-caching:$ktorVersion")
         implementation("org.ehcache:ehcache:3.10.8")
     }
 
