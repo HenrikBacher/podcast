@@ -33,7 +33,9 @@ private fun fetchEpisodes(
         apiKey: String,
 ): Sequence<Item> = sequence {
     var currentUri = "${baseUri.appendPath(urn)}/episodes?limit=256"
-    while (true) {
+    var shouldContinue = true
+    
+    while (shouldContinue) {
         log.info("Getting $currentUri")
         val request = Request.Builder()
                 .url(currentUri)
@@ -41,12 +43,17 @@ private fun fetchEpisodes(
                 .build()
         
         client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) break
+            if (!response.isSuccessful) {
+                shouldContinue = false
+                return@use
+            }
             
             val episodes = gson.fromJson(response.body?.string(), Episodes::class.java)
             log.info("Got ${episodes.items.size} items")
             episodes.items.forEach { yield(it) }
-            currentUri = episodes.next ?: break
+            
+            currentUri = episodes.next
+            shouldContinue = episodes.next != null
         }
     }
 }
