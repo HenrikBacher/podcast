@@ -60,8 +60,9 @@ private class DSL(val document: Document) : Document by document {
 }
 
 fun Feed.generate(feedFile: File) {
-    // Create a new document
-    val documentBuilder = DocumentBuilderFactory.newInstance().newDocumentBuilder()
+    val documentBuilder = DocumentBuilderFactory.newInstance().apply {
+        isNamespaceAware = true
+    }.newDocumentBuilder()
     val document = documentBuilder.newDocument()
     document.xmlStandalone = true
     DSL(document).run {
@@ -92,6 +93,9 @@ fun Feed.generate(feedFile: File) {
                     text("itunes:name", ownerName)
                 }
                 text("itunes:new-feed-url", feedUrl)
+                element("itunes:image") {
+                    setAttribute("href", imageUrl)
+                }
                 element("image") {
                     text("url", imageUrl)
                     text("title", title)
@@ -128,11 +132,18 @@ fun Feed.generate(feedFile: File) {
             }
         }
     }
-    // Write the content into XML file
-    val transformer =
-            TransformerFactory.newInstance().newTransformer().apply {
-                setOutputProperty(OutputKeys.INDENT, "yes")
-            }
+    // Optimize XML output with better settings
+    val transformer = TransformerFactory.newInstance().newTransformer().apply {
+        setOutputProperty(OutputKeys.INDENT, "yes")
+        setOutputProperty(OutputKeys.METHOD, "xml")
+        setOutputProperty(OutputKeys.ENCODING, "UTF-8")
+        setOutputProperty("{http://xml.apache.org/xslt}indent-amount", "2")
+        setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "no")
+        setOutputProperty(OutputKeys.STANDALONE, "yes")
+    }
+    
     val source = DOMSource(document)
-    transformer.transform(source, StreamResult(feedFile))
+    feedFile.bufferedWriter(Charsets.UTF_8, DEFAULT_BUFFER_SIZE).use { writer ->
+        transformer.transform(source, StreamResult(writer))
+    }
 }

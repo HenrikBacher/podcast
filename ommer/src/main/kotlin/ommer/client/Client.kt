@@ -6,6 +6,7 @@ import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
+import io.ktor.http.*
 import io.ktor.serialization.gson.*
 import kotlinx.coroutines.runBlocking
 import java.io.File
@@ -29,7 +30,9 @@ private val log = LoggerFactory.getLogger("ommer")
 private val gson = Gson()
 private val client = HttpClient(CIO) {
     install(ContentNegotiation) {
-        gson()
+        gson {
+            // Optional: Configure Gson here if needed
+        }
     }
 }
 
@@ -44,29 +47,25 @@ private suspend fun fetchEpisodes(
 ): List<Item> {
     val items = mutableListOf<Item>()
     var currentUri = "${baseUri.appendPath(urn)}/episodes?limit=256"
-    var shouldContinue = true
     
-    while (shouldContinue) {
+    while (true) {
         log.info("Getting $currentUri")
         val response = client.get(currentUri) {
             header("x-apikey", apiKey)
+            contentType(ContentType.Application.Json)
         }
         
-        if (!response.status.value.toString().startsWith("2")) {
-            shouldContinue = false
+        if (response.status.isSuccess()) {
+            val episodes = gson.fromJson(response.bodyAsText(), Episodes::class.java)
+            log.info("Got ${episodes.items.size} items")
+            items.addAll(episodes.items)
+            
+            currentUri = episodes.next ?: break
+        } else {
             break
         }
-        
-        val episodes = gson.fromJson(response.bodyAsText(), Episodes::class.java)
-        log.info("Got ${episodes.items.size} items")
-        items.addAll(episodes.items)
-        
-        episodes.next?.let { 
-            currentUri = it
-        } ?: run {
-            shouldContinue = false
-        }
     }
+    
     return items
 }
 
@@ -141,51 +140,52 @@ fun main(args: Array<String>) = runBlocking {
         header("x-apikey", apiKey)
     }
     
-    if (!response.status.value.toString().startsWith("2")) {
+    if (response.status.isSuccess()) {
+        val showInfo = gson.fromJson(response.bodyAsText(), Show::class.java)
+        val feed = with(showInfo) {
+            Feed(
+                    link = presentationUrl,
+                    title = "$title${podcast.titleSuffix?.let { s -> " $s" } ?: ""}",
+                    description = "$description${podcast.descriptionSuffix?.let { s -> "\n$s" } ?: ""}",
+                    email = "podcast@dr.dk",
+                    lastBuildDate = ZonedDateTime.parse(latestEpisodeStartTime)
+                            .withZoneSameInstant(ZoneId.of("Europe/Copenhagen"))
+                            .format(rssDateTimeFormatter),
+                    feedUrl = "${podcast.feedUrl}",
+                    imageUrl = "${podcast.imageUrl}",
+                    imageLink = presentationUrl,
+                    items = fetchEpisodes("$apiUri/series", podcast.urn, apiKey)
+                            .mapNotNull { item ->
+                                with(item) {
+                                    val audioAsset = audioAssets
+                                            .filter { it.format == "mp3" }
+                                            .minByOrNull { abs(it.bitrate - 192) }
+                                            ?: run {
+                                                log.warn("No audio asset for ${item.id} (${item.title})")
+                                                return@mapNotNull null
+                                            }
+                                    FeedItem(
+                                            guid = productionNumber,
+                                            link = presentationUrl,
+                                            title = title,
+                                            description = description,
+                                            pubDate = ZonedDateTime.parse(publishTime)
+                                                    .withZoneSameInstant(ZoneId.of("Europe/Copenhagen"))
+                                                    .format(rssDateTimeFormatter),
+                                            duration = Duration.of(durationMilliseconds, ChronoUnit.MILLIS)
+                                                    .formatHMS(),
+                                            enclosureUrl = audioAsset.url,
+                                            enclosureByteLength = audioAsset.fileSize,
+                                    )
+                                }
+                            }
+                            .toList(),
+            )
+        }
+        feed.generate(feedFile)
+    } else {
         throw IllegalStateException("Failed to fetch show info")
     }
     
-    val showInfo = gson.fromJson(response.bodyAsText(), Show::class.java)
-    val feed = with(showInfo) {
-        Feed(
-                link = presentationUrl,
-                title = "$title${podcast.titleSuffix?.let { s -> " $s" } ?: ""}",
-                description = "$description${podcast.descriptionSuffix?.let { s -> "\n$s" } ?: ""}",
-                email = "podcast@dr.dk",
-                lastBuildDate = ZonedDateTime.parse(latestEpisodeStartTime)
-                        .withZoneSameInstant(ZoneId.of("Europe/Copenhagen"))
-                        .format(rssDateTimeFormatter),
-                feedUrl = "${podcast.feedUrl}",
-                imageUrl = "${podcast.imageUrl}",
-                imageLink = presentationUrl,
-                items = fetchEpisodes("$apiUri/series", podcast.urn, apiKey)
-                        .mapNotNull { item ->
-                            with(item) {
-                                val audioAsset = audioAssets
-                                        .filter { it.format == "mp3" }
-                                        .minByOrNull { abs(it.bitrate - 192) }
-                                        ?: run {
-                                            log.warn("No audio asset for ${item.id} (${item.title})")
-                                            return@mapNotNull null
-                                        }
-                                FeedItem(
-                                        guid = productionNumber,
-                                        link = presentationUrl,
-                                        title = title,
-                                        description = description,
-                                        pubDate = ZonedDateTime.parse(publishTime)
-                                                .withZoneSameInstant(ZoneId.of("Europe/Copenhagen"))
-                                                .format(rssDateTimeFormatter),
-                                        duration = Duration.of(durationMilliseconds, ChronoUnit.MILLIS)
-                                                .formatHMS(),
-                                        enclosureUrl = audioAsset.url,
-                                        enclosureByteLength = audioAsset.fileSize,
-                                )
-                            }
-                        }
-                        .toList(),
-        )
-    }
-    feed.generate(feedFile)
     client.close()
 }

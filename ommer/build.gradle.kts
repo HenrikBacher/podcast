@@ -1,13 +1,5 @@
 plugins { id("com.github.johnrengelman.shadow") version "8.1.1" }
 
-dependencies {
-    implementation("org.slf4j:slf4j-api:2.0.16")
-    implementation("ch.qos.logback:logback-classic:1.5.12")
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("com.google.code.gson:gson:2.11.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-cli:0.3.6")
-}
-
 val mainClass = "ommer.client.ClientKt"
 
 tasks.jar {

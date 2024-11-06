@@ -6,6 +6,8 @@ plugins {
 group = "dr1ommer"
 version = "0.1"
 
+val ktorVersion = "3.0.1"
+
 allprojects {
     apply(plugin = "kotlin")
 
@@ -14,11 +16,16 @@ allprojects {
     }
 
     dependencies {
-        implementation("io.ktor:ktor-client-core:2.3.7")
-        implementation("io.ktor:ktor-client-cio:2.3.7")
-        implementation("io.ktor:ktor-client-content-negotiation:2.3.7")
-        implementation("io.ktor:ktor-serialization-gson:2.3.7")
-        implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+        implementation("io.ktor:ktor-client-core:$ktorVersion")
+        implementation("io.ktor:ktor-client-cio:$ktorVersion")
+        implementation("io.ktor:ktor-client-content-negotiation:$ktorVersion")
+        implementation("io.ktor:ktor-serialization-gson:$ktorVersion")
+        implementation("io.ktor:ktor-client-logging:$ktorVersion")
+        implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
+        implementation("org.slf4j:slf4j-api:2.0.16")
+        implementation("ch.qos.logback:logback-classic:1.5.12")
+        implementation("com.google.code.gson:gson:2.11.0")
+        implementation("org.jetbrains.kotlinx:kotlinx-cli:0.3.6")
     }
 
     tasks.test {
