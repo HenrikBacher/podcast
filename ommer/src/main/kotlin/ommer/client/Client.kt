@@ -1,5 +1,6 @@
 package ommer.client
 
+import com.google.gson.Gson
 import java.io.File
 import java.time.Duration
 import java.time.ZoneId
@@ -8,44 +9,45 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import kotlin.math.abs
 import kotlinx.cli.*
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import ommer.drapi.Episodes
 import ommer.drapi.Item
 import ommer.drapi.Show
 import ommer.rss.Feed
 import ommer.rss.FeedItem
 import ommer.rss.generate
-import org.http4k.client.JettyClient
-import org.http4k.core.Body
-import org.http4k.core.HttpHandler
-import org.http4k.core.Method.GET
-import org.http4k.core.Request
-import org.http4k.core.Uri
-import org.http4k.core.query
-import org.http4k.format.Gson.auto
 import org.slf4j.LoggerFactory
 
 private val log = LoggerFactory.getLogger("ommer")
+private val gson = Gson()
 
-private operator fun Uri.div(suffix: String): Uri = path("$path/$suffix")
+private fun String.appendPath(suffix: String): String = if (endsWith("/")) "$this$suffix" else "$this/$suffix"
 
 private operator fun File.div(relative: String): File = resolve(relative)
 
-private val episodes = Body.auto<Episodes>().toLens()
-private val show = Body.auto<Show>().toLens()
-
 private fun fetchEpisodes(
-        client: HttpHandler,
-        baseUri: Uri,
+        client: OkHttpClient,
+        baseUri: String,
         urn: String,
         apiKey: String,
 ): Sequence<Item> = sequence {
-    var currentUri = (baseUri / urn / "episodes").query("limit", "256")
+    var currentUri = "${baseUri.appendPath(urn)}/episodes?limit=256"
     while (true) {
         log.info("Getting $currentUri")
-        val response = episodes(client(Request(GET, currentUri).header("x-apikey", apiKey)))
-        log.info("Got ${response.items.size} items")
-        response.items.forEach { yield(it) }
-        currentUri = response.next ?: break
+        val request = Request.Builder()
+                .url(currentUri)
+                .header("x-apikey", apiKey)
+                .build()
+        
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) break
+            
+            val episodes = gson.fromJson(response.body?.string(), Episodes::class.java)
+            log.info("Got ${episodes.items.size} items")
+            episodes.items.forEach { yield(it) }
+            currentUri = episodes.next ?: break
+        }
     }
 }
 
@@ -94,7 +96,7 @@ fun main(args: Array<String>) {
 
     parser.parse(args)
 
-    val apiUri = Uri.of("https://api.dr.dk/radio/v2")
+    val apiUri = "https://api.dr.dk/radio/v2"
 
     val feedUrl = "https://${baseUrl}/feeds/${slug}.xml"
     val outputDirectory = File("output")
@@ -110,79 +112,62 @@ fun main(args: Array<String>) {
             )
 
     val rssDateTimeFormatter = DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm:ss Z")
-    JettyClient().use { client ->
-        val feedDirectory = outputDirectory
-        feedDirectory.mkdirs()
-        val feedFile = outputDirectory / "${podcast.slug}.xml"
-        log.info("Processing podcast ${podcast.slug}. Target feed: $feedFile")
-        val response =
-                client(Request(GET, apiUri / "series" / podcast.urn).header("x-apikey", apiKey))
-        val showInfo = show(response)
-        val feed =
-                with(showInfo) {
-                    Feed(
-                            link = presentationUrl,
-                            title = "$title${podcast.titleSuffix?.let { s -> " $s" } ?: ""}",
-                            description =
-                                    "$description${podcast.descriptionSuffix?.let { s -> "\n$s" } ?: ""}",
-                            email = "podcast@dr.dk",
-                            lastBuildDate =
-                                    ZonedDateTime.parse(latestEpisodeStartTime)
-                                            .withZoneSameInstant(ZoneId.of("Europe/Copenhagen"))
-                                            .format(rssDateTimeFormatter),
-                            feedUrl = "${podcast.feedUrl}",
-                            imageUrl = "${podcast.imageUrl}",
-                            imageLink = presentationUrl,
-                            items =
-                                    fetchEpisodes(client, apiUri / "series", podcast.urn, apiKey)
-                                            .mapNotNull { item ->
-                                                with(item) {
-                                                    val audioAsset =
-                                                            audioAssets
-                                                                    .filter { it.format == "mp3" }
-                                                                    // Select asset which is closest
-                                                                    // to bitrate 192
-                                                                    .minByOrNull {
-                                                                        abs(it.bitrate - 192)
-                                                                    }
-                                                                    ?: run {
-                                                                        log.warn(
-                                                                                "No audio asset for ${item.id} (${item.title})"
-                                                                        )
-                                                                        return@mapNotNull null
-                                                                    }
-                                                    FeedItem(
-                                                            guid = productionNumber,
-                                                            link = presentationUrl.toString(),
-                                                            title = title,
-                                                            description = description,
-                                                            pubDate =
-                                                                    ZonedDateTime.parse(publishTime)
-                                                                            .withZoneSameInstant(
-                                                                                    ZoneId.of(
-                                                                                            "Europe/Copenhagen"
-                                                                                    )
-                                                                            )
-                                                                            .format(
-                                                                                    rssDateTimeFormatter
-                                                                            ),
-                                                            duration =
-                                                                    Duration.of(
-                                                                                    durationMilliseconds,
-                                                                                    ChronoUnit
-                                                                                            .MILLIS
-                                                                            )
-                                                                            .formatHMS(),
-                                                            enclosureUrl =
-                                                                    audioAsset.url.toString(),
-                                                            enclosureByteLength =
-                                                                    audioAsset.fileSize,
-                                                    )
-                                                }
+    val client = OkHttpClient.Builder().build()
+    
+    val feedDirectory = outputDirectory
+    feedDirectory.mkdirs()
+    val feedFile = outputDirectory / "${podcast.slug}.xml"
+    log.info("Processing podcast ${podcast.slug}. Target feed: $feedFile")
+    
+    val request = Request.Builder()
+            .url("${apiUri}/series/${podcast.urn}")
+            .header("x-apikey", apiKey)
+            .build()
+    
+    client.newCall(request).execute().use { response ->
+        if (!response.isSuccessful) throw IllegalStateException("Failed to fetch show info")
+        
+        val showInfo = gson.fromJson(response.body?.string(), Show::class.java)
+        val feed = with(showInfo) {
+            Feed(
+                    link = presentationUrl,
+                    title = "$title${podcast.titleSuffix?.let { s -> " $s" } ?: ""}",
+                    description = "$description${podcast.descriptionSuffix?.let { s -> "\n$s" } ?: ""}",
+                    email = "podcast@dr.dk",
+                    lastBuildDate = ZonedDateTime.parse(latestEpisodeStartTime)
+                            .withZoneSameInstant(ZoneId.of("Europe/Copenhagen"))
+                            .format(rssDateTimeFormatter),
+                    feedUrl = "${podcast.feedUrl}",
+                    imageUrl = "${podcast.imageUrl}",
+                    imageLink = presentationUrl,
+                    items = fetchEpisodes(client, "$apiUri/series", podcast.urn, apiKey)
+                            .mapNotNull { item ->
+                                with(item) {
+                                    val audioAsset = audioAssets
+                                            .filter { it.format == "mp3" }
+                                            .minByOrNull { abs(it.bitrate - 192) }
+                                            ?: run {
+                                                log.warn("No audio asset for ${item.id} (${item.title})")
+                                                return@mapNotNull null
                                             }
-                                            .toList(),
-                    )
-                }
+                                    FeedItem(
+                                            guid = productionNumber,
+                                            link = presentationUrl,
+                                            title = title,
+                                            description = description,
+                                            pubDate = ZonedDateTime.parse(publishTime)
+                                                    .withZoneSameInstant(ZoneId.of("Europe/Copenhagen"))
+                                                    .format(rssDateTimeFormatter),
+                                            duration = Duration.of(durationMilliseconds, ChronoUnit.MILLIS)
+                                                    .formatHMS(),
+                                            enclosureUrl = audioAsset.url,
+                                            enclosureByteLength = audioAsset.fileSize,
+                                    )
+                                }
+                            }
+                            .toList(),
+            )
+        }
         feed.generate(feedFile)
     }
 }
