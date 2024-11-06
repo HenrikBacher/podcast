@@ -61,18 +61,17 @@ private suspend fun fetchEpisodes(
             contentType(ContentType.Application.Json)
         }
         
-        if (!response.status.isSuccess()) {
-            shouldContinue = false
-            break
-        }
-        
-        val episodes = gson.fromJson(response.bodyAsText(), Episodes::class.java)
-        log.info("Got ${episodes.items.size} items")
-        items.addAll(episodes.items)
-        
-        episodes.next?.let { 
-            currentUri = it
-        } ?: run {
+        if (response.status.isSuccess()) {
+            val episodes = gson.fromJson(response.bodyAsText(), Episodes::class.java)
+            log.info("Got ${episodes.items.size} items")
+            items.addAll(episodes.items)
+            
+            episodes.next?.let { 
+                currentUri = it
+            } ?: run {
+                shouldContinue = false
+            }
+        } else {
             shouldContinue = false
         }
     }
@@ -150,51 +149,51 @@ fun main(args: Array<String>) = runBlocking {
         header("x-apikey", apiKey)
     }
     
-    if (!response.status.isSuccess()) {
+    if (response.status.isSuccess()) {
+        val showInfo = gson.fromJson(response.bodyAsText(), Show::class.java)
+        val feed = with(showInfo) {
+            Feed(
+                    link = presentationUrl,
+                    title = "$title${podcast.titleSuffix?.let { s -> " $s" } ?: ""}",
+                    description = "$description${podcast.descriptionSuffix?.let { s -> "\n$s" } ?: ""}",
+                    email = "podcast@dr.dk",
+                    lastBuildDate = ZonedDateTime.parse(latestEpisodeStartTime)
+                            .withZoneSameInstant(ZoneId.of("Europe/Copenhagen"))
+                            .format(rssDateTimeFormatter),
+                    feedUrl = "${podcast.feedUrl}",
+                    imageUrl = "${podcast.imageUrl}",
+                    imageLink = presentationUrl,
+                    items = fetchEpisodes("$apiUri/series", podcast.urn, apiKey)
+                            .mapNotNull { item ->
+                                with(item) {
+                                    val audioAsset = audioAssets
+                                            .filter { it.format == "mp3" }
+                                            .minByOrNull { abs(it.bitrate - 192) }
+                                            ?: run {
+                                                log.warn("No audio asset for ${item.id} (${item.title})")
+                                                return@mapNotNull null
+                                            }
+                                    FeedItem(
+                                            guid = productionNumber,
+                                            link = presentationUrl,
+                                            title = title,
+                                            description = description,
+                                            pubDate = ZonedDateTime.parse(publishTime)
+                                                    .withZoneSameInstant(ZoneId.of("Europe/Copenhagen"))
+                                                    .format(rssDateTimeFormatter),
+                                            duration = Duration.of(durationMilliseconds, ChronoUnit.MILLIS)
+                                                    .formatHMS(),
+                                            enclosureUrl = audioAsset.url,
+                                            enclosureByteLength = audioAsset.fileSize,
+                                    )
+                                }
+                            }
+                            .toList(),
+            )
+        }
+        feed.generate(feedFile)
+    } else {
         throw IllegalStateException("Failed to fetch show info")
     }
-    
-    val showInfo = gson.fromJson(response.bodyAsText(), Show::class.java)
-    val feed = with(showInfo) {
-        Feed(
-                link = presentationUrl,
-                title = "$title${podcast.titleSuffix?.let { s -> " $s" } ?: ""}",
-                description = "$description${podcast.descriptionSuffix?.let { s -> "\n$s" } ?: ""}",
-                email = "podcast@dr.dk",
-                lastBuildDate = ZonedDateTime.parse(latestEpisodeStartTime)
-                        .withZoneSameInstant(ZoneId.of("Europe/Copenhagen"))
-                        .format(rssDateTimeFormatter),
-                feedUrl = "${podcast.feedUrl}",
-                imageUrl = "${podcast.imageUrl}",
-                imageLink = presentationUrl,
-                items = fetchEpisodes("$apiUri/series", podcast.urn, apiKey)
-                        .mapNotNull { item ->
-                            with(item) {
-                                val audioAsset = audioAssets
-                                        .filter { it.format == "mp3" }
-                                        .minByOrNull { abs(it.bitrate - 192) }
-                                        ?: run {
-                                            log.warn("No audio asset for ${item.id} (${item.title})")
-                                            return@mapNotNull null
-                                        }
-                                FeedItem(
-                                        guid = productionNumber,
-                                        link = presentationUrl,
-                                        title = title,
-                                        description = description,
-                                        pubDate = ZonedDateTime.parse(publishTime)
-                                                .withZoneSameInstant(ZoneId.of("Europe/Copenhagen"))
-                                                .format(rssDateTimeFormatter),
-                                        duration = Duration.of(durationMilliseconds, ChronoUnit.MILLIS)
-                                                .formatHMS(),
-                                        enclosureUrl = audioAsset.url,
-                                        enclosureByteLength = audioAsset.fileSize,
-                                )
-                            }
-                        }
-                        .toList(),
-        )
-    }
-    feed.generate(feedFile)
     client.close()
 }
