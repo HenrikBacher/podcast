@@ -80,6 +80,12 @@ jobs:
           fi
         shell: bash
 
+      - name: Login to Azure
+        if: env.PODCAST_RECENTLY_UPDATED == 'true' && env.NEEDS_UPLOAD == 'true'
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
       # Combine MD5 check steps into one
       - name: Compare MD5 hashes
         if: env.PODCAST_RECENTLY_UPDATED == 'true'
@@ -98,11 +104,8 @@ jobs:
             echo "NEEDS_UPLOAD=false" >> $GITHUB_ENV
           fi
 
-      - name: Upload to Azure
+      - name: Upload to Azure Storage
         if: env.PODCAST_RECENTLY_UPDATED == 'true' && env.NEEDS_UPLOAD == 'true'
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
         run: |
           az storage blob upload \
             --account-name ${{ secrets.STORAGE_ACCOUNT }} \
