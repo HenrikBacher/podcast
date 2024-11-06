@@ -26,7 +26,9 @@ import ommer.rss.generate
 import org.slf4j.LoggerFactory
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.retry
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.retry
+import kotlinx.coroutines.flow.single
 
 private val log = LoggerFactory.getLogger("ommer")
 private val gson = Gson()
@@ -44,15 +46,13 @@ private val initialRetryDelay = 1000L // 1 second
 private suspend fun <T> withRetry(
     operation: String,
     block: suspend () -> T
-): T = retry(maxRetries) {
-    try {
-        block()
-    } catch (e: Exception) {
-        log.warn("$operation failed (attempt ${it + 1}/$maxRetries): ${e.message}")
-        delay(initialRetryDelay * (it + 1)) // Exponential backoff
-        throw e
-    }
-}
+): T = flow {
+    emit(block())
+}.retry(maxRetries) { cause ->
+    log.warn("$operation failed (attempt ${maxRetries - retryCount}/$maxRetries): ${cause.message}")
+    delay(initialRetryDelay * (maxRetries - retryCount)) // Exponential backoff
+    true
+}.single()
 
 private fun String.appendPath(suffix: String): String = if (endsWith("/")) "$this$suffix" else "$this/$suffix"
 

@@ -23,7 +23,6 @@ allprojects {
         implementation("io.ktor:ktor-serialization-gson:$ktorVersion")
         implementation("io.ktor:ktor-client-logging:$ktorVersion")
         implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutinesVersion")
-        implementation("org.jetbrains.kotlinx:kotlinx-coroutines-retry:$coroutinesVersion")
         implementation("org.slf4j:slf4j-api:2.0.16")
         implementation("ch.qos.logback:logback-classic:1.5.12")
         implementation("com.google.code.gson:gson:2.11.0")
