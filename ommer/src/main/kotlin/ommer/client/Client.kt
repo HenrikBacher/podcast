@@ -9,7 +9,6 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.serialization.gson.*
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
 import java.io.File
 import java.time.Duration
@@ -27,34 +26,17 @@ import ommer.rss.FeedItem
 import ommer.rss.generate
 import org.slf4j.LoggerFactory
 import io.ktor.http.isSuccess
-import io.ktor.client.plugins.compression.*
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.withContext
 
 private val log = LoggerFactory.getLogger("ommer")
 private val gson = Gson()
 private val client = HttpClient(CIO) {
     install(ContentNegotiation) {
-        gson()
+        gson {
+            // Optional: Configure Gson here if needed
+        }
     }
     install(Logging) {
-        level = LogLevel.INFO
-    }
-    install(ContentEncoding) {
-        gzip()
-        deflate()
-    }
-    engine {
-        maxConnectionsCount = 100
-        endpoint {
-            maxConnectionsPerRoute = 100
-            pipelineMaxSize = 20
-            keepAliveTime = 5000
-            connectTimeout = 5000
-            connectAttempts = 3
-        }
+        level = LogLevel.ERROR
     }
 }
 
@@ -66,46 +48,29 @@ private suspend fun fetchEpisodes(
     baseUri: String,
     urn: String,
     apiKey: String,
-): List<Item> = withContext(Dispatchers.IO) {
+): List<Item> {
     val items = mutableListOf<Item>()
     var currentUri = "${baseUri.appendPath(urn)}/episodes?limit=256"
-    val uris = mutableListOf<String>()
     
-    // First collect all URIs
     while (true) {
+        log.info("Getting $currentUri")
         val response = client.get(currentUri) {
             header("x-apikey", apiKey)
             contentType(ContentType.Application.Json)
-            header("Accept-Encoding", "gzip, deflate")
         }
         
-        if (!response.status.isSuccess()) break
-        
-        val episodes = gson.fromJson(response.bodyAsText(), Episodes::class.java)
-        uris.add(currentUri)
-        
-        episodes.next?.let { 
-            currentUri = it
-        } ?: break
+        if (response.status.isSuccess()) {
+            val episodes = gson.fromJson(response.bodyAsText(), Episodes::class.java)
+            log.info("Got ${episodes.items.size} items")
+            items.addAll(episodes.items)
+            
+            currentUri = episodes.next ?: break
+        } else {
+            break
+        }
     }
     
-    // Then fetch all episodes in parallel
-    items.addAll(uris.map { uri ->
-        async {
-            val response = client.get(uri) {
-                header("x-apikey", apiKey)
-                contentType(ContentType.Application.Json)
-                header("Accept-Encoding", "gzip, deflate")
-            }
-            if (response.status.isSuccess()) {
-                gson.fromJson(response.bodyAsText(), Episodes::class.java).items
-            } else {
-                emptyList()
-            }
-        }
-    }.awaitAll().flatten())
-    
-    items
+    return items
 }
 
 fun Duration.formatHMS(): String =
@@ -120,7 +85,7 @@ data class Podcast(
         val imageUrl: String?
 )
 
-fun main(args: Array<String>) = runBlocking(Dispatchers.Default) {
+fun main(args: Array<String>) = runBlocking {
     val parser = ArgParser("ommer", strictSubcommandOptionsOrder = false)
     val slug by
             parser.option(ArgType.String, fullName = "slug", description = "Podcast slug")
@@ -179,13 +144,10 @@ fun main(args: Array<String>) = runBlocking(Dispatchers.Default) {
         header("x-apikey", apiKey)
     }
     
-    withContext(Dispatchers.IO) {
-        if (response.status.isSuccess()) {
-            val showInfo = gson.fromJson(response.bodyAsText(), Show::class.java)
-            val episodes = async { fetchEpisodes("$apiUri/series", podcast.urn, apiKey) }
-            
-            val feed = with(showInfo) {
-                Feed(
+    if (response.status.isSuccess()) {
+        val showInfo = gson.fromJson(response.bodyAsText(), Show::class.java)
+        val feed = with(showInfo) {
+            Feed(
                     link = presentationUrl,
                     title = "$title${podcast.titleSuffix?.let { s -> " $s" } ?: ""}",
                     description = "$description${podcast.descriptionSuffix?.let { s -> "\n$s" } ?: ""}",
@@ -196,38 +158,38 @@ fun main(args: Array<String>) = runBlocking(Dispatchers.Default) {
                     feedUrl = "${podcast.feedUrl}",
                     imageUrl = "${podcast.imageUrl}",
                     imageLink = presentationUrl,
-                    items = episodes.await()
-                        .mapNotNull { item ->
-                            with(item) {
-                                val audioAsset = audioAssets
-                                        .filter { it.format == "mp3" }
-                                        .minByOrNull { abs(it.bitrate - 192) }
-                                        ?: run {
-                                            log.warn("No audio asset for ${item.id} (${item.title})")
-                                            return@mapNotNull null
-                                        }
-                                FeedItem(
-                                        guid = productionNumber,
-                                        link = presentationUrl,
-                                        title = title,
-                                        description = description,
-                                        pubDate = ZonedDateTime.parse(publishTime)
-                                                .withZoneSameInstant(ZoneId.of("Europe/Copenhagen"))
-                                                .format(rssDateTimeFormatter),
-                                        duration = Duration.of(durationMilliseconds, ChronoUnit.MILLIS)
-                                                .formatHMS(),
-                                        enclosureUrl = audioAsset.url,
-                                        enclosureByteLength = audioAsset.fileSize,
-                                )
+                    items = fetchEpisodes("$apiUri/series", podcast.urn, apiKey)
+                            .mapNotNull { item ->
+                                with(item) {
+                                    val audioAsset = audioAssets
+                                            .filter { it.format == "mp3" }
+                                            .minByOrNull { abs(it.bitrate - 192) }
+                                            ?: run {
+                                                log.warn("No audio asset for ${item.id} (${item.title})")
+                                                return@mapNotNull null
+                                            }
+                                    FeedItem(
+                                            guid = productionNumber,
+                                            link = presentationUrl,
+                                            title = title,
+                                            description = description,
+                                            pubDate = ZonedDateTime.parse(publishTime)
+                                                    .withZoneSameInstant(ZoneId.of("Europe/Copenhagen"))
+                                                    .format(rssDateTimeFormatter),
+                                            duration = Duration.of(durationMilliseconds, ChronoUnit.MILLIS)
+                                                    .formatHMS(),
+                                            enclosureUrl = audioAsset.url,
+                                            enclosureByteLength = audioAsset.fileSize,
+                                    )
+                                }
                             }
-                        }
-                        .toList(),
-                )
-            }
-            feed.generate(feedFile)
-        } else {
-            throw IllegalStateException("Failed to fetch show info")
+                            .toList(),
+            )
         }
+        feed.generate(feedFile)
+    } else {
+        throw IllegalStateException("Failed to fetch show info")
     }
+    
     client.close()
 }
