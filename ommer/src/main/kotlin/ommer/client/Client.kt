@@ -23,6 +23,7 @@ import ommer.rss.Feed
 import ommer.rss.FeedItem
 import ommer.rss.generate
 import org.slf4j.LoggerFactory
+import io.ktor.http.isSuccess
 
 private val log = LoggerFactory.getLogger("ommer")
 private val gson = Gson()
@@ -51,7 +52,7 @@ private suspend fun fetchEpisodes(
             header("x-apikey", apiKey)
         }
         
-        if (!response.status.isSuccess()) {
+        if (!response.status.value.toString().startsWith("2")) {
             shouldContinue = false
             break
         }
@@ -140,7 +141,7 @@ fun main(args: Array<String>) = runBlocking {
         header("x-apikey", apiKey)
     }
     
-    if (!response.status.isSuccess()) {
+    if (!response.status.value.toString().startsWith("2")) {
         throw IllegalStateException("Failed to fetch show info")
     }
     
