@@ -27,17 +27,34 @@ import ommer.rss.FeedItem
 import ommer.rss.generate
 import org.slf4j.LoggerFactory
 import io.ktor.http.isSuccess
+import io.ktor.client.plugins.compression.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.withContext
 
 private val log = LoggerFactory.getLogger("ommer")
 private val gson = Gson()
 private val client = HttpClient(CIO) {
     install(ContentNegotiation) {
-        gson {
-            // Optional: Configure Gson here if needed
-        }
+        gson()
     }
     install(Logging) {
         level = LogLevel.INFO
+    }
+    install(ContentEncoding) {
+        gzip()
+        deflate()
+    }
+    engine {
+        maxConnectionsCount = 100
+        endpoint {
+            maxConnectionsPerRoute = 100
+            pipelineMaxSize = 20
+            keepAliveTime = 5000
+            connectTimeout = 5000
+            connectAttempts = 3
+        }
     }
 }
 
@@ -49,33 +66,46 @@ private suspend fun fetchEpisodes(
     baseUri: String,
     urn: String,
     apiKey: String,
-): List<Item> = coroutineScope {
+): List<Item> = withContext(Dispatchers.IO) {
     val items = mutableListOf<Item>()
     var currentUri = "${baseUri.appendPath(urn)}/episodes?limit=256"
-    var shouldContinue = true
+    val uris = mutableListOf<String>()
     
-    while (shouldContinue) {
-        log.info("Getting $currentUri")
+    // First collect all URIs
+    while (true) {
         val response = client.get(currentUri) {
             header("x-apikey", apiKey)
             contentType(ContentType.Application.Json)
+            header("Accept-Encoding", "gzip, deflate")
         }
         
-        if (response.status.isSuccess()) {
-            val episodes = gson.fromJson(response.bodyAsText(), Episodes::class.java)
-            log.info("Got ${episodes.items.size} items")
-            items.addAll(episodes.items)
-            
-            episodes.next?.let { 
-                currentUri = it
-            } ?: run {
-                shouldContinue = false
-            }
-        } else {
-            shouldContinue = false
-        }
+        if (!response.status.isSuccess()) break
+        
+        val episodes = gson.fromJson(response.bodyAsText(), Episodes::class.java)
+        uris.add(currentUri)
+        
+        episodes.next?.let { 
+            currentUri = it
+        } ?: break
     }
-    return@coroutineScope items
+    
+    // Then fetch all episodes in parallel
+    items.addAll(uris.map { uri ->
+        async {
+            val response = client.get(uri) {
+                header("x-apikey", apiKey)
+                contentType(ContentType.Application.Json)
+                header("Accept-Encoding", "gzip, deflate")
+            }
+            if (response.status.isSuccess()) {
+                gson.fromJson(response.bodyAsText(), Episodes::class.java).items
+            } else {
+                emptyList()
+            }
+        }
+    }.awaitAll().flatten())
+    
+    items
 }
 
 fun Duration.formatHMS(): String =
@@ -90,7 +120,7 @@ data class Podcast(
         val imageUrl: String?
 )
 
-fun main(args: Array<String>) = runBlocking {
+fun main(args: Array<String>) = runBlocking(Dispatchers.Default) {
     val parser = ArgParser("ommer", strictSubcommandOptionsOrder = false)
     val slug by
             parser.option(ArgType.String, fullName = "slug", description = "Podcast slug")
@@ -149,10 +179,13 @@ fun main(args: Array<String>) = runBlocking {
         header("x-apikey", apiKey)
     }
     
-    if (response.status.isSuccess()) {
-        val showInfo = gson.fromJson(response.bodyAsText(), Show::class.java)
-        val feed = with(showInfo) {
-            Feed(
+    withContext(Dispatchers.IO) {
+        if (response.status.isSuccess()) {
+            val showInfo = gson.fromJson(response.bodyAsText(), Show::class.java)
+            val episodes = async { fetchEpisodes("$apiUri/series", podcast.urn, apiKey) }
+            
+            val feed = with(showInfo) {
+                Feed(
                     link = presentationUrl,
                     title = "$title${podcast.titleSuffix?.let { s -> " $s" } ?: ""}",
                     description = "$description${podcast.descriptionSuffix?.let { s -> "\n$s" } ?: ""}",
@@ -163,37 +196,38 @@ fun main(args: Array<String>) = runBlocking {
                     feedUrl = "${podcast.feedUrl}",
                     imageUrl = "${podcast.imageUrl}",
                     imageLink = presentationUrl,
-                    items = fetchEpisodes("$apiUri/series", podcast.urn, apiKey)
-                            .mapNotNull { item ->
-                                with(item) {
-                                    val audioAsset = audioAssets
-                                            .filter { it.format == "mp3" }
-                                            .minByOrNull { abs(it.bitrate - 192) }
-                                            ?: run {
-                                                log.warn("No audio asset for ${item.id} (${item.title})")
-                                                return@mapNotNull null
-                                            }
-                                    FeedItem(
-                                            guid = productionNumber,
-                                            link = presentationUrl,
-                                            title = title,
-                                            description = description,
-                                            pubDate = ZonedDateTime.parse(publishTime)
-                                                    .withZoneSameInstant(ZoneId.of("Europe/Copenhagen"))
-                                                    .format(rssDateTimeFormatter),
-                                            duration = Duration.of(durationMilliseconds, ChronoUnit.MILLIS)
-                                                    .formatHMS(),
-                                            enclosureUrl = audioAsset.url,
-                                            enclosureByteLength = audioAsset.fileSize,
-                                    )
-                                }
+                    items = episodes.await()
+                        .mapNotNull { item ->
+                            with(item) {
+                                val audioAsset = audioAssets
+                                        .filter { it.format == "mp3" }
+                                        .minByOrNull { abs(it.bitrate - 192) }
+                                        ?: run {
+                                            log.warn("No audio asset for ${item.id} (${item.title})")
+                                            return@mapNotNull null
+                                        }
+                                FeedItem(
+                                        guid = productionNumber,
+                                        link = presentationUrl,
+                                        title = title,
+                                        description = description,
+                                        pubDate = ZonedDateTime.parse(publishTime)
+                                                .withZoneSameInstant(ZoneId.of("Europe/Copenhagen"))
+                                                .format(rssDateTimeFormatter),
+                                        duration = Duration.of(durationMilliseconds, ChronoUnit.MILLIS)
+                                                .formatHMS(),
+                                        enclosureUrl = audioAsset.url,
+                                        enclosureByteLength = audioAsset.fileSize,
+                                )
                             }
-                            .toList(),
-            )
+                        }
+                        .toList(),
+                )
+            }
+            feed.generate(feedFile)
+        } else {
+            throw IllegalStateException("Failed to fetch show info")
         }
-        feed.generate(feedFile)
-    } else {
-        throw IllegalStateException("Failed to fetch show info")
     }
     client.close()
 }

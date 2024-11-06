@@ -21,6 +21,7 @@ allprojects {
         implementation("io.ktor:ktor-client-content-negotiation:$ktorVersion")
         implementation("io.ktor:ktor-serialization-gson:$ktorVersion")
         implementation("io.ktor:ktor-client-logging:$ktorVersion")
+        implementation("io.ktor:ktor-client-encoding:$ktorVersion")  // For compression
         implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
         implementation("org.slf4j:slf4j-api:2.0.16")
         implementation("ch.qos.logback:logback-classic:1.5.12")
