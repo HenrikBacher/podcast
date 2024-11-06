@@ -52,8 +52,11 @@ private fun fetchEpisodes(
             log.info("Got ${episodes.items.size} items")
             episodes.items.forEach { yield(it) }
             
-            currentUri = episodes.next
-            shouldContinue = episodes.next != null
+            episodes.next?.let { 
+                currentUri = it
+            } ?: run {
+                shouldContinue = false
+            }
         }
     }
 }
