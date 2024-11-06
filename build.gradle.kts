@@ -6,6 +6,8 @@ plugins {
 group = "dr1ommer"
 version = "0.1"
 
+val ktorVersion = "3.0.1"
+
 allprojects {
     apply(plugin = "kotlin")
 
@@ -14,10 +16,11 @@ allprojects {
     }
 
     dependencies {
-        implementation("io.ktor:ktor-client-core:2.3.7")
-        implementation("io.ktor:ktor-client-cio:2.3.7")
-        implementation("io.ktor:ktor-client-content-negotiation:2.3.7")
-        implementation("io.ktor:ktor-serialization-gson:2.3.7")
+        implementation("io.ktor:ktor-client-core:$ktorVersion")
+        implementation("io.ktor:ktor-client-cio:$ktorVersion")
+        implementation("io.ktor:ktor-client-content-negotiation:$ktorVersion")
+        implementation("io.ktor:ktor-serialization-gson:$ktorVersion")
+        implementation("io.ktor:ktor-client-logging:$ktorVersion")
         implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
     }
 

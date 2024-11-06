@@ -4,8 +4,10 @@ import com.google.gson.Gson
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.contentnegotiation.*
+import io.ktor.client.plugins.logging.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
+import io.ktor.http.*
 import io.ktor.serialization.gson.*
 import kotlinx.coroutines.runBlocking
 import java.io.File
@@ -29,7 +31,12 @@ private val log = LoggerFactory.getLogger("ommer")
 private val gson = Gson()
 private val client = HttpClient(CIO) {
     install(ContentNegotiation) {
-        gson()
+        gson {
+            // Optional: Configure Gson here if needed
+        }
+    }
+    install(Logging) {
+        level = LogLevel.INFO
     }
 }
 
@@ -41,7 +48,7 @@ private suspend fun fetchEpisodes(
     baseUri: String,
     urn: String,
     apiKey: String,
-): List<Item> {
+): List<Item> = coroutineScope {
     val items = mutableListOf<Item>()
     var currentUri = "${baseUri.appendPath(urn)}/episodes?limit=256"
     var shouldContinue = true
@@ -50,9 +57,10 @@ private suspend fun fetchEpisodes(
         log.info("Getting $currentUri")
         val response = client.get(currentUri) {
             header("x-apikey", apiKey)
+            contentType(ContentType.Application.Json)
         }
         
-        if (!response.status.value.toString().startsWith("2")) {
+        if (!response.status.isSuccess()) {
             shouldContinue = false
             break
         }
@@ -67,7 +75,7 @@ private suspend fun fetchEpisodes(
             shouldContinue = false
         }
     }
-    return items
+    return@coroutineScope items
 }
 
 fun Duration.formatHMS(): String =
@@ -141,7 +149,7 @@ fun main(args: Array<String>) = runBlocking {
         header("x-apikey", apiKey)
     }
     
-    if (!response.status.value.toString().startsWith("2")) {
+    if (!response.status.isSuccess()) {
         throw IllegalStateException("Failed to fetch show info")
     }
     
