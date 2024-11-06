@@ -1,5 +1,10 @@
 name: Update feeds
 
+# Add concurrency to cancel redundant workflow runs
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     paths:
@@ -28,6 +33,8 @@ jobs:
     name: "Update ${{ matrix.podcasts.slug }} feed"
     needs: load-podcasts
     strategy:
+      # Add fail-fast to stop all jobs if one fails
+      fail-fast: true
       matrix: ${{ fromJson(needs.load-podcasts.outputs.podcasts) }}
     runs-on: ubuntu-latest
     steps:
@@ -51,29 +58,25 @@ jobs:
       - name: Execute parser for ${{ matrix.podcasts.slug }} feed
         run: java -jar ./ommer.jar --slug ${{ matrix.podcasts.slug }} --urn ${{ matrix.podcasts.urn }} --imageUrl ${{ matrix.podcasts.image }} --apiKey ${{ secrets.API_KEY }} --baseUrl ${{ secrets.HOST_URL }}
 
+      # Replace the PowerShell check with faster bash script
       - name: Check if feed has been updated recently
         run: |
-          $xmlPath = "output/${{ matrix.podcasts.slug }}.xml"
-          [xml]$xmlContent = Get-Content $xmlPath
-
-          $format = "ddd, dd MMM yyyy HH:mm:ss zzz"
-
-          $lastBuildDate = [datetime]::ParseExact($xmlContent.rss.channel.lastBuildDate, $format, $null)
-          $utcNow = Get-Date -Format 'ddd, dd MMM yyyy HH:mm:ss zzz' -AsUTC
-
-          Write-Host "Latest update to feed: $lastBuildDate" 
-          Write-Host "Current UTC time: $utcNow"
-
-          $recentEpisodeThresholdMinutes = 1440
-                
-          if ($lastBuildDate.AddMinutes($recentEpisodeThresholdMinutes) -gt $utcNow) {
-            echo "PODCAST_RECENTLY_UPDATED=true" | Out-File -FilePath $Env:GITHUB_ENV -Append
-            echo "Podcast updated within the last $recentEpisodeThresholdMinutes minutes, uploading to Azure Blob Storage"
-          } else {
-            echo "PODCAST_RECENTLY_UPDATED=false" | Out-File -FilePath $Env:GITHUB_ENV -Append
-            echo "Podcast not updated recently, skipping upload to Azure Blob Storage"
-          }
-        shell: pwsh
+          xmlPath="output/${{ matrix.podcasts.slug }}.xml"
+          lastBuildDate=$(grep -o '<lastBuildDate>[^<]*' "$xmlPath" | cut -d'>' -f2)
+          lastBuildTimestamp=$(date -d "$lastBuildDate" +%s)
+          currentTimestamp=$(date +%s)
+          
+          thresholdMinutes=1440
+          thresholdSeconds=$((thresholdMinutes * 60))
+          
+          if [ $((currentTimestamp - lastBuildTimestamp)) -lt $thresholdSeconds ]; then
+            echo "PODCAST_RECENTLY_UPDATED=true" >> $GITHUB_ENV
+            echo "Podcast updated within the last $thresholdMinutes minutes"
+          else
+            echo "PODCAST_RECENTLY_UPDATED=false" >> $GITHUB_ENV
+            echo "Podcast not updated recently, skipping upload"
+          fi
+        shell: bash
 
       - name: Login to Azure
         if: env.PODCAST_RECENTLY_UPDATED == 'true'
@@ -81,30 +84,26 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Get local MD5 hash of ${{ matrix.podcasts.slug }}.xml
+      # Combine MD5 check steps into one
+      - name: Compare MD5 hashes
         if: env.PODCAST_RECENTLY_UPDATED == 'true'
-        id: local_md5
         run: |
-          MD5_HASH=$(md5sum output/${{ matrix.podcasts.slug }}.xml | awk '{print $1}' | xxd -r -p | base64)
-          echo "LOCAL_MD5=$MD5_HASH" >> $GITHUB_ENV
-          echo "LOCAL_MD5=$MD5_HASH"
-
-      - name: Get blob MD5 hash of ${{ matrix.podcasts.slug }}.xml
-        if: env.PODCAST_RECENTLY_UPDATED == 'true'
-        id: blob_md5
-        continue-on-error: true
-        run: |
-          BLOB_PROPERTIES=$(az storage blob show \
+          LOCAL_MD5=$(md5sum output/${{ matrix.podcasts.slug }}.xml | awk '{print $1}' | xxd -r -p | base64)
+          BLOB_MD5=$(az storage blob show \
             --account-name ${{ secrets.STORAGE_ACCOUNT }} \
             --container-name ${{ secrets.CONTAINER_NAME }} \
             --auth-mode login \
             --name ${{ matrix.podcasts.slug }}.xml \
-            --query properties.contentSettings.contentMd5 -o tsv)
-          echo "BLOB_MD5=$BLOB_PROPERTIES" >> $GITHUB_ENV
-          echo "BLOB_MD5=$BLOB_PROPERTIES"
+            --query properties.contentSettings.contentMd5 -o tsv || echo "")
+          
+          if [ "$LOCAL_MD5" != "$BLOB_MD5" ]; then
+            echo "NEEDS_UPLOAD=true" >> $GITHUB_ENV
+          else
+            echo "NEEDS_UPLOAD=false" >> $GITHUB_ENV
+          fi
 
-      - name: Upload ${{ matrix.podcasts.slug }}.xml if it has been updated
-        if: env.PODCAST_RECENTLY_UPDATED == 'true' && env.LOCAL_MD5 != env.BLOB_MD5
+      - name: Upload to Azure Storage
+        if: env.PODCAST_RECENTLY_UPDATED == 'true' && env.NEEDS_UPLOAD == 'true'
         run: |
           az storage blob upload \
             --account-name ${{ secrets.STORAGE_ACCOUNT }} \
