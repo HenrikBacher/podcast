@@ -21,7 +21,7 @@ allprojects {
         implementation("io.ktor:ktor-client-content-negotiation:$ktorVersion")
         implementation("io.ktor:ktor-serialization-gson:$ktorVersion")
         implementation("io.ktor:ktor-client-logging:$ktorVersion")
-        implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+        implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
     }
 
     tasks.test {
