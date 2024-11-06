@@ -40,7 +40,6 @@ jobs:
           ./gradlew build assemble
 
       - name: Set the date
-        if: github.ref == 'refs/heads/main'
         id: set_date
         run: |
           TAG_NAME=$(date +'%Y%m%d-%H%M%S')
@@ -48,7 +47,6 @@ jobs:
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
-        if: github.ref == 'refs/heads/main'
         with:
           tag_name: ${{ env.TAG_NAME }}
           body: "New release of ommer.jar on ${{ env.TAG_NAME }}"
