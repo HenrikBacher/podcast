@@ -18,11 +18,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
+      - name: Setup GraalVM
+        uses: graalvm/setup-graalvm@v1
         with:
-          java-version: "21"
-          distribution: "adopt"
+          java-version: '21'
+          distribution: 'graalvm'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          native-image-job-reports: 'true'
+
+      - name: Install native-image dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install build-essential libz-dev zlib1g-dev
 
       - name: Cache Gradle dependencies
         uses: actions/cache@v4
@@ -34,10 +41,11 @@ jobs:
           key: ${{ runner.os }}-${{ hashFiles('./build.gradle.kts', './settings.gradle.kts', './gradle.properties', '**/gradle-wrapper.properties') }}
           restore-keys: ${{ runner.os }}-gradle-
 
-      - name: Build Kotlin app
+      - name: Build Kotlin app and create native image
         run: |
           chmod +x ./gradlew
-          ./gradlew build assemble
+          ./gradlew nativeCompile
+          chmod +x ./ommer/build/native/nativeCompile/ommer
 
       - name: Set the date
         id: set_date
@@ -45,10 +53,19 @@ jobs:
           TAG_NAME=$(date +'%Y%m%d-%H%M%S')
           echo "TAG_NAME=${TAG_NAME}" >> $GITHUB_ENV
 
+      - name: Prepare release artifact
+        run: |
+          cd ./ommer/build/native/nativeCompile/
+          mv ommer ommer-linux-x86_64
+          chmod +x ommer-linux-x86_64
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG_NAME }}
-          body: "New release of ommer.jar on ${{ env.TAG_NAME }}"
+          body: |
+            New release of ommer native executable on ${{ env.TAG_NAME }}
+            
+            Platform: Linux x86_64
           files: |
-            ./ommer/build/libs/ommer.jar
+            ./ommer/build/native/nativeCompile/ommer-linux-x86_64
