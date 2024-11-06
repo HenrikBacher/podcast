@@ -40,7 +40,8 @@ private suspend fun fetchEpisodes(
     baseUri: String,
     urn: String,
     apiKey: String,
-): Sequence<Item> = sequence {
+): List<Item> {
+    val items = mutableListOf<Item>()
     var currentUri = "${baseUri.appendPath(urn)}/episodes?limit=256"
     var shouldContinue = true
     
@@ -52,12 +53,12 @@ private suspend fun fetchEpisodes(
         
         if (!response.status.isSuccess()) {
             shouldContinue = false
-            return@sequence
+            break
         }
         
         val episodes = gson.fromJson(response.bodyAsText(), Episodes::class.java)
         log.info("Got ${episodes.items.size} items")
-        episodes.items.forEach { yield(it) }
+        items.addAll(episodes.items)
         
         episodes.next?.let { 
             currentUri = it
@@ -65,6 +66,7 @@ private suspend fun fetchEpisodes(
             shouldContinue = false
         }
     }
+    return items
 }
 
 fun Duration.formatHMS(): String =
