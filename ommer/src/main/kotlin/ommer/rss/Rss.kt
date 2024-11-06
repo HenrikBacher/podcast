@@ -128,11 +128,14 @@ fun Feed.generate(feedFile: File) {
             }
         }
     }
-    // Write the content into XML file
-    val transformer =
-            TransformerFactory.newInstance().newTransformer().apply {
-                setOutputProperty(OutputKeys.INDENT, "yes")
-            }
+    // Write the content into XML file with buffering
+    val transformer = TransformerFactory.newInstance().newTransformer().apply {
+        setOutputProperty(OutputKeys.INDENT, "yes")
+        setOutputProperty("{http://xml.apache.org/xslt}indent-amount", "2")
+        setOutputProperty(OutputKeys.ENCODING, "UTF-8")
+    }
     val source = DOMSource(document)
-    transformer.transform(source, StreamResult(feedFile))
+    feedFile.bufferedWriter().use { writer ->
+        transformer.transform(source, StreamResult(writer))
+    }
 }

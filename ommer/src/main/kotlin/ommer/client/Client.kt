@@ -24,12 +24,23 @@ import ommer.rss.FeedItem
 import ommer.rss.generate
 import org.slf4j.LoggerFactory
 import io.ktor.http.isSuccess
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 
 private val log = LoggerFactory.getLogger("ommer")
 private val gson = Gson()
 private val client = HttpClient(CIO) {
     install(ContentNegotiation) {
         gson()
+    }
+    engine {
+        maxConnectionsCount = 1000
+        endpoint {
+            maxConnectionsPerRoute = 100
+            pipelineMaxSize = 20
+            keepAliveTime = 5000
+            connectTimeout = 5000
+        }
     }
 }
 
@@ -44,29 +55,38 @@ private suspend fun fetchEpisodes(
 ): List<Item> {
     val items = mutableListOf<Item>()
     var currentUri = "${baseUri.appendPath(urn)}/episodes?limit=256"
-    var shouldContinue = true
+    val uris = mutableListOf<String>()
     
-    while (shouldContinue) {
-        log.info("Getting $currentUri")
+    // First, collect all URIs
+    while (true) {
         val response = client.get(currentUri) {
             header("x-apikey", apiKey)
         }
         
-        if (!response.status.value.toString().startsWith("2")) {
-            shouldContinue = false
-            break
-        }
+        if (!response.status.isSuccess()) break
         
         val episodes = gson.fromJson(response.bodyAsText(), Episodes::class.java)
-        log.info("Got ${episodes.items.size} items")
-        items.addAll(episodes.items)
+        uris.add(currentUri)
         
         episodes.next?.let { 
             currentUri = it
-        } ?: run {
-            shouldContinue = false
-        }
+        } ?: break
     }
+    
+    // Then fetch all episodes in parallel
+    items.addAll(uris.map { uri ->
+        async {
+            val response = client.get(uri) {
+                header("x-apikey", apiKey)
+            }
+            if (response.status.isSuccess()) {
+                gson.fromJson(response.bodyAsText(), Episodes::class.java).items
+            } else {
+                emptyList()
+            }
+        }
+    }.awaitAll().flatten())
+    
     return items
 }
 
