@@ -36,7 +36,7 @@ jobs:
       # Add fail-fast to stop all jobs if one fails
       fail-fast: true
       matrix: ${{ fromJson(needs.load-podcasts.outputs.podcasts) }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Get latest release
         id: get_latest_release
