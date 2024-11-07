@@ -1,14 +1,24 @@
 package ommer.client
 
-import com.google.gson.Gson
+// Ktor imports
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import io.ktor.http.isSuccess
 import io.ktor.serialization.gson.*
+
+// Kotlin standard & coroutines
+import kotlinx.cli.*
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.retryWhen
+import kotlinx.coroutines.flow.single
 import kotlinx.coroutines.runBlocking
+
+// Java imports
 import java.io.File
 import java.time.Duration
 import java.time.ZoneId
@@ -16,19 +26,16 @@ import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import kotlin.math.abs
-import kotlinx.cli.*
+
+// Project-specific imports
+import com.google.gson.Gson
+import org.slf4j.LoggerFactory
 import ommer.drapi.Episodes
 import ommer.drapi.Item
 import ommer.drapi.Show
 import ommer.rss.Feed
 import ommer.rss.FeedItem
 import ommer.rss.generate
-import org.slf4j.LoggerFactory
-import io.ktor.http.isSuccess
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.retryWhen
-import kotlinx.coroutines.flow.single
 
 private val log = LoggerFactory.getLogger("ommer")
 private val gson = Gson()
@@ -48,7 +55,7 @@ private suspend fun <T> withRetry(
     block: suspend () -> T
 ): T = flow {
     emit(block())
-}.retryWhen { cause, attempt ->
+}.retryWhen { cause, attempt -> 
     if (attempt < maxRetries) {
         log.warn("$operation failed (attempt ${attempt + 1}/$maxRetries): ${cause.message}")
         delay(initialRetryDelay * (attempt + 1)) // Exponential backoff
@@ -186,7 +193,7 @@ fun main(args: Array<String>) = runBlocking {
                 imageUrl = "${podcast.imageUrl}",
                 imageLink = presentationUrl,
                 items = fetchEpisodes("$apiUri/series", podcast.urn, apiKey)
-                        .mapNotNull { item ->
+                        .mapNotNull { item -> 
                             with(item) {
                                 val audioAsset = audioAssets
                                         .filter { it.format == "mp3" }
