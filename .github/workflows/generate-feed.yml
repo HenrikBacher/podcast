@@ -49,7 +49,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Execute parser for ${{ matrix.podcasts.slug }} feed
-        run: java -jar ./ommer.jar --slug ${{ matrix.podcasts.slug }} --urn ${{ matrix.podcasts.urn }} --imageUrl ${{ matrix.podcasts.image }} --apiKey ${{ secrets.API_KEY }} --baseUrl ${{ secrets.HOST_URL }}
+        run: |
+          "${JAVA_HOME}/bin/java" -jar ./ommer.jar \
+            --slug ${{ matrix.podcasts.slug }} \
+            --urn ${{ matrix.podcasts.urn }} \
+            --imageUrl ${{ matrix.podcasts.image }} \
+            --apiKey ${{ secrets.API_KEY }} \
+            --baseUrl ${{ secrets.HOST_URL }}
         env:
           JAVA_HOME: ${{ env.JAVA_HOME_21_X64 }}
 
