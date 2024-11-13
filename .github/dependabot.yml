@@ -5,6 +5,11 @@ updates:
     directory: "/" # Location of the root project where your build.gradle resides
     schedule:
       interval: "daily" # How often to check for updates
+
+  - package-ecosystem: "gradle"
+    directory: "/ommer" # Location of the root project where your build.gradle resides
+    schedule:
+      interval: "daily" # How often to check for updates   
       
   # Enable updates for GitHub Actions
   - package-ecosystem: "github-actions"
