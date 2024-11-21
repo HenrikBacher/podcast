@@ -17,6 +17,19 @@ tasks {
         archiveClassifier.set("")
         manifest { attributes["Main-Class"] = mainClass }
         minimize()
+        
+        // Configure Java version for shadowJar
+        manifest {
+            attributes(mapOf(
+                "Implementation-Title" to project.name,
+                "Implementation-Version" to project.version,
+                "Main-Class" to mainClass,
+                "Multi-Release" to "true"
+            ))
+        }
+        
+        // Ensure Java 21 compatibility
+        targetCompatibility = JavaVersion.VERSION_21
     }
 
     // Configure Kotlin compilation
