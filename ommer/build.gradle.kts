@@ -28,6 +28,5 @@ dependencies {
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
     compilerOptions {
         incremental = true
-        jvmTarget = "21"
     }
 }
