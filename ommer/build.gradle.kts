@@ -3,10 +3,8 @@ plugins {
     id("io.spring.dependency-management") version "1.1.4"
 }
 
-val mainClass = "ommer.client.ClientKt"
-
 tasks.bootJar {
-    mainClass.set(mainClass)
+    mainClass.set("ommer.client.ClientKt")
     layered {
         enabled = true
         includeLayerTools = true
@@ -28,7 +26,7 @@ dependencies {
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
-    kotlinOptions {
+    compilerOptions {
         incremental = true
         jvmTarget = "21"
     }
