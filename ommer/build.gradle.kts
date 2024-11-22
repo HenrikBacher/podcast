@@ -1,4 +1,4 @@
-plugins { id("com.github.johnrengelman.shadow") version "8.1.1" }
+plugins { id("com.gradleup.shadow") version "8.3.5" }
 
 val mainClass = "ommer.client.ClientKt"
 
