@@ -8,7 +8,7 @@ tasks.jar {
     from(configurations.runtimeClasspath.get().map { if (it.isDirectory) it else zipTree(it) })
 }
 
-tasks.withType<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar> {
+tasks.withType<com.gradleup.shadow> {
     archiveClassifier.set("")
     manifest { attributes["Main-Class"] = mainClass }
     minimize()
