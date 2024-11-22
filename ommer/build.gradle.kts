@@ -6,7 +6,6 @@ tasks.jar {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     manifest { attributes["Main-Class"] = mainClass }
     from(configurations.runtimeClasspath.get().map { if (it.isDirectory) it else zipTree(it) })
-    minimize()
 }
 
 tasks.withType<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar> {
