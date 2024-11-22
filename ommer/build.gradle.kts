@@ -1,5 +1,9 @@
 plugins { id("com.gradleup.shadow") version "8.3.5" }
 
+// Enable configuration cache
+org.gradle.configuration.cache=true
+org.gradle.configuration.cache.problems=warn
+
 val mainClass = "ommer.client.ClientKt"
 
 tasks.jar {
