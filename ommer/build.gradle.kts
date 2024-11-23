@@ -1,12 +1,10 @@
 plugins { 
     id("com.gradleup.shadow") version "8.3.5" 
-    id("com.github.johnrengelman.proguard") version "7.3.2"
 }
 
 val mainClass = "ommer.client.ClientKt"
 
 dependencies {
-    implementation("com.guardsquare:proguard-gradle:7.3.2")
 }
 
 tasks.jar {
