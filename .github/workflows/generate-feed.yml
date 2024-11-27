@@ -134,7 +134,7 @@ jobs:
 
   publish-feed:
     name: "publish ${{ matrix.podcasts.slug }} feed"
-    needs: update-feed
+    needs: [update-feed, load-podcasts]
     strategy:
       # Add fail-fast to stop all jobs if one fails
       fail-fast: true
