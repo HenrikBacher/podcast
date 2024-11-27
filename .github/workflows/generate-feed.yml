@@ -1,5 +1,11 @@
 name: Update feeds
 
+# Add permissions for GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
 # Add concurrency to cancel redundant workflow runs
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -71,7 +77,7 @@ jobs:
           lastBuildTimestamp=$(date -d "$lastBuildDate" +%s)
           currentTimestamp=$(date +%s)
           
-          thresholdMinutes=1440
+          thresholdMinutes=3600
           thresholdSeconds=$((thresholdMinutes * 60))
           
           if [ $((currentTimestamp - lastBuildTimestamp)) -lt $thresholdSeconds ]; then
@@ -118,24 +124,33 @@ jobs:
             --file output/${{ matrix.podcasts.slug }}.xml \
             --overwrite
 
-      - name: Setup GitHub Pages branch
-        run: |
-          git init
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-          git checkout -B gh-pages || git checkout gh-pages
-              
-      - name: Copy feed to Pages directory
-        run: |
-          mkdir -p feeds
-          cp output/${{ matrix.podcasts.slug }}.xml feeds/
-          git add feeds/
-          git commit -m "Update ${{ matrix.podcasts.slug }} feed" || echo "No changes to commit"
-          git push origin gh-pages -f
-              
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
+      - name: Upload feed artifact
+        if: env.PODCAST_RECENTLY_UPDATED == 'true'
+        uses: actions/upload-artifact@v4
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./feeds
-          keep_files: true
+          name: podcast-feeds
+          path: output/${{ matrix.podcasts.slug }}.xml
+          retention-days: 14
+
+  deploy-pages:
+    needs: update-feed
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: podcast-feeds
+          path: _site
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
