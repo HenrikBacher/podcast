@@ -128,16 +128,22 @@ jobs:
         if: env.PODCAST_RECENTLY_UPDATED == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: podcast-feeds
-          path: ${{ matrix.podcasts.slug }}.xml
+          name: ${{ matrix.podcasts.slug }}-feed
+          path: output/${{ matrix.podcasts.slug }}.xml
           retention-days: 14
 
-  deploy-pages:
+  publish-feed:
+    name: "publish ${{ matrix.podcasts.slug }} feed"
     needs: update-feed
+    strategy:
+      # Add fail-fast to stop all jobs if one fails
+      fail-fast: true
+      matrix: ${{ fromJson(needs.load-podcasts.outputs.podcasts) }}
+    
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Setup Pages
         uses: actions/configure-pages@v4
@@ -145,7 +151,7 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          name: podcast-feeds
+          name: ${{ matrix.podcasts.slug }}-feed
           path: _site
 
       - name: Upload Pages artifact
