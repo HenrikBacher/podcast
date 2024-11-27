@@ -117,3 +117,26 @@ jobs:
             --name ${{ matrix.podcasts.slug }}.xml \
             --file output/${{ matrix.podcasts.slug }}.xml \
             --overwrite
+      - name: Setup GitHub Pages branch
+        if: env.PODCAST_RECENTLY_UPDATED == 'true'
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git checkout -B gh-pages || git checkout gh-pages
+              
+      - name: Copy feed to Pages directory
+        if: env.PODCAST_RECENTLY_UPDATED == 'true'
+        run: |
+          mkdir -p feeds
+          cp output/${{ matrix.podcasts.slug }}.xml feeds/
+          git add feeds/
+          git commit -m "Update ${{ matrix.podcasts.slug }} feed" || echo "No changes to commit"
+          git push origin gh-pages -f
+              
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        if: env.PODCAST_RECENTLY_UPDATED == 'true'
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./feeds
+          keep_files: true
