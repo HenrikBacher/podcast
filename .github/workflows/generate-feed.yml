@@ -115,8 +115,7 @@ jobs:
             --container-name ${{ secrets.CONTAINER_NAME }} \
             --auth-mode login \
             --name ${{ matrix.podcasts.slug }}.xml \
-            --file output/${{ matrix.podcasts.slug }}.xml \
-            --overwrite
+            --file output/${{ matrix.podcasts.slug }}.xml 
 
       - name: Upload feed artifact
         if: env.PODCAST_RECENTLY_UPDATED == 'true'
