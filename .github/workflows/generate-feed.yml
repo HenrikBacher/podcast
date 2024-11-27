@@ -71,7 +71,7 @@ jobs:
           lastBuildTimestamp=$(date -d "$lastBuildDate" +%s)
           currentTimestamp=$(date +%s)
           
-          thresholdMinutes=1440
+          thresholdMinutes=3600
           thresholdSeconds=$((thresholdMinutes * 60))
           
           if [ $((currentTimestamp - lastBuildTimestamp)) -lt $thresholdSeconds ]; then
@@ -115,5 +115,45 @@ jobs:
             --container-name ${{ secrets.CONTAINER_NAME }} \
             --auth-mode login \
             --name ${{ matrix.podcasts.slug }}.xml \
-            --file output/${{ matrix.podcasts.slug }}.xml \
-            --overwrite
+            --file output/${{ matrix.podcasts.slug }}.xml 
+
+      - name: Upload feed artifact
+        if: env.PODCAST_RECENTLY_UPDATED == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.podcasts.slug }}-feed
+          path: output/${{ matrix.podcasts.slug }}.xml
+          retention-days: 14
+
+  publish-feed:
+    name: "publish ${{ matrix.podcasts.slug }} feed"
+    needs: [update-feed, load-podcasts]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    strategy:
+      # Add fail-fast to stop all jobs if one fails
+      fail-fast: true
+      matrix: ${{ fromJson(needs.load-podcasts.outputs.podcasts) }}
+    
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.podcasts.slug }}-feed
+          path: _site
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
