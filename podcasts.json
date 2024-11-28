@@ -6,6 +6,11 @@
       "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6593ba22846e9f8fc0338958.jpg"
     },
     {
+      "slug": "genstart dox",
+      "urn": "urn:dr:radio:series:65cb475de80d2a267cd12ae9",
+      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:67001f85fd6dd215a9aaa921.jpg"
+    },
+    {
       "slug": "sara-og-monopolet",
       "urn": "urn:dr:radio:series:5fa15704da351264f87b46ce",
       "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6523bd03443243f95e2c39b0.jpg"
