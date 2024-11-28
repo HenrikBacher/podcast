@@ -152,7 +152,7 @@ jobs:
           # Install xmllint
           sudo apt-get update
           sudo apt-get install -y libxml2-utils
-          
+      
           cat > _site/index.html << 'EOF'
           <!DOCTYPE html>
           <html>
@@ -188,10 +188,13 @@ jobs:
             <ul class="feeds">
           EOF
       
+          # Set error handling
+          set -e
+      
           for feed in _site/feeds/*.xml; do
             filename=$(basename "$feed" .xml)
-            # Extract iTunes image URL using xmllint
-            image_url=$(xmllint --xpath "string(//itunes:image/@href)" --namespaces <(echo 'xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"') "$feed" 2>/dev/null)
+            # Extract iTunes image URL using xmllint with error handling
+            image_url=$(xmllint --xpath "string(//itunes:image/@href)" --namespaces <(echo 'xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"') "$feed" 2>/dev/null || echo '')
             if [ -n "$image_url" ]; then
               echo "<li><a class='feed-link' href='feeds/$filename.xml'><img class='feed-icon' src='$image_url' alt='$filename icon'><span>$filename</span></a></li>" >> _site/index.html
             else
