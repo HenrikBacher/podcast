@@ -159,88 +159,44 @@ jobs:
           <!DOCTYPE html>
           <html>
           <head>
-            <title>DR Podcast Feeds</title>
+            <title>DR Podcasts</title>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
-              body { 
-                font-family: system-ui, sans-serif; 
-                max-width: 800px; 
-                margin: 1rem auto; 
-                padding: 0 1rem; 
-              }
-              h1 { 
-                color: #333;
-                font-size: 1.5rem;
-                margin: 1rem 0;
-              }
-              .feeds { 
-                list-style: none; 
-                padding: 0;
-                display: grid;
-                gap: 1rem;
-                grid-template-columns: 1fr;
-              }
-              .feed-link { 
-                display: flex;
-                align-items: center;
-                gap: 0.75rem;
-                padding: 0.75rem;
-                background: #f5f5f5;
-                border-radius: 4px;
-                text-decoration: none;
-                color: #333;
-                transition: background 0.2s;
-              }
-              .feed-link:hover { 
-                background: #e5e5e5; 
-              }
-              .feed-icon {
-                width: 48px;
-                height: 48px;
-                border-radius: 4px;
-                object-fit: cover;
-              }
-              .feed-title {
-                word-break: break-word;
-              }
-              @media (min-width: 640px) {
-                body {
-                  margin: 2rem auto;
-                }
-                h1 {
-                  font-size: 2rem;
-                }
-                .feeds {
-                  grid-template-columns: repeat(2, 1fr);
-                }
-                .feed-icon {
-                  width: 60px;
-                  height: 60px;
-                }
-              }
+              /* ... existing styles ... */
             </style>
           </head>
           <body>
-            <h1>DR Podcast Feeds</h1>
+            <h1>DR Podcasts</h1>
             <ul class="feeds">
           EOF
-
+      
           for feed in _site/feeds/*.xml; do
             filename=$(basename "$feed" .xml)
-            image_url=$(xmllint --xpath "string(//itunes:image/@href)" --namespaces <(echo 'xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"') "$feed" 2>/dev/null || echo '')
+            # Try multiple approaches to extract image URL
+            image_url=$(xmllint --xpath "string(/*[local-name()='rss']/*[local-name()='channel']/*[local-name()='image']/*[local-name()='url']/text())" "$feed" 2>/dev/null || \
+                       xmllint --xpath "string(//*[local-name()='image']/@href)" "$feed" 2>/dev/null || \
+                       echo '')
+            
+            echo "Processing $filename - Image URL: $image_url" # Debug output
+            
             if [ -n "$image_url" ]; then
               echo "<li><a class='feed-link' href='feeds/$filename.xml'><img class='feed-icon' src='$image_url' alt='$filename icon'><span class='feed-title'>$filename</span></a></li>" >> _site/index.html
             else
               echo "<li><a class='feed-link' href='feeds/$filename.xml'><span class='feed-title'>$filename</span></a></li>" >> _site/index.html
             fi
           done
-
+      
           cat >> _site/index.html << 'EOF'
             </ul>
           </body>
           </html>
-          EOF  
+          EOF
+      
+          # Debug: Show generated HTML
+          echo "Generated HTML contents:"
+          cat _site/index.html
+
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
