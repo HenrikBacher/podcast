@@ -160,7 +160,9 @@ jobs:
               h1 { color: #333; }
               .feeds { list-style: none; padding: 0; }
               .feed-link { 
-                display: block;
+                display: flex;
+                align-items: center;
+                gap: 1rem;
                 padding: 1rem;
                 margin: 0.5rem 0;
                 background: #f5f5f5;
@@ -169,23 +171,36 @@ jobs:
                 color: #333;
               }
               .feed-link:hover { background: #e5e5e5; }
+              .feed-icon {
+                width: 60px;
+                height: 60px;
+                border-radius: 4px;
+                object-fit: cover;
+              }
             </style>
           </head>
           <body>
             <h1>DR Podcast Feeds</h1>
             <ul class="feeds">
           EOF
-  
+      
           for feed in _site/feeds/*.xml; do
             filename=$(basename "$feed" .xml)
-            echo "<li><a class='feed-link' href='feeds/$filename.xml'>$filename</a></li>" >> _site/index.html
+            # Extract iTunes image URL using xmllint
+            image_url=$(xmllint --xpath "string(//itunes:image/@href)" --namespaces <(echo 'xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"') "$feed" 2>/dev/null)
+            if [ -n "$image_url" ]; then
+              echo "<li><a class='feed-link' href='feeds/$filename.xml'><img class='feed-icon' src='$image_url' alt='$filename icon'><span>$filename</span></a></li>" >> _site/index.html
+            else
+              echo "<li><a class='feed-link' href='feeds/$filename.xml'><span>$filename</span></a></li>" >> _site/index.html
+            fi
           done
-  
+      
           cat >> _site/index.html << 'EOF'
             </ul>
           </body>
           </html>
           EOF
+        
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
