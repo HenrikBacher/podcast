@@ -225,7 +225,7 @@ jobs:
             <h1>DR Podcast Feeds</h1>
             <ul class="feeds">
           EOF
-              
+
           for feed in _site/feeds/*.xml; do
             filename=$(basename "$feed" .xml)
             image_url=$(xmllint --xpath "string(//itunes:image/@href)" --namespaces <(echo 'xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"') "$feed" 2>/dev/null || echo '')
@@ -235,16 +235,16 @@ jobs:
               echo "<li><a class='feed-link' href='feeds/$filename.xml'><span class='feed-title'>$filename</span></a></li>" >> _site/index.html
             fi
           done
-              
+
           cat >> _site/index.html << 'EOF'
             </ul>
           </body>
           </html>
           EOF  
-              
-            - name: Upload Pages artifact
-              uses: actions/upload-pages-artifact@v3
-              
-            - name: Deploy to GitHub Pages
-              id: deployment
-              uses: actions/deploy-pages@v4
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
