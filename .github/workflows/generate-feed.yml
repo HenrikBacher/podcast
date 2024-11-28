@@ -115,13 +115,14 @@ jobs:
             --container-name ${{ secrets.CONTAINER_NAME }} \
             --auth-mode login \
             --name ${{ matrix.podcasts.slug }}.xml \
-            --file output/${{ matrix.podcasts.slug }}.xml 
+            --file output/${{ matrix.podcasts.slug }}.xml \
+            --overwrite
 
       - name: Upload feed artifact
         if: env.PODCAST_RECENTLY_UPDATED == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.podcasts.slug }}-feed
+          name: ${{ matrix.podcasts.slug }}
           path: output/${{ matrix.podcasts.slug }}.xml
           retention-days: 14
 
