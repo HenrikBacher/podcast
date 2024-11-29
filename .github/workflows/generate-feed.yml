@@ -115,9 +115,9 @@ jobs:
       - name: Get last deployment time
         id: last_deploy
         run: |
-          LAST_DEPLOY=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/deployments?environment=github-pages&per_page=1" | \
-            jq -r '.[0].created_at // empty')
+          LAST_DEPLOY=$(gh api "repos/$GITHUB_REPOSITORY/deployments" \
+            --jq '.[0].created_at // empty' \
+            -q '.[] | select(.environment == "github-pages") | .created_at' | head -n1)
           if [ -z "$LAST_DEPLOY" ]; then
             LAST_DEPLOY="1970-01-01T00:00:00Z"
           fi
@@ -126,20 +126,16 @@ jobs:
       - name: Check for new feeds or feed changes
         id: deployment_check
         run: |
-          # Get the pages URL from deployments
-          SITE_URL=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/deployments?environment=github-pages&per_page=1" | \
-            jq -r '.[0].payload.web_url // empty')
-          
-          # Fallback to constructing URL if not found in deployments
-          if [ -z "$SITE_URL" ]; then
-            SITE_URL="https://${{ github.repository_owner }}.github.io/${GITHUB_REPOSITORY#*/}"
-          fi
+          NEEDS_DEPLOY="false"
+
+          SITE_URL=$(gh api "repos/$GITHUB_REPOSITORY/pages" --jq '.html_url')
+          sed -i '19i\
+                <meta http-equiv="refresh" content="0;URL='"$url"manual/'">
+          ' _site/index.html
           
           LAST_DEPLOY="${{ steps.last_deploy.outputs.last_deploy_time }}"
           LAST_DEPLOY_RFC822=$(date -d "$LAST_DEPLOY" "+%a, %d %b %Y %H:%M:%S %z")
           LAST_DEPLOY_TS=$(date -d "$LAST_DEPLOY_RFC822" +%s)
-          NEEDS_DEPLOY="false"
           
           # Get current feed count from website
           LIVE_COUNT=$(curl -sL --max-time 10 $SITE_URL | grep -o '<li.*</li>' | wc -l || echo "0")
