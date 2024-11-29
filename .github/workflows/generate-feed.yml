@@ -82,12 +82,6 @@ jobs:
       id-token: write
     runs-on: ubuntu-24.04
     steps:
-      - name: Install libxml2-utils
-        run: |
-          # Install xmllint
-          sudo apt-get update
-          sudo apt-get install -y libxml2-utils
-
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -109,7 +103,6 @@ jobs:
         id: check_updates
         run: |
           LAST_DEPLOY="${{ steps.last_deploy.outputs.last_deploy_time }}"
-          # Convert GitHub API ISO8601 date to RFC822 format
           LAST_DEPLOY_RFC822=$(date -d "$LAST_DEPLOY" "+%a, %d %b %Y %H:%M:%S %z")
           LAST_DEPLOY_TS=$(date -d "$LAST_DEPLOY_RFC822" +%s)
           NEEDS_DEPLOY="false"
@@ -129,8 +122,8 @@ jobs:
               continue
             fi
             
-            # Extract lastBuildDate with error handling
-            LAST_BUILD=$(xmllint --noblanks --xpath "string(/*[local-name()='rss']/*[local-name()='channel']/*[local-name()='lastBuildDate']/text())" "$file" 2>/dev/null || echo "")
+            # Extract lastBuildDate using grep
+            LAST_BUILD=$(grep -oP '(?<=<lastBuildDate>)[^<]+' "$file" || echo "")
             
             if [ -n "$LAST_BUILD" ]; then
               echo "Found lastBuildDate: $LAST_BUILD"
@@ -148,7 +141,6 @@ jobs:
           echo "needs_deploy=$NEEDS_DEPLOY" >> $GITHUB_OUTPUT
 
       - name: Generate index.html
-        if: steps.check_updates.outputs.needs_deploy == 'true'
         run: |      
           cat > _site/index.html << 'EOF'
           <!DOCTYPE html>
@@ -213,12 +205,11 @@ jobs:
       
           for feed in _site/feeds/*.xml; do
             filename=$(basename "$feed" .xml)
-            # Format the title - replace hyphens with spaces
             formatted_title=$(echo "$filename" | sed 's/-/ /g')
             
-            # Try multiple approaches to extract image URL
-            image_url=$(xmllint --xpath "string(/*[local-name()='rss']/*[local-name()='channel']/*[local-name()='image']/*[local-name()='url']/text())" "$feed" 2>/dev/null || \
-                       xmllint --xpath "string(//*[local-name()='image']/@href)" "$feed" 2>/dev/null || \
+            # Try multiple approaches to extract image URL using grep
+            image_url=$(grep -oP '(?<=<url>)[^<]+(?=</url>)' "$feed" | head -n1 || \
+                       grep -oP '(?<=<image href=")[^"]+' "$feed" | head -n1 || \
                        echo '')
             
             echo "Processing $filename - Image URL: $image_url" # Debug output
@@ -241,14 +232,11 @@ jobs:
           cat _site/index.html
 
       - name: Setup Pages
-        if: steps.check_updates.outputs.needs_deploy == 'true'
         uses: actions/configure-pages@v5
 
       - name: Upload Pages artifact
-        if: steps.check_updates.outputs.needs_deploy == 'true'
         uses: actions/upload-pages-artifact@v3
         
       - name: Deploy to GitHub Pages
-        if: steps.check_updates.outputs.needs_deploy == 'true'
         id: deployment
         uses: actions/deploy-pages@v4
