@@ -255,6 +255,37 @@ jobs:
                 overflow: hidden;
                 text-overflow: ellipsis;
               }
+              @keyframes slideUp {
+                from {
+                  transform: translate(-50%, 100%);
+                  opacity: 0;
+                }
+                to {
+                  transform: translate(-50%, 0);
+                  opacity: 1;
+                }
+              }
+              
+              .toast {
+                position: fixed;
+                bottom: 20px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: var(--accent);
+                color: white;
+                padding: 12px 24px;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px -1px var(--card-shadow);
+                z-index: 1000;
+                animation: slideUp 0.3s ease, fadeOut 0.3s ease 1.7s forwards;
+              }
+              
+              @keyframes fadeOut {
+                to {
+                  opacity: 0;
+                  transform: translate(-50%, 20px);
+                }
+              }
             </style>
             <script>
               let pressTimer;
@@ -263,27 +294,16 @@ jobs:
               function copyToClipboard(text) {
                 navigator.clipboard.writeText(text).then(() => {
                   const toast = document.createElement('div');
-                  toast.style.cssText = `
-                    position: fixed;
-                    bottom: 20px;
-                    left: 50%;
-                    transform: translateX(-50%);
-                    background: var(--accent);
-                    color: white;
-                    padding: 12px 24px;
-                    border-radius: 8px;
-                    box-shadow: 0 4px 6px -1px var(--card-shadow);
-                    z-index: 1000;
-                    opacity: 0;
-                    transition: opacity 0.3s;
-                  `;
+                  toast.className = 'toast';
                   toast.textContent = 'Feed URL copied to clipboard!';
                   document.body.appendChild(toast);
-                  requestAnimationFrame(() => toast.style.opacity = '1');
-                  setTimeout(() => {
-                    toast.style.opacity = '0';
-                    setTimeout(() => toast.remove(), 300);
-                  }, 2000);
+                  
+                  // Remove toast after animation
+                  toast.addEventListener('animationend', (e) => {
+                    if (e.animationName === 'fadeOut') {
+                      toast.remove();
+                    }
+                  });
                 });
               }
 
