@@ -10,7 +10,7 @@ on:
     paths:
       - "**/generate-feed.yml"
       - "**/podcasts.json"
-      - "**/index.html"
+      - "site/**"
   schedule:
     - cron: "0 * * * *"  # Run at minute 0 of every hour
   workflow_dispatch:
@@ -30,16 +30,11 @@ jobs:
         run: |
           echo "podcasts=$(jq -c . < podcasts.json)" >> $GITHUB_OUTPUT
 
-      - name: Prepare template
-        run: |
-          mkdir -p output
-          cp index.html output/
-
       - name: Upload template artifact
         uses: actions/upload-artifact@v4
         with:
-          name: template
-          path: output/index.html
+          name: site
+          path: site
           retention-days: 1
 
   update-feed:
@@ -116,7 +111,7 @@ jobs:
             LAST_DEPLOY="1970-01-01T00:00:00Z"
           fi
           echo "last_deploy_time=$LAST_DEPLOY" >> $GITHUB_OUTPUT
-      
+          
       - name: Check for new feeds or feed changes
         id: deployment_check
         run: |
