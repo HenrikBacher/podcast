@@ -88,9 +88,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libxml2-utils
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -151,7 +148,6 @@ jobs:
           echo "needs_deploy=$NEEDS_DEPLOY" >> $GITHUB_OUTPUT
 
       - name: Generate index.html
-        if: steps.check_updates.outputs.needs_deploy == 'true'
         run: |      
           cat > _site/index.html << 'EOF'
           <!DOCTYPE html>
@@ -243,11 +239,12 @@ jobs:
           echo "Generated HTML contents:"
           cat _site/index.html
 
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
       - name: Upload Pages artifact
-        if: steps.check_updates.outputs.needs_deploy == 'true'
         uses: actions/upload-pages-artifact@v3
         
       - name: Deploy to GitHub Pages
-        if: steps.check_updates.outputs.needs_deploy == 'true'
         id: deployment
         uses: actions/deploy-pages@v4
