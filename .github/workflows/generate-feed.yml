@@ -196,8 +196,8 @@ jobs:
             fi
           done
           
-          # Replace placeholder with generated feeds
-          sed -i "s|<!-- FEEDS_PLACEHOLDER -->|$feeds_html|" _site/index.html
+          # Replace entire section between markers with generated feeds
+          sed -i "/<!-- BEGIN_FEEDS -->/,/<!-- END_FEEDS -->/c\        <!-- BEGIN_FEEDS -->\n        $feeds_html\n        <!-- END_FEEDS -->" _site/index.html
 
       - name: Setup Pages
         if: steps.deployment_check.outputs.needs_deploy == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
