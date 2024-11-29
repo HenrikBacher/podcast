@@ -254,6 +254,7 @@ jobs:
                 white-space: nowrap;
                 overflow: hidden;
                 text-overflow: ellipsis;
+                text-transform: capitalize;
               }
               @keyframes slideUp {
                 from {
