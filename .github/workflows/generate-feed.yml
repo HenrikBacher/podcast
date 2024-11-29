@@ -79,7 +79,7 @@ jobs:
           retention-days: 1
 
   publish-feed:
-    name: "publish feeds"
+    name: "Publish feeds"
     needs: [update-feed, load-podcasts]
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'    
     environment:
