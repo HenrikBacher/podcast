@@ -293,18 +293,24 @@ jobs:
               let lastTap = 0;
               
               function copyToClipboard(text) {
+                // Check if running on iOS or Android
+                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+                const isAndroid = /Android/.test(navigator.userAgent);
+                
                 navigator.clipboard.writeText(text).then(() => {
-                  const toast = document.createElement('div');
-                  toast.className = 'toast';
-                  toast.textContent = 'Feed URL copied to clipboard!';
-                  document.body.appendChild(toast);
-                  
-                  // Remove toast after animation
-                  toast.addEventListener('animationend', (e) => {
-                    if (e.animationName === 'fadeOut') {
-                      toast.remove();
-                    }
-                  });
+                  // Only show custom toast on desktop or other devices
+                  if (!isIOS && !isAndroid) {
+                    const toast = document.createElement('div');
+                    toast.className = 'toast';
+                    toast.textContent = 'Feed URL copied to clipboard!';
+                    document.body.appendChild(toast);
+                    
+                    toast.addEventListener('animationend', (e) => {
+                      if (e.animationName === 'fadeOut') {
+                        toast.remove();
+                      }
+                    });
+                  }
                 });
               }
 
