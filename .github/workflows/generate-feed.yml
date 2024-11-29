@@ -162,9 +162,6 @@ jobs:
       - name: Generate index.html
         if: steps.deployment_check.outputs.needs_deploy == 'true' || github.event_name == 'workflow_dispatch'
         run: |      
-          # Install ImageMagick
-          sudo apt-get update && sudo apt-get install -y imagemagick
-
           cat > _site/index.html << 'EOF'
           <!DOCTYPE html>
           <html>
@@ -173,51 +170,85 @@ jobs:
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
+              :root {
+                --bg: #ffffff;
+                --text: #1a1a1a;
+                --card-bg: #ffffff;
+                --card-border: rgba(0,0,0,0.1);
+                --card-shadow: rgba(0,0,0,0.1);
+                --accent: #4f46e5;
+              }
+              @media (prefers-color-scheme: dark) {
+                :root {
+                  --bg: #111827;
+                  --text: #ffffff;
+                  --card-bg: #1f2937;
+                  --card-border: rgba(255,255,255,0.1);
+                  --card-shadow: rgba(0,0,0,0.3);
+                }
+              }
               body { 
-                font-family: system-ui, sans-serif; 
-                max-width: 800px; 
-                margin: 1rem auto; 
-                padding: 0 1rem; 
+                font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+                max-width: 1200px; 
+                margin: 0 auto;
+                padding: 2rem 1rem;
+                background: var(--bg);
+                color: var(--text);
+                line-height: 1.5;
+              }
+              .header {
+                text-align: center;
+                margin-bottom: 3rem;
+              }
+              .header h1 {
+                font-size: 2.5rem;
+                font-weight: 800;
+                background: linear-gradient(to right, var(--accent), #9333ea);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                margin: 0;
               }
               .feeds { 
                 list-style: none; 
                 padding: 0;
                 display: grid;
-                grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-                gap: 1rem;
+                grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+                gap: 1.5rem;
               }
               .feeds li { 
-                background: #f5f5f5;
-                border-radius: 4px;
-                border: 1px solid #ddd;
-                transition: all 0.2s ease;
+                background: var(--card-bg);
+                border-radius: 12px;
+                border: 1px solid var(--card-border);
+                box-shadow: 0 4px 6px -1px var(--card-shadow);
+                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                overflow: hidden;
               }
               .feeds li:hover {
-                border-color: #999;
-                filter: brightness(0.95);
+                transform: translateY(-2px);
+                box-shadow: 0 10px 15px -3px var(--card-shadow);
               }
               .feed-link { 
-                display: inline-flex;
+                display: flex;
                 align-items: center;
-                gap: 0.5em;
-                padding: 0.8em;
+                gap: 1em;
+                padding: 1.25em;
                 text-decoration: none;
-                color: #333;
-                margin: 0;
-                font-size: 1rem;
+                color: var(--text);
                 width: 100%;
                 box-sizing: border-box;
               }
               .feed-icon {
-                height: 2em;
-                aspect-ratio: 1;
-                border-radius: 4px;
+                height: 3em;
+                width: 3em;
+                border-radius: 8px;
                 object-fit: cover;
                 flex-shrink: 0;
+                box-shadow: 0 2px 4px var(--card-shadow);
               }
               .feed-title {
                 flex: 1;
-                text-transform: capitalize;
+                font-size: 1.1rem;
+                font-weight: 500;
                 white-space: nowrap;
                 overflow: hidden;
                 text-overflow: ellipsis;
@@ -225,7 +256,9 @@ jobs:
             </style>
           </head>
           <body>
-            <h1>DR Podcasts</h1>
+            <header class="header">
+              <h1>DR Podcasts</h1>
+            </header>
             <ul class="feeds">
           EOF
       
@@ -238,15 +271,7 @@ jobs:
                        echo '')
             
             if [ -n "$image_url" ]; then
-              # Download image and analyze color
-              curl -s "$image_url" > temp_image
-              color=$(convert temp_image -resize 1x1\! -format "%[pixel:p{0,0}]" info:-)
-              # Make color more subtle by reducing opacity
-              bg_color=$(convert temp_image -resize 1x1\! -format "%[pixel:p{0,0}]" info:- | \
-                        sed 's/rgb(\([0-9]*\),\([0-9]*\),\([0-9]*\))/rgba(\1,\2,\3,0.1)/')
-              rm temp_image
-              
-              echo "<li style='background: $bg_color'><a class='feed-link' href='feeds/$filename.xml'><img class='feed-icon' src='$image_url' alt='$formatted_title icon'><span class='feed-title'>$formatted_title</span></a></li>" >> _site/index.html
+              echo "<li><a class='feed-link' href='feeds/$filename.xml'><img class='feed-icon' src='$image_url' alt='$formatted_title icon'><span class='feed-title'>$formatted_title</span></a></li>" >> _site/index.html
             else
               echo "<li><a class='feed-link' href='feeds/$filename.xml'><span class='feed-title'>$formatted_title</span></a></li>" >> _site/index.html
             fi
@@ -258,6 +283,7 @@ jobs:
           </html>
           EOF
 
+          
       - name: Setup Pages
         if: steps.deployment_check.outputs.needs_deploy == 'true' || github.event_name == 'workflow_dispatch'
         uses: actions/configure-pages@v5
