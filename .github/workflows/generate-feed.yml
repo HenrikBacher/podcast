@@ -160,7 +160,7 @@ jobs:
           echo "needs_deploy=$NEEDS_DEPLOY" >> $GITHUB_OUTPUT
 
       - name: Generate index.html
-        if: steps.deployment_check.outputs.needs_deploy == 'true'
+        if: steps.deployment_check.outputs.needs_deploy == 'true' || github.event_name == 'workflow_dispatch'
         run: |      
           # Install ImageMagick
           sudo apt-get update && sudo apt-get install -y imagemagick
@@ -186,25 +186,27 @@ jobs:
                 grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
                 gap: 1rem;
               }
+              .feeds li { 
+                background: #f5f5f5;
+                border-radius: 4px;
+                border: 1px solid #ddd;
+                transition: all 0.2s ease;
+              }
+              .feeds li:hover {
+                border-color: #999;
+                filter: brightness(0.95);
+              }
               .feed-link { 
                 display: inline-flex;
                 align-items: center;
                 gap: 0.5em;
                 padding: 0.8em;
-                background: #f5f5f5;
-                border-radius: 4px;
                 text-decoration: none;
                 color: #333;
                 margin: 0;
                 font-size: 1rem;
                 width: 100%;
                 box-sizing: border-box;
-                border: 1px solid #ddd;
-                transition: all 0.2s ease;
-              }
-              .feed-link:hover {
-                border-color: #999;
-                filter: brightness(0.95);
               }
               .feed-icon {
                 height: 2em;
@@ -244,7 +246,7 @@ jobs:
                         sed 's/rgb(\([0-9]*\),\([0-9]*\),\([0-9]*\))/rgba(\1,\2,\3,0.1)/')
               rm temp_image
               
-              echo "<li><a class='feed-link' style='background: $bg_color' href='feeds/$filename.xml'><img class='feed-icon' src='$image_url' alt='$formatted_title icon'><span class='feed-title'>$formatted_title</span></a></li>" >> _site/index.html
+              echo "<li style='background: $bg_color'><a class='feed-link' href='feeds/$filename.xml'><img class='feed-icon' src='$image_url' alt='$formatted_title icon'><span class='feed-title'>$formatted_title</span></a></li>" >> _site/index.html
             else
               echo "<li><a class='feed-link' href='feeds/$filename.xml'><span class='feed-title'>$formatted_title</span></a></li>" >> _site/index.html
             fi
@@ -257,14 +259,14 @@ jobs:
           EOF
 
       - name: Setup Pages
-        if: steps.deployment_check.outputs.needs_deploy == 'true'
+        if: steps.deployment_check.outputs.needs_deploy == 'true' || github.event_name == 'workflow_dispatch'
         uses: actions/configure-pages@v5
 
       - name: Upload Pages artifact
-        if: steps.deployment_check.outputs.needs_deploy == 'true'
+        if: steps.deployment_check.outputs.needs_deploy == 'true' || github.event_name == 'workflow_dispatch'
         uses: actions/upload-pages-artifact@v3
         
       - name: Deploy to GitHub Pages
-        if: steps.deployment_check.outputs.needs_deploy == 'true'
+        if: steps.deployment_check.outputs.needs_deploy == 'true' || github.event_name == 'workflow_dispatch'
         id: deployment
         uses: actions/deploy-pages@v4
