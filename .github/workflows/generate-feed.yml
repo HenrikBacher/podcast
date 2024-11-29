@@ -181,7 +181,7 @@ jobs:
         run: |          
           # Generate feeds HTML
           feeds_html=""
-          for feed in _site/*.xml; do
+          for feed in _site/feeds/*.xml; do
             filename=$(basename "$feed" .xml)
             formatted_title=$(echo "$filename" | sed 's/-/ /g')
             
