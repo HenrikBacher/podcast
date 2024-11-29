@@ -160,7 +160,7 @@ jobs:
           echo "needs_deploy=$NEEDS_DEPLOY" >> $GITHUB_OUTPUT
 
       - name: Generate index.html
-        if: steps.deployment_check.outputs.needs_deploy == 'true' || github.event_name == 'workflow_dispatch'
+        if: steps.deployment_check.outputs.needs_deploy == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
         run: |      
           cat > _site/index.html << 'EOF'
           <!DOCTYPE html>
@@ -228,6 +228,8 @@ jobs:
                 box-shadow: 0 10px 15px -3px var(--card-shadow);
               }
               .feed-link { 
+                -webkit-tap-highlight-color: transparent;
+                user-select: none;
                 display: flex;
                 align-items: center;
                 gap: 1em;
@@ -254,6 +256,86 @@ jobs:
                 text-overflow: ellipsis;
               }
             </style>
+            <script>
+              let pressTimer;
+              let lastTap = 0;
+              
+              function copyToClipboard(text) {
+                navigator.clipboard.writeText(text).then(() => {
+                  const toast = document.createElement('div');
+                  toast.style.cssText = `
+                    position: fixed;
+                    bottom: 20px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: var(--accent);
+                    color: white;
+                    padding: 12px 24px;
+                    border-radius: 8px;
+                    box-shadow: 0 4px 6px -1px var(--card-shadow);
+                    z-index: 1000;
+                    opacity: 0;
+                    transition: opacity 0.3s;
+                  `;
+                  toast.textContent = 'Feed URL copied to clipboard!';
+                  document.body.appendChild(toast);
+                  requestAnimationFrame(() => toast.style.opacity = '1');
+                  setTimeout(() => {
+                    toast.style.opacity = '0';
+                    setTimeout(() => toast.remove(), 300);
+                  }, 2000);
+                });
+              }
+
+              document.addEventListener('DOMContentLoaded', () => {
+                document.querySelectorAll('.feed-link').forEach(link => {
+                  const url = link.href;
+                  
+                  link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const now = Date.now();
+                    const timeDiff = now - lastTap;
+                    
+                    if (timeDiff < 300 && timeDiff > 0) {
+                      // Double tap
+                      window.open(url, '_blank');
+                    } else {
+                      // Single tap
+                      copyToClipboard(url);
+                    }
+                    lastTap = now;
+                  });
+                  
+                  link.addEventListener('mousedown', (e) => {
+                    pressTimer = setTimeout(() => {
+                      window.open(url, '_blank');
+                    }, 500);
+                  });
+                  
+                  link.addEventListener('mouseup', () => {
+                    clearTimeout(pressTimer);
+                  });
+                  
+                  link.addEventListener('mouseleave', () => {
+                    clearTimeout(pressTimer);
+                  });
+                  
+                  link.addEventListener('touchstart', (e) => {
+                    pressTimer = setTimeout(() => {
+                      window.open(url, '_blank');
+                    }, 500);
+                  });
+                  
+                  link.addEventListener('touchend', () => {
+                    clearTimeout(pressTimer);
+                  });
+                  
+                  link.addEventListener('touchcancel', () => {
+                    clearTimeout(pressTimer);
+                  });
+                });
+              });
+            </script>
           </head>
           <body>
             <header class="header">
@@ -285,14 +367,14 @@ jobs:
 
           
       - name: Setup Pages
-        if: steps.deployment_check.outputs.needs_deploy == 'true' || github.event_name == 'workflow_dispatch'
+        if: steps.deployment_check.outputs.needs_deploy == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
         uses: actions/configure-pages@v5
 
       - name: Upload Pages artifact
-        if: steps.deployment_check.outputs.needs_deploy == 'true' || github.event_name == 'workflow_dispatch'
+        if: steps.deployment_check.outputs.needs_deploy == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
         uses: actions/upload-pages-artifact@v3
         
       - name: Deploy to GitHub Pages
-        if: steps.deployment_check.outputs.needs_deploy == 'true' || github.event_name == 'workflow_dispatch'
+        if: steps.deployment_check.outputs.needs_deploy == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
         id: deployment
         uses: actions/deploy-pages@v4
