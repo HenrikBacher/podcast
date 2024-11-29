@@ -6,20 +6,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         :root {
-            --bg: #ffffff;
-            --text: #1a1a1a;
-            --card-bg: #ffffff;
-            --card-border: rgba(0,0,0,0.1);
-            --card-shadow: rgba(0,0,0,0.1);
-            --accent: #4f46e5;
+            --bg: #f8fafc;          /* Lighter background */
+            --text: #0f172a;        /* Darker text for better contrast */
+            --card-bg: #ffffff;     /* Keep white cards */
+            --card-border: #e2e8f0; /* Solid border color */
+            --card-shadow: rgba(51, 65, 85, 0.1);
+            --accent: #6366f1;      /* Brighter primary accent */
         }
         @media (prefers-color-scheme: dark) {
             :root {
-                --bg: #111827;
-                --text: #ffffff;
-                --card-bg: #1f2937;
-                --card-border: rgba(255,255,255,0.1);
-                --card-shadow: rgba(0,0,0,0.3);
+                --bg: #0f172a;      /* Darker blue background */
+                --text: #f1f5f9;    /* Light gray text */
+                --card-bg: #1e293b; /* Lighter card background */
+                --card-border: #334155; /* Visible card border */
+                --card-shadow: rgba(0, 0, 0, 0.4);
             }
         }
         body { 
@@ -38,7 +38,7 @@
         .header h1 {
             font-size: 2.5rem;
             font-weight: 800;
-            background: linear-gradient(to right, var(--accent), #9333ea);
+            background: linear-gradient(to right, #6366f1, #a855f7); /* Adjusted gradient */
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             margin: 0;
@@ -75,20 +75,28 @@
             color: var(--text);
             width: 100%;
             box-sizing: border-box;
+            position: relative;
         }
         .feed-icon {
             width: 100%;
-            height: 75%;
+            height: 100%;
             object-fit: cover;
-            flex-shrink: 0;
+            position: absolute;
+            top: 0;
+            left: 0;
         }
         .feed-title {
-            flex: 1;
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 2.5em 0.75em 0.75em;
+            margin: 0;
+            background: linear-gradient(transparent, rgba(0, 0, 0, 0.75));
+            color: #fff;
             font-size: 0.95rem;
             font-weight: 500;
             text-align: center;
-            padding: 0.75em;
-            width: 100%;
             overflow: hidden;
             text-overflow: ellipsis;
             display: -webkit-box;
@@ -208,14 +216,38 @@
         <!-- BEGIN_FEEDS -->
         <li>
             <a href="https://example.com/feed1" class="feed-link">
-                <img src="https://picsum.photos/300/300?1" alt="Design Example 1" class="feed-icon">
-                <span class="feed-title">Example Podcast 1</span>
+                <img src="https://picsum.photos/seed/tech/300/300" alt="Tech Talk Weekly" class="feed-icon">
+                <span class="feed-title">Tech Talk Weekly</span>
             </a>
         </li>
         <li>
             <a href="https://example.com/feed2" class="feed-link">
-                <img src="https://picsum.photos/300/300?2" alt="Design Example 2" class="feed-icon">
-                <span class="feed-title">Example Podcast 2</span>
+                <img src="https://picsum.photos/seed/nature/300/300" alt="Nature Explorer" class="feed-icon">
+                <span class="feed-title">Nature Explorer</span>
+            </a>
+        </li>
+        <li>
+            <a href="https://example.com/feed3" class="feed-link">
+                <img src="https://picsum.photos/seed/science/300/300" alt="Science Today" class="feed-icon">
+                <span class="feed-title">Science Today</span>
+            </a>
+        </li>
+        <li>
+            <a href="https://example.com/feed4" class="feed-link">
+                <img src="https://picsum.photos/seed/history/300/300" alt="History Mysteries" class="feed-icon">
+                <span class="feed-title">History Mysteries</span>
+            </a>
+        </li>
+        <li>
+            <a href="https://example.com/feed5" class="feed-link">
+                <img src="https://picsum.photos/seed/culture/300/300" alt="Cultural Stories" class="feed-icon">
+                <span class="feed-title">Cultural Stories</span>
+            </a>
+        </li>
+        <li>
+            <a href="https://example.com/feed6" class="feed-link">
+                <img src="https://picsum.photos/seed/news/300/300" alt="Daily News Roundup" class="feed-icon">
+                <span class="feed-title">Daily News Roundup</span>
             </a>
         </li>
         <!-- END_FEEDS -->
