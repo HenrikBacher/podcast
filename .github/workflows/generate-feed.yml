@@ -109,7 +109,7 @@ jobs:
           NEEDS_DEPLOY="false"
           
           # Get current feed count from website
-          LIVE_COUNT=$(curl -s $SITE_URL | grep -o '<li.*</li>' | wc -l || echo "0")
+          LIVE_COUNT=$(curl -sL --max-time 10 $SITE_URL | grep -o '<li.*</li>' | wc -l || echo "0")
           
           # Count current XML files
           CURRENT_COUNT=$(find "_site/feeds" -name "*.xml" 2>/dev/null | wc -l)
