@@ -71,7 +71,7 @@ jobs:
           lastBuildTimestamp=$(date -d "$lastBuildDate" +%s)
           currentTimestamp=$(date +%s)
           
-          thresholdMinutes=3600
+          thresholdMinutes=360
           thresholdSeconds=$((thresholdMinutes * 60))
           
           if [ $((currentTimestamp - lastBuildTimestamp)) -lt $thresholdSeconds ]; then
