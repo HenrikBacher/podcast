@@ -138,8 +138,8 @@ jobs:
           LAST_DEPLOY_RFC822=$(date -d "$LAST_DEPLOY" "+%a, %d %b %Y %H:%M:%S %z")
           LAST_DEPLOY_TS=$(date -d "$LAST_DEPLOY_RFC822" +%s)
           
-          # Get current feed count from website
-          LIVE_COUNT=$(curl -sL --max-time 10 $SITE_URL | grep -o '<li.*</li>' | wc -l || echo "0")
+          # Get current feed count from website by counting feed-link classes
+          LIVE_COUNT=$(curl -sL --max-time 10 $SITE_URL | grep -o "class='feed-link'" | wc -l || echo "0")
           
           # Count current XML files
           CURRENT_COUNT=$(find "_site/feeds" -name "*.xml" 2>/dev/null | wc -l)
