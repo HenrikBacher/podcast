@@ -59,13 +59,12 @@ jobs:
     steps:
       - name: Get latest release
         id: get_latest_release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          LATEST_RELEASE_URL=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-          "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/latest" | jq -r '.assets[0].browser_download_url')
+          LATEST_RELEASE_URL=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq '.assets[0].browser_download_url')
           echo "Downloading latest release from $LATEST_RELEASE_URL"
           curl -L $LATEST_RELEASE_URL -o ommer.jar
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Java 21
         uses: actions/setup-java@v4
@@ -132,11 +131,9 @@ jobs:
         run: |
           NEEDS_DEPLOY="false"
 
-          SITE_URL=$(gh api "repos/$GITHUB_REPOSITORY/pages" --jq '.html_url')
-          sed -i '19i\
-                <meta http-equiv="refresh" content="0;URL='"$url"manual/'">
-          ' _site/index.html
-          
+          SITE_URL=$(gh api "repos/${GITHUB_REPOSITORY}/pages" --jq '.html_url')          
+          echo "Site URL: $SITE_URL"
+
           LAST_DEPLOY="${{ steps.last_deploy.outputs.last_deploy_time }}"
           LAST_DEPLOY_RFC822=$(date -d "$LAST_DEPLOY" "+%a, %d %b %Y %H:%M:%S %z")
           LAST_DEPLOY_TS=$(date -d "$LAST_DEPLOY_RFC822" +%s)
