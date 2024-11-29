@@ -1,10 +1,5 @@
 name: Build app
 
-# Common configuration
-env:
-  JAVA_VERSION: "21"
-  JAVA_DISTRIBUTION: "adopt"
-
 on:
   workflow_dispatch:
   pull_request:
@@ -29,8 +24,8 @@ jobs:
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: ${{ env.JAVA_VERSION }}
-          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          java-version: "21"
+          distribution: "adopt"
 
       - name: Cache Gradle dependencies
         uses: actions/cache@v4
