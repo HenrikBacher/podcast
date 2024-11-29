@@ -9,6 +9,9 @@ on:
       - main
     paths-ignore:
       - ".github/**"
+      - "**/generate-feed.yml"
+      - "**/podcasts.json"
+      - "**/index.html"
 
 jobs:
   build-app:
