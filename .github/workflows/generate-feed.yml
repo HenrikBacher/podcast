@@ -99,6 +99,29 @@ jobs:
           fi
           echo "last_deploy_time=$LAST_DEPLOY" >> $GITHUB_OUTPUT
 
+      - name: Get site URL
+        id: get_site_url
+        shell: pwsh
+        run: |
+          $headers = @{
+              Authorization = "Bearer $env:GITHUB_TOKEN"
+          }
+          
+          $deploymentUrl = "https://api.github.com/repos/$env:GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=1"
+          
+          try {
+              $response = Invoke-RestMethod -Uri $deploymentUrl -Headers $headers
+              $siteUrl = $response[0].payload.web_url
+          } catch {
+              Write-Warning "Failed to get deployment URL: $_"
+              $siteUrl = "https://$env:GITHUB_REPOSITORY_OWNER.github.io/$env:REPOSITORY_NAME"
+          }
+          
+          Write-Host "url=$siteUrl" >> $env:GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY_NAME: ${{ github.event.repository.name }}
+
       - name: Check for new feeds or feed changes
         id: deployment_check
         shell: pwsh
@@ -169,9 +192,9 @@ jobs:
           
           "needs_deploy=$($needsDeploy.ToString().ToLower())" >> $env:GITHUB_OUTPUT
         env:
-          SITE_URL: ${{ steps.get_site_url.outputs.url }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           LAST_DEPLOY: ${{ steps.last_deploy.outputs.last_deploy_time }}
+          SITE_URL: ${{ steps.get_site_url.outputs.url }}
 
       - name: Generate index.html
         if: steps.deployment_check.outputs.needs_deploy == 'true'
