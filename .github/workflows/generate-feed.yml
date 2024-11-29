@@ -102,7 +102,16 @@ jobs:
       - name: Check if any XML files are newer
         id: check_updates
         run: |
-          SITE_URL="https://henrikbacher.github.io/podcast"
+          # Get the pages URL from deployments
+          SITE_URL=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/deployments?environment=github-pages&per_page=1" | \
+            jq -r '.[0].payload.web_url // empty')
+          
+          # Fallback to constructing URL if not found in deployments
+          if [ -z "$SITE_URL" ]; then
+            SITE_URL="https://${{ github.repository_owner }}.github.io/${GITHUB_REPOSITORY#*/}"
+          fi
+          
           LAST_DEPLOY="${{ steps.last_deploy.outputs.last_deploy_time }}"
           LAST_DEPLOY_RFC822=$(date -d "$LAST_DEPLOY" "+%a, %d %b %Y %H:%M:%S %z")
           LAST_DEPLOY_TS=$(date -d "$LAST_DEPLOY_RFC822" +%s)
