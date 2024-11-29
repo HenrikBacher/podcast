@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>DR Podcasts</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        :root {
+            --bg: #ffffff;
+            --text: #1a1a1a;
+            --card-bg: #ffffff;
+            --card-border: rgba(0,0,0,0.1);
+            --card-shadow: rgba(0,0,0,0.1);
+            --accent: #4f46e5;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #111827;
+                --text: #ffffff;
+                --card-bg: #1f2937;
+                --card-border: rgba(255,255,255,0.1);
+                --card-shadow: rgba(0,0,0,0.3);
+            }
+        }
+        body { 
+            font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+            max-width: 1200px; 
+            margin: 0 auto;
+            padding: 2rem 1rem;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.5;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: linear-gradient(to right, var(--accent), #9333ea);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin: 0;
+        }
+        .feeds { 
+            list-style: none; 
+            padding: 0;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1.5rem;
+            padding: 1rem;
+        }
+        .feeds li { 
+            background: var(--card-bg);
+            border-radius: 12px;
+            border: 1px solid var(--card-border);
+            box-shadow: 0 4px 6px -1px var(--card-shadow);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: hidden;
+            aspect-ratio: 1;
+        }
+        .feeds li:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px var(--card-shadow);
+        }
+        .feed-link { 
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100%;
+            text-decoration: none;
+            color: var(--text);
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .feed-icon {
+            width: 100%;
+            height: 75%;
+            object-fit: cover;
+            flex-shrink: 0;
+        }
+        .feed-title {
+            flex: 1;
+            font-size: 0.95rem;
+            font-weight: 500;
+            text-align: center;
+            padding: 0.75em;
+            width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            text-transform: capitalize;
+        }
+        @keyframes slideUp {
+            from {
+                transform: translate(-50%, 100%);
+                opacity: 0;
+            }
+            to {
+                transform: translate(-50%, 0);
+                opacity: 1;
+            }
+        }
+        
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--accent);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px -1px var(--card-shadow);
+            z-index: 1000;
+            animation: slideUp 0.3s ease, fadeOut 0.3s ease 1.7s forwards;
+        }
+        
+        @keyframes fadeOut {
+            to {
+                opacity: 0;
+                transform: translate(-50%, 20px);
+            }
+        }
+    </style>
+    <script>
+        let pressTimer;
+        let lastTap = 0;
+        
+        function copyToClipboard(text) {
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            const isAndroid = /Android/.test(navigator.userAgent);
+            
+            navigator.clipboard.writeText(text).then(() => {
+                if (!isIOS && !isAndroid) {
+                    const toast = document.createElement('div');
+                    toast.className = 'toast';
+                    toast.textContent = 'Feed URL copied to clipboard!';
+                    document.body.appendChild(toast);
+                    
+                    toast.addEventListener('animationend', (e) => {
+                        if (e.animationName === 'fadeOut') {
+                            toast.remove();
+                        }
+                    });
+                }
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.feed-link').forEach(link => {
+                const url = link.href;
+                
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const now = Date.now();
+                    const timeDiff = now - lastTap;
+                    
+                    if (timeDiff < 300 && timeDiff > 0) {
+                        window.open(url, '_blank');
+                    } else {
+                        copyToClipboard(url);
+                    }
+                    lastTap = now;
+                });
+                
+                link.addEventListener('mousedown', (e) => {
+                    pressTimer = setTimeout(() => {
+                        window.open(url, '_blank');
+                    }, 500);
+                });
+                
+                link.addEventListener('mouseup', () => {
+                    clearTimeout(pressTimer);
+                });
+                
+                link.addEventListener('mouseleave', () => {
+                    clearTimeout(pressTimer);
+                });
+                
+                link.addEventListener('touchstart', (e) => {
+                    pressTimer = setTimeout(() => {
+                        window.open(url, '_blank');
+                    }, 500);
+                });
+                
+                link.addEventListener('touchend', () => {
+                    clearTimeout(pressTimer);
+                });
+                
+                link.addEventListener('touchcancel', () => {
+                    clearTimeout(pressTimer);
+                });
+            });
+        });
+    </script>
+</head>
+<body>
+    <header class="header">
+        <h1>DR Podcasts</h1>
+    </header>
+    <ul class="feeds">
+        <!-- FEEDS_PLACEHOLDER -->
+    </ul>
+</body>
+</html>
