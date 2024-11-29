@@ -1,6 +1,13 @@
 name: Update feeds
 
-# Add concurrency to cancel redundant workflow runs
+# Common configuration
+env:
+  JAVA_VERSION: "21"
+  JAVA_DISTRIBUTION: "adopt"
+  OUTPUT_DIR: "_site"
+  ICONS_DIR: "icons"
+  FEEDS_DIR: "feeds"
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -12,7 +19,7 @@ on:
       - "**/podcasts.json"
       - "site/**"
   schedule:
-    - cron: "0 * * * *"  # Run at minute 0 of every hour
+    - cron: "0 * * * *"
   workflow_dispatch:
 
 jobs:
@@ -22,37 +29,33 @@ jobs:
     outputs:
       podcasts: ${{ steps.load_data.outputs.podcasts }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
+      - uses: actions/checkout@v4
+      
       - name: Load Podcasts Data
         id: load_data
-        run: |
-          echo "podcasts=$(jq -c . < podcasts.json)" >> $GITHUB_OUTPUT
+        shell: bash
+        run: echo "podcasts=$(jq -c . < podcasts.json)" >> $GITHUB_OUTPUT
 
       - name: Download podcast icons
+        shell: bash
         run: |
-          mkdir -p site/icons
-          jq -c '.podcasts[]' podcasts.json | while read -r podcast; do
-            slug=$(echo $podcast | jq -r '.slug')
-            image=$(echo $podcast | jq -r '.image')
+          mkdir -p ${{ env.OUTPUT_DIR }}/${{ env.ICONS_DIR }}
+          jq -r '.podcasts[] | "\(.slug) \(.image)"' podcasts.json | while read -r slug image; do
             ext=$(echo "$image" | grep -oP '\.(?:png|jpg|jpeg|gif|webp)$' || echo '.jpg')
-            echo "Downloading icon for $slug from $image"
-            curl -L "$image" -o "site/icons/$slug$ext"
+            echo "Downloading icon for $slug"
+            curl -sSL "$image" -o "${{ env.OUTPUT_DIR }}/${{ env.ICONS_DIR }}/$slug$ext"
           done
 
-      - name: Upload template artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: site
-          path: site
+          path: ${{ env.OUTPUT_DIR }}
           retention-days: 1
 
   update-feed:
-    name: "Update ${{ matrix.podcasts.slug }} feed"
     needs: load-podcasts
+    name: "Update ${{ matrix.podcasts.slug }} feed"
     strategy:
-      # Add fail-fast to stop all jobs if one fails
       fail-fast: true
       matrix: ${{ fromJson(needs.load-podcasts.outputs.podcasts) }}
     runs-on: ubuntu-24.04
@@ -69,8 +72,8 @@ jobs:
       - name: Set up Java 21
         uses: actions/setup-java@v4
         with:
-          java-version: "21"
-          distribution: "adopt"
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
           java-package: "jre"
 
       - name: Execute parser for ${{ matrix.podcasts.slug }} feed
@@ -89,9 +92,11 @@ jobs:
           retention-days: 1
 
   publish-feed:
-    name: "Publish feeds"
     needs: [update-feed, load-podcasts]
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'    
+    if: |
+      github.ref == 'refs/heads/main' || 
+      github.ref == 'refs/heads/master'
+    name: "Publish feeds"
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -99,119 +104,95 @@ jobs:
       pages: write
       id-token: write
     runs-on: ubuntu-24.04
+    
     steps:
-      - name: Download all artifacts
+      - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          path: _site
+          path: ${{ env.OUTPUT_DIR }}
           merge-multiple: true
 
-      - name: Move feeds to correct location
+      - name: Prepare feeds directory
+        shell: bash
         run: |
-          mkdir -p _site/feeds
-          mv _site/*.xml _site/feeds/
+          mkdir -p ${{ env.OUTPUT_DIR }}/${{ env.FEEDS_DIR }}
+          mv ${{ env.OUTPUT_DIR }}/*.xml ${{ env.OUTPUT_DIR }}/${{ env.FEEDS_DIR }}/
 
-      - name: Get last deployment time
-        id: last_deploy
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          LAST_DEPLOY=$(gh api "repos/$GITHUB_REPOSITORY/deployments" \
-            --jq '.[0].created_at // empty' \
-            -q '.[] | select(.environment == "github-pages") | .created_at' | head -n1)
-          if [ -z "$LAST_DEPLOY" ]; then
-            LAST_DEPLOY="1970-01-01T00:00:00Z"
-          fi
-          echo "last_deploy_time=$LAST_DEPLOY" >> $GITHUB_OUTPUT
-          
-      - name: Check for new feeds or feed changes
+      - name: Check deployment status
         id: deployment_check
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          NEEDS_DEPLOY="false"
-
-          SITE_URL=$(gh api "repos/${GITHUB_REPOSITORY}/pages" --jq '.html_url')          
-          echo "Site URL: $SITE_URL"
-
-          LAST_DEPLOY="${{ steps.last_deploy.outputs.last_deploy_time }}"
-          LAST_DEPLOY_RFC822=$(date -d "$LAST_DEPLOY" "+%a, %d %b %Y %H:%M:%S %z")
-          LAST_DEPLOY_TS=$(date -d "$LAST_DEPLOY_RFC822" +%s)
+          # Get last deployment time
+          LAST_DEPLOY=$(gh api "repos/$GITHUB_REPOSITORY/deployments" \
+            --jq 'map(select(.environment == "github-pages"))[0].created_at // "1970-01-01T00:00:00Z"')
+          LAST_DEPLOY_TS=$(date -d "$LAST_DEPLOY" +%s)
           
-          # Get current feed count from website by counting feed-link classes
+          # Get site URL and current feed count
+          SITE_URL=$(gh api "repos/${GITHUB_REPOSITORY}/pages" --jq '.html_url')
           LIVE_COUNT=$(curl -sL --max-time 10 $SITE_URL | grep -o "class='feed-link'" | wc -l || echo "0")
+          CURRENT_COUNT=$(find "${{ env.OUTPUT_DIR }}/${{ env.FEEDS_DIR }}" -name "*.xml" | wc -l)
           
-          # Count current XML files
-          CURRENT_COUNT=$(find "_site/feeds" -name "*.xml" 2>/dev/null | wc -l)
-          
-          echo "Current XML file count: $CURRENT_COUNT"
-          echo "Live deployment feed count: $LIVE_COUNT"
-          
-          # Check if number of files changed
+          # Check for changes
           if [ "$CURRENT_COUNT" != "$LIVE_COUNT" ]; then
-            echo "Number of XML files changed (current: $CURRENT_COUNT, live: $LIVE_COUNT)"
-            NEEDS_DEPLOY="true"
-          else
-            # Check for updated files only if count hasn't changed
-            for file in _site/feeds/*.xml; do
-              echo "Processing file: $file"
-              
-              if [ ! -f "$file" ]; then
-                echo "Skipping non-existent file: $file"
-                continue
-              fi
-              
-              # Extract lastBuildDate using grep
-              LAST_BUILD=$(grep -oP '(?<=<lastBuildDate>)[^<]+' "$file" || echo "")
-              
-              if [ -n "$LAST_BUILD" ]; then
-                echo "Found lastBuildDate: $LAST_BUILD"
-                BUILD_TS=$(date -d "$LAST_BUILD" +%s 2>/dev/null || echo "0")
-                if [ "$BUILD_TS" != "0" ] && [ $BUILD_TS -gt $LAST_DEPLOY_TS ]; then
-                  echo "Feed $file has newer lastBuildDate ($LAST_BUILD) than last deployment ($LAST_DEPLOY_RFC822)"
-                  NEEDS_DEPLOY="true"
-                  break
-                fi
-              else
-                echo "No lastBuildDate found in $file"
-              fi
-            done
+            echo "needs_deploy=true" >> $GITHUB_OUTPUT
+            exit 0
           fi
           
-          echo "needs_deploy=$NEEDS_DEPLOY" >> $GITHUB_OUTPUT
+          # Check feed dates
+          while IFS= read -r file; do
+            if [ -n "$(grep -oP '(?<=<lastBuildDate>)[^<]+' "$file")" ]; then
+              BUILD_TS=$(date -d "$(grep -oP '(?<=<lastBuildDate>)[^<]+' "$file")" +%s)
+              if [ "$BUILD_TS" -gt "$LAST_DEPLOY_TS" ]; then
+                echo "needs_deploy=true" >> $GITHUB_OUTPUT
+                exit 0
+              fi
+            fi
+          done < <(find "${{ env.OUTPUT_DIR }}/${{ env.FEEDS_DIR }}" -name "*.xml")
+          
+          echo "needs_deploy=false" >> $GITHUB_OUTPUT
 
       - name: Generate index.html
-        if: steps.deployment_check.outputs.needs_deploy == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
-        run: |          
-          # Generate feeds HTML
-          feeds_html=""
-          for feed in _site/feeds/*.xml; do
-            filename=$(basename "$feed" .xml)
-            formatted_title=$(echo "$filename" | sed 's/-/ /g')
+        if: |
+          steps.deployment_check.outputs.needs_deploy == 'true' || 
+          github.event_name == 'workflow_dispatch' || 
+          github.event_name == 'push'
+        shell: bash
+        run: |
+          generate_feed_html() {
+            local filename="$1"
+            local formatted_title=$(echo "$filename" | sed 's/-/ /g')
+            local icon_path=""
             
-            # Look for local icon file with any supported extension
-            icon_path=""
             for ext in jpg jpeg png gif webp; do
-              if [ -f "_site/icons/$filename.$ext" ]; then
-                icon_path="icons/$filename.$ext"
+              if [ -f "${{ env.OUTPUT_DIR }}/${{ env.ICONS_DIR }}/$filename.$ext" ]; then
+                icon_path="${{ env.ICONS_DIR }}/$filename.$ext"
                 break
               fi
             done
             
             if [ -n "$icon_path" ]; then
-              feeds_html+="<li><a class='feed-link' href='feeds/$filename.xml'><img class='feed-icon' src='$icon_path' loading='lazy' alt='$formatted_title'><span class='feed-title'>$formatted_title</span></a></li>"
+              echo "<li><a class='feed-link' href='${{ env.FEEDS_DIR }}/$filename.xml'><img class='feed-icon' src='$icon_path' loading='lazy' alt='$formatted_title'><span class='feed-title'>$formatted_title</span></a></li>"
             else
-              feeds_html+="<li><a class='feed-link' href='feeds/$filename.xml'><div class='feed-icon'></div><span class='feed-title'>$formatted_title</span></a></li>"
+              echo "<li><a class='feed-link' href='${{ env.FEEDS_DIR }}/$filename.xml'><div class='feed-icon'></div><span class='feed-title'>$formatted_title</span></a></li>"
             fi
+          }
+          
+          feeds_html=""
+          for feed in ${{ env.OUTPUT_DIR }}/${{ env.FEEDS_DIR }}/*.xml; do
+            feeds_html+="$(generate_feed_html "$(basename "$feed" .xml)")"
           done
           
-          # Replace entire section between markers with generated feeds
-          sed -i "/<!-- BEGIN_FEEDS -->/,/<!-- END_FEEDS -->/c\        <!-- BEGIN_FEEDS -->\n        $feeds_html\n        <!-- END_FEEDS -->" _site/index.html
+          sed -i "/<!-- BEGIN_FEEDS -->/,/<!-- END_FEEDS -->/c\        <!-- BEGIN_FEEDS -->\n        $feeds_html\n        <!-- END_FEEDS -->" ${{ env.OUTPUT_DIR }}/index.html
 
       - name: Setup Pages
-        if: steps.deployment_check.outputs.needs_deploy == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+        if: |
+          steps.deployment_check.outputs.needs_deploy == 'true' || 
+          github.event_name == 'workflow_dispatch' || 
+          github.event_name == 'push'
         uses: actions/configure-pages@v5
-
+        
       - name: Upload Pages artifact
         if: steps.deployment_check.outputs.needs_deploy == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
         uses: actions/upload-pages-artifact@v3
