@@ -99,8 +99,8 @@ jobs:
           fi
           echo "last_deploy_time=$LAST_DEPLOY" >> $GITHUB_OUTPUT
 
-      - name: Check if any XML files are newer
-        id: check_updates
+      - name: Check for new feeds or feed changes
+        id: deployment_check
         run: |
           # Get the pages URL from deployments
           SITE_URL=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
@@ -160,7 +160,7 @@ jobs:
           echo "needs_deploy=$NEEDS_DEPLOY" >> $GITHUB_OUTPUT
 
       - name: Generate index.html
-        if: steps.check_updates.outputs.needs_deploy == 'true'
+        if: steps.deployment_check.outputs.needs_deploy == 'true'
         run: |      
           cat > _site/index.html << 'EOF'
           <!DOCTYPE html>
@@ -252,14 +252,14 @@ jobs:
           cat _site/index.html
 
       - name: Setup Pages
-        if: steps.check_updates.outputs.needs_deploy == 'true'
+        if: steps.deployment_check.outputs.needs_deploy == 'true'
         uses: actions/configure-pages@v5
 
       - name: Upload Pages artifact
-        if: steps.check_updates.outputs.needs_deploy == 'true'
+        if: steps.deployment_check.outputs.needs_deploy == 'true'
         uses: actions/upload-pages-artifact@v3
         
       - name: Deploy to GitHub Pages
-        if: steps.check_updates.outputs.needs_deploy == 'true'
+        if: steps.deployment_check.outputs.needs_deploy == 'true'
         id: deployment
         uses: actions/deploy-pages@v4
