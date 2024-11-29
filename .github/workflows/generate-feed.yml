@@ -152,92 +152,30 @@ jobs:
 
       - name: Generate index.html
         if: steps.check_updates.outputs.needs_deploy == 'true'
-        run: |      
-          cat > _site/index.html << 'EOF'
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <title>DR Podcasts</title>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <style>
-              body { 
-                font-family: system-ui, sans-serif; 
-                max-width: 800px; 
-                margin: 1rem auto; 
-                padding: 0 1rem; 
-              }
-              .feeds { 
-                list-style: none; 
-                padding: 0;
-                display: grid;
-                grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-                gap: 1rem;
-              }
-              .feed-link { 
-                display: inline-flex;
-                align-items: center;
-                gap: 0.5em;
-                padding: 0.8em;
-                background: #f5f5f5;
-                border-radius: 4px;
-                text-decoration: none;
-                color: #333;
-                margin: 0;
-                font-size: 1rem;
-                width: 100%;
-                box-sizing: border-box;
-                border: 1px solid #ddd;
-                transition: border-color 0.2s ease;
-              }
-              .feed-link:hover {
-                border-color: #999;
-              }
-              .feed-icon {
-                height: 2em;
-                aspect-ratio: 1;
-                border-radius: 4px;
-                object-fit: cover;
-                flex-shrink: 0;
-              }
-              .feed-title {
-                flex: 1;
-                text-transform: capitalize;
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
-              }
-            </style>
-          </head>
-          <body>
-            <h1>DR Podcasts</h1>
-            <ul class="feeds">
-          EOF
-      
+        run: |
+          # Copy template to _site
+          cp resources/index.html _site/index.html
+          
+          # Generate feed items
+          FEED_ITEMS=""
           for feed in _site/feeds/*.xml; do
             filename=$(basename "$feed" .xml)
             formatted_title=$(echo "$filename" | sed 's/-/ /g')
             
-            # Try multiple approaches to extract image URL using grep
             image_url=$(grep -oP '(?<=<url>)[^<]+(?=</url>)' "$feed" | head -n1 || \
                        grep -oP '(?<=<image href=")[^"]+' "$feed" | head -n1 || \
                        echo '')
             
-            echo "Processing $filename - Image URL: $image_url" # Debug output
-            
             if [ -n "$image_url" ]; then
-              echo "<li><a class='feed-link' href='feeds/$filename.xml'><img class='feed-icon' src='$image_url' alt='$formatted_title icon'><span class='feed-title'>$formatted_title</span></a></li>" >> _site/index.html
+              FEED_ITEMS="$FEED_ITEMS<li><a class='feed-link' href='feeds/$filename.xml'><img class='feed-icon' src='$image_url' alt='$formatted_title icon'><span class='feed-title'>$formatted_title</span></a></li>"
             else
-              echo "<li><a class='feed-link' href='feeds/$filename.xml'><span class='feed-title'>$formatted_title</span></a></li>" >> _site/index.html
+              FEED_ITEMS="$FEED_ITEMS<li><a class='feed-link' href='feeds/$filename.xml'><span class='feed-title'>$formatted_title</span></a></li>"
             fi
           done
-      
-          cat >> _site/index.html << 'EOF'
-            </ul>
-          </body>
-          </html>
-          EOF
-      
+          
+          # Replace placeholder with generated items
+          sed -i "s|<!-- FEED_ITEMS -->|$FEED_ITEMS|" _site/index.html
+          
           # Debug: Show generated HTML
           echo "Generated HTML contents:"
           cat _site/index.html
