@@ -85,28 +85,9 @@ body {
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
 }
-
-/* Modify card hover to only apply on non-touch devices */
-@media (hover: hover) {
-    .feeds li:hover {
-        transform: translateY(-4px) scale(1.02);
-        box-shadow: 0 20px 25px -5px var(--card-shadow);
-    }
-
-    .feed-link:hover .feed-icon {
-        transform: scale(1.1);
-    }
-}
-
-/* Remove the active state scaling on mobile */
-@media (hover: none) {
-    .feed-link:active {
-        transform: none;
-    }
-
-    .feeds li:active {
-        transform: none;
-    }
+.feeds li:hover {
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 20px 25px -5px var(--card-shadow);
 }
 
 .feed-link { 
