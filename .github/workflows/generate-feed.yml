@@ -102,13 +102,14 @@ jobs:
       - name: Check if any XML files are newer
         id: check_updates
         run: |
+          SITE_URL="https://henrikbacher.github.io/podcast"
           LAST_DEPLOY="${{ steps.last_deploy.outputs.last_deploy_time }}"
           LAST_DEPLOY_RFC822=$(date -d "$LAST_DEPLOY" "+%a, %d %b %Y %H:%M:%S %z")
           LAST_DEPLOY_TS=$(date -d "$LAST_DEPLOY_RFC822" +%s)
           NEEDS_DEPLOY="false"
           
           # Get current feed count from website
-          LIVE_COUNT=$(curl -s ${{ steps.deployment.outputs.page_url }} | grep -o '<li.*</li>' | wc -l || echo "0")
+          LIVE_COUNT=$(curl -s "$SITE_URL" | grep -o '<li.*</li>' | wc -l || echo "0")
           
           # Count current XML files
           CURRENT_COUNT=$(find "_site/feeds" -name "*.xml" 2>/dev/null | wc -l)
