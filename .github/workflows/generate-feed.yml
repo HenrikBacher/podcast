@@ -98,103 +98,66 @@ jobs:
             LAST_DEPLOY="1970-01-01T00:00:00Z"
           fi
           echo "last_deploy_time=$LAST_DEPLOY" >> $GITHUB_OUTPUT
-
-      - name: Get site URL
-        id: get_site_url
-        shell: pwsh
-        run: |
-          $headers = @{
-              Authorization = "Bearer $env:GITHUB_TOKEN"
-          }
-          
-          $deploymentUrl = "https://api.github.com/repos/$env:GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=1"
-          
-          try {
-              $response = Invoke-RestMethod -Uri $deploymentUrl -Headers $headers
-              $siteUrl = $response[0].payload.web_url
-          } catch {
-              Write-Warning "Failed to get deployment URL: $_"
-              $siteUrl = "https://$env:GITHUB_REPOSITORY_OWNER.github.io/$env:REPOSITORY_NAME"
-          }
-          
-          Write-Host "url=$siteUrl" >> $env:GITHUB_OUTPUT
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPOSITORY_NAME: ${{ github.event.repository.name }}
-
+      
       - name: Check for new feeds or feed changes
         id: deployment_check
-        shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
+          # Get the pages URL from deployments
+          SITE_URL=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/deployments?environment=github-pages&per_page=1" | \
+            jq -r '.[0].payload.web_url // empty')
           
-          function Get-FeedBuildDate {
-              param([string]$FilePath)
-              try {
-                  $xml = [xml](Get-Content $FilePath)
-                  $lastBuild = $xml.SelectSingleNode("//lastBuildDate")
-                  if ($lastBuild) {
-                      return [DateTime]::Parse($lastBuild.InnerText)
-                  }
-              } catch {
-                  Write-Warning "Error processing $FilePath : $_"
-              }
-              return [DateTime]::MinValue
-          }
+          # Fallback to constructing URL if not found in deployments
+          if [ -z "$SITE_URL" ]; then
+            SITE_URL="https://${{ github.repository_owner }}.github.io/${GITHUB_REPOSITORY#*/}"
+          fi
           
-          # Get deployment info
-          $lastDeploy = if ($env:LAST_DEPLOY) { 
-              [DateTime]::Parse($env:LAST_DEPLOY) 
-          } else { 
-              [DateTime]::MinValue 
-          }
+          LAST_DEPLOY="${{ steps.last_deploy.outputs.last_deploy_time }}"
+          LAST_DEPLOY_RFC822=$(date -d "$LAST_DEPLOY" "+%a, %d %b %Y %H:%M:%S %z")
+          LAST_DEPLOY_TS=$(date -d "$LAST_DEPLOY_RFC822" +%s)
+          NEEDS_DEPLOY="false"
           
-          # Get current feed files
-          $xmlFiles = Get-ChildItem "_site/feeds/*.xml"
-          $currentCount = $xmlFiles.Count
+          # Get current feed count from website
+          LIVE_COUNT=$(curl -sL --max-time 10 $SITE_URL | grep -o '<li.*</li>' | wc -l || echo "0")
           
-          # Try to get live count
-          try {
-              $webResponse = Invoke-WebRequest -Uri $env:SITE_URL -TimeoutSec 10
-              $liveCount = ([regex]"<li.*?</li>").Matches($webResponse.Content).Count
-          } catch {
-              $liveCount = 0
-          }
+          # Count current XML files
+          CURRENT_COUNT=$(find "_site/feeds" -name "*.xml" 2>/dev/null | wc -l)
           
-          Write-Host "Current XML file count: $currentCount"
-          Write-Host "Live deployment feed count: $liveCount"
+          echo "Current XML file count: $CURRENT_COUNT"
+          echo "Live deployment feed count: $LIVE_COUNT"
           
-          $needsDeploy = $false
-          
-          if ($currentCount -ne $liveCount) {
-              $needsDeploy = $true
-          } else {
-              # Process files in parallel using jobs
-              $jobs = @()
-              foreach ($file in $xmlFiles) {
-                  $jobs += Start-Job -ScriptBlock {
-                      param($path)
-                      $result = Get-FeedBuildDate -FilePath $path
-                      return @{
-                          Path = $path
-                          BuildDate = $result
-                      }
-                  } -ArgumentList $file.FullName
-              }
+          # Check if number of files changed
+          if [ "$CURRENT_COUNT" != "$LIVE_COUNT" ]; then
+            echo "Number of XML files changed (current: $CURRENT_COUNT, live: $LIVE_COUNT)"
+            NEEDS_DEPLOY="true"
+          else
+            # Check for updated files only if count hasn't changed
+            for file in _site/feeds/*.xml; do
+              echo "Processing file: $file"
               
-              # Wait for all jobs and get results
-              $results = $jobs | Wait-Job | Receive-Job
-              Remove-Job -Job $jobs
+              if [ ! -f "$file" ]; then
+                echo "Skipping non-existent file: $file"
+                continue
+              fi
               
-              # Check if any feed is newer than last deployment
-              $needsDeploy = ($results | Where-Object { $_.BuildDate -gt $lastDeploy }).Count -gt 0
-          }
+              # Extract lastBuildDate using grep
+              LAST_BUILD=$(grep -oP '(?<=<lastBuildDate>)[^<]+' "$file" || echo "")
+              
+              if [ -n "$LAST_BUILD" ]; then
+                echo "Found lastBuildDate: $LAST_BUILD"
+                BUILD_TS=$(date -d "$LAST_BUILD" +%s 2>/dev/null || echo "0")
+                if [ "$BUILD_TS" != "0" ] && [ $BUILD_TS -gt $LAST_DEPLOY_TS ]; then
+                  echo "Feed $file has newer lastBuildDate ($LAST_BUILD) than last deployment ($LAST_DEPLOY_RFC822)"
+                  NEEDS_DEPLOY="true"
+                  break
+                fi
+              else
+                echo "No lastBuildDate found in $file"
+              fi
+            done
+          fi
           
-          "needs_deploy=$($needsDeploy.ToString().ToLower())" >> $env:GITHUB_OUTPUT
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          LAST_DEPLOY: ${{ steps.last_deploy.outputs.last_deploy_time }}
-          SITE_URL: ${{ steps.get_site_url.outputs.url }}
+          echo "needs_deploy=$NEEDS_DEPLOY" >> $GITHUB_OUTPUT
 
       - name: Generate index.html
         if: steps.deployment_check.outputs.needs_deploy == 'true'
