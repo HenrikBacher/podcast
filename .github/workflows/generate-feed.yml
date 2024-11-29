@@ -102,6 +102,7 @@ jobs:
 
       - name: Move feeds to correct location
         run: |
+          mkdir -p _site/feeds
           mv _site/*.xml _site/feeds/
 
       - name: Get last deployment time
