@@ -114,6 +114,8 @@ jobs:
 
       - name: Get last deployment time
         id: last_deploy
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           LAST_DEPLOY=$(gh api "repos/$GITHUB_REPOSITORY/deployments" \
             --jq '.[0].created_at // empty' \
@@ -125,6 +127,8 @@ jobs:
           
       - name: Check for new feeds or feed changes
         id: deployment_check
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           NEEDS_DEPLOY="false"
 
