@@ -10,6 +10,7 @@ on:
     paths:
       - "**/generate-feed.yml"
       - "**/podcasts.json"
+      - "**/index.html"
   schedule:
     - cron: "0 * * * *"  # Run at minute 0 of every hour
   workflow_dispatch:
