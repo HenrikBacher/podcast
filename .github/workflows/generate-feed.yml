@@ -63,61 +63,6 @@ jobs:
           max_attempts: 3
           retry_interval: 10
 
-      # Replace the PowerShell check with faster bash script
-      - name: Check if feed has been updated recently
-        run: |
-          xmlPath="output/${{ matrix.podcasts.slug }}.xml"
-          lastBuildDate=$(grep -o '<lastBuildDate>[^<]*' "$xmlPath" | cut -d'>' -f2)
-          lastBuildTimestamp=$(date -d "$lastBuildDate" +%s)
-          currentTimestamp=$(date +%s)
-          
-          thresholdMinutes=360
-          thresholdSeconds=$((thresholdMinutes * 60))
-          
-          if [ $((currentTimestamp - lastBuildTimestamp)) -lt $thresholdSeconds ]; then
-            echo "PODCAST_RECENTLY_UPDATED=true" >> $GITHUB_ENV
-            echo "Podcast updated within the last $thresholdMinutes minutes"
-          else
-            echo "PODCAST_RECENTLY_UPDATED=false" >> $GITHUB_ENV
-            echo "Podcast not updated recently, skipping upload"
-          fi
-        shell: bash
-
-      - name: Login to Azure
-        if: env.PODCAST_RECENTLY_UPDATED == 'true'
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      # Combine MD5 check steps into one
-      - name: Compare MD5 hashes
-        if: env.PODCAST_RECENTLY_UPDATED == 'true'
-        run: |
-          LOCAL_MD5=$(md5sum output/${{ matrix.podcasts.slug }}.xml | awk '{print $1}' | xxd -r -p | base64)
-          BLOB_MD5=$(az storage blob show \
-            --account-name ${{ secrets.STORAGE_ACCOUNT }} \
-            --container-name ${{ secrets.CONTAINER_NAME }} \
-            --auth-mode login \
-            --name ${{ matrix.podcasts.slug }}.xml \
-            --query properties.contentSettings.contentMd5 -o tsv || echo "")
-          
-          if [ "$LOCAL_MD5" != "$BLOB_MD5" ]; then
-            echo "NEEDS_UPLOAD=true" >> $GITHUB_ENV
-          else
-            echo "NEEDS_UPLOAD=false" >> $GITHUB_ENV
-          fi
-
-      - name: Upload to Azure Storage
-        if: env.PODCAST_RECENTLY_UPDATED == 'true' && env.NEEDS_UPLOAD == 'true'
-        run: |
-          az storage blob upload \
-            --account-name ${{ secrets.STORAGE_ACCOUNT }} \
-            --container-name ${{ secrets.CONTAINER_NAME }} \
-            --auth-mode login \
-            --name ${{ matrix.podcasts.slug }}.xml \
-            --file output/${{ matrix.podcasts.slug }}.xml \
-            --overwrite
-
       - name: Upload feed artifact
         if: env.PODCAST_RECENTLY_UPDATED == 'true'
         uses: actions/upload-artifact@v4
@@ -153,7 +98,43 @@ jobs:
           path: _site/feeds
           merge-multiple: true
 
+      - name: Get last deployment time
+        id: last_deploy
+        run: |
+          LAST_DEPLOY=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/deployments?environment=github-pages&per_page=1" | \
+            jq -r '.[0].created_at // empty')
+          if [ -z "$LAST_DEPLOY" ]; then
+            LAST_DEPLOY="1970-01-01T00:00:00Z"
+          fi
+          echo "last_deploy_time=$LAST_DEPLOY" >> $GITHUB_OUTPUT
+
+      - name: Check if any XML files are newer
+        id: check_updates
+        run: |
+          LAST_DEPLOY="${{ steps.last_deploy.outputs.last_deploy_time }}"
+          # Convert GitHub API ISO8601 date to RFC822 format
+          LAST_DEPLOY_RFC822=$(date -d "$LAST_DEPLOY" "+%a, %d %b %Y %H:%M:%S %z")
+          LAST_DEPLOY_TS=$(date -d "$LAST_DEPLOY_RFC822" +%s)
+          NEEDS_DEPLOY="false"
+          
+          for file in _site/feeds/*.xml; do
+            # Extract lastBuildDate from XML (already in RFC822 format)
+            LAST_BUILD=$(xmllint --xpath "string(/*[local-name()='rss']/*[local-name()='channel']/*[local-name()='lastBuildDate']/text())" "$file" 2>/dev/null)
+            if [ -n "$LAST_BUILD" ]; then
+              BUILD_TS=$(date -d "$LAST_BUILD" +%s)
+              if [ $BUILD_TS -gt $LAST_DEPLOY_TS ]; then
+                echo "Feed $file has newer lastBuildDate ($LAST_BUILD) than last deployment ($LAST_DEPLOY_RFC822)"
+                NEEDS_DEPLOY="true"
+                break
+              fi
+            fi
+          done
+          
+          echo "needs_deploy=$NEEDS_DEPLOY" >> $GITHUB_OUTPUT
+
       - name: Generate index.html
+        if: steps.check_updates.outputs.needs_deploy == 'true'
         run: |      
           cat > _site/index.html << 'EOF'
           <!DOCTYPE html>
@@ -245,10 +226,11 @@ jobs:
           echo "Generated HTML contents:"
           cat _site/index.html
 
-
       - name: Upload Pages artifact
+        if: steps.check_updates.outputs.needs_deploy == 'true'
         uses: actions/upload-pages-artifact@v3
         
       - name: Deploy to GitHub Pages
+        if: steps.check_updates.outputs.needs_deploy == 'true'
         id: deployment
         uses: actions/deploy-pages@v4
