@@ -162,6 +162,9 @@ jobs:
       - name: Generate index.html
         if: steps.deployment_check.outputs.needs_deploy == 'true'
         run: |      
+          # Install ImageMagick
+          sudo apt-get update && sudo apt-get install -y imagemagick
+
           cat > _site/index.html << 'EOF'
           <!DOCTYPE html>
           <html>
@@ -197,10 +200,11 @@ jobs:
                 width: 100%;
                 box-sizing: border-box;
                 border: 1px solid #ddd;
-                transition: border-color 0.2s ease;
+                transition: all 0.2s ease;
               }
               .feed-link:hover {
                 border-color: #999;
+                filter: brightness(0.95);
               }
               .feed-icon {
                 height: 2em;
@@ -227,15 +231,20 @@ jobs:
             filename=$(basename "$feed" .xml)
             formatted_title=$(echo "$filename" | sed 's/-/ /g')
             
-            # Try multiple approaches to extract image URL using grep
             image_url=$(grep -oP '(?<=<url>)[^<]+(?=</url>)' "$feed" | head -n1 || \
                        grep -oP '(?<=<image href=")[^"]+' "$feed" | head -n1 || \
                        echo '')
             
-            echo "Processing $filename - Image URL: $image_url" # Debug output
-            
             if [ -n "$image_url" ]; then
-              echo "<li><a class='feed-link' href='feeds/$filename.xml'><img class='feed-icon' src='$image_url' alt='$formatted_title icon'><span class='feed-title'>$formatted_title</span></a></li>" >> _site/index.html
+              # Download image and analyze color
+              curl -s "$image_url" > temp_image
+              color=$(convert temp_image -resize 1x1\! -format "%[pixel:p{0,0}]" info:-)
+              # Make color more subtle by reducing opacity
+              bg_color=$(convert temp_image -resize 1x1\! -format "%[pixel:p{0,0}]" info:- | \
+                        sed 's/rgb(\([0-9]*\),\([0-9]*\),\([0-9]*\))/rgba(\1,\2,\3,0.1)/')
+              rm temp_image
+              
+              echo "<li><a class='feed-link' style='background: $bg_color' href='feeds/$filename.xml'><img class='feed-icon' src='$image_url' alt='$formatted_title icon'><span class='feed-title'>$formatted_title</span></a></li>" >> _site/index.html
             else
               echo "<li><a class='feed-link' href='feeds/$filename.xml'><span class='feed-title'>$formatted_title</span></a></li>" >> _site/index.html
             fi
@@ -246,10 +255,6 @@ jobs:
           </body>
           </html>
           EOF
-      
-          # Debug: Show generated HTML
-          echo "Generated HTML contents:"
-          cat _site/index.html
 
       - name: Setup Pages
         if: steps.deployment_check.outputs.needs_deploy == 'true'
