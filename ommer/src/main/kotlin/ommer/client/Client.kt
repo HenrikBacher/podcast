@@ -160,7 +160,7 @@ fun main(args: Array<String>) = runBlocking {
         log.info("Starting podcast feed generation for $slug")
         val apiUri = "https://api.dr.dk/radio/v2"
 
-        val feedUrl = "https://${baseUrl}/feeds/${slug}.xml"
+        val feedUrl = "${baseUrl}feeds/${slug}.xml"
         val outputDirectory = File("output")
 
         val podcast =

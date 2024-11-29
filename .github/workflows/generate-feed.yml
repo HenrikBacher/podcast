@@ -84,12 +84,7 @@ jobs:
       - name: Execute parser for ${{ matrix.podcasts.slug }} feed
         uses: corrupt952/actions-retry-command@v1.0.7
         with:
-          command: java -jar ./ommer.jar \
-            --slug ${{ matrix.podcasts.slug }} \
-            --urn ${{ matrix.podcasts.urn }} \
-            --imageUrl ${{ matrix.podcasts.image }} \
-            --apiKey ${{ secrets.API_KEY }} \
-            --baseUrl ${{ steps.get_host_url.outputs.host_url }}
+          command: java -jar ./ommer.jar --slug ${{ matrix.podcasts.slug }} --urn ${{ matrix.podcasts.urn }} --imageUrl ${{ matrix.podcasts.image }} --apiKey ${{ secrets.API_KEY }} --baseUrl ${{ steps.get_host_url.outputs.host_url }}
           working_directory: ./
           max_attempts: 3
           retry_interval: 10
