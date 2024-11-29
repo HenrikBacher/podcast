@@ -30,6 +30,17 @@ jobs:
         run: |
           echo "podcasts=$(jq -c . < podcasts.json)" >> $GITHUB_OUTPUT
 
+      - name: Download podcast icons
+        run: |
+          mkdir -p site/icons
+          jq -c '.podcasts[]' podcasts.json | while read -r podcast; do
+            slug=$(echo $podcast | jq -r '.slug')
+            image=$(echo $podcast | jq -r '.image')
+            ext=$(echo "$image" | grep -oP '\.(?:png|jpg|jpeg|gif|webp)$' || echo '.jpg')
+            echo "Downloading icon for $slug from $image"
+            curl -L "$image" -o "site/icons/$slug$ext"
+          done
+
       - name: Upload template artifact
         uses: actions/upload-artifact@v4
         with:
@@ -181,12 +192,17 @@ jobs:
             filename=$(basename "$feed" .xml)
             formatted_title=$(echo "$filename" | sed 's/-/ /g')
             
-            image_url=$(grep -oP '(?<=<url>)[^<]+(?=</url>)' "$feed" | head -n1 || \
-                       grep -oP '(?<=<image href=")[^"]+' "$feed" | head -n1 || \
-                       echo '')
+            # Look for local icon file with any supported extension
+            icon_path=""
+            for ext in jpg jpeg png gif webp; do
+              if [ -f "_site/icons/$filename.$ext" ]; then
+                icon_path="icons/$filename.$ext"
+                break
+              fi
+            done
             
-            if [ -n "$image_url" ]; then
-              feeds_html+="<li><a class='feed-link' href='feeds/$filename.xml'><img class='feed-icon' src='$image_url' loading='lazy' alt='$formatted_title'><span class='feed-title'>$formatted_title</span></a></li>"
+            if [ -n "$icon_path" ]; then
+              feeds_html+="<li><a class='feed-link' href='feeds/$filename.xml'><img class='feed-icon' src='$icon_path' loading='lazy' alt='$formatted_title'><span class='feed-title'>$formatted_title</span></a></li>"
             else
               feeds_html+="<li><a class='feed-link' href='feeds/$filename.xml'><div class='feed-icon'></div><span class='feed-title'>$formatted_title</span></a></li>"
             fi
