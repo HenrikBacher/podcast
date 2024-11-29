@@ -11,7 +11,7 @@ on:
       - "**/generate-feed.yml"
       - "**/podcasts.json"
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "0 * * * *"  # Run at minute 0 of every hour
   workflow_dispatch:
 
 jobs:
@@ -68,7 +68,7 @@ jobs:
         with:
           name: ${{ matrix.podcasts.slug }}
           path: output/${{ matrix.podcasts.slug }}.xml
-          retention-days: 14
+          retention-days: 1
 
   publish-feed:
     name: "publish feeds"
@@ -107,40 +107,64 @@ jobs:
           LAST_DEPLOY_TS=$(date -d "$LAST_DEPLOY_RFC822" +%s)
           NEEDS_DEPLOY="false"
           
-          # Check if directory exists and has files
-          if [ ! -d "_site/feeds" ] || [ -z "$(ls -A _site/feeds/*.xml 2>/dev/null)" ]; then
-            echo "No XML files found in _site/feeds"
+          # Function to count XML files
+          count_xml_files() {
+            find "_site/feeds" -name "*.xml" 2>/dev/null | wc -l
+          }
+          
+          # Check if directory exists
+          if [ ! -d "_site/feeds" ]; then
+            echo "No feeds directory found"
             echo "needs_deploy=false" >> $GITHUB_OUTPUT
             exit 0
           fi
           
-          for file in _site/feeds/*.xml; do
-            echo "Processing file: $file"
-            
-            if [ ! -f "$file" ]; then
-              echo "Skipping non-existent file: $file"
-              continue
-            fi
-            
-            # Extract lastBuildDate using grep
-            LAST_BUILD=$(grep -oP '(?<=<lastBuildDate>)[^<]+' "$file" || echo "")
-            
-            if [ -n "$LAST_BUILD" ]; then
-              echo "Found lastBuildDate: $LAST_BUILD"
-              BUILD_TS=$(date -d "$LAST_BUILD" +%s 2>/dev/null || echo "0")
-              if [ "$BUILD_TS" != "0" ] && [ $BUILD_TS -gt $LAST_DEPLOY_TS ]; then
-                echo "Feed $file has newer lastBuildDate ($LAST_BUILD) than last deployment ($LAST_DEPLOY_RFC822)"
-                NEEDS_DEPLOY="true"
-                break
+          # Get current XML file count
+          CURRENT_COUNT=$(count_xml_files)
+          
+          # Get last deployment count from GitHub API
+          LAST_COUNT=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/pages/builds?per_page=1" | \
+            jq -r '.[0].status // "0"')
+          
+          echo "Current XML file count: $CURRENT_COUNT"
+          echo "Last deployment XML file count: $LAST_COUNT"
+          
+          # Check if number of files changed
+          if [ "$CURRENT_COUNT" != "$LAST_COUNT" ]; then
+            echo "Number of XML files changed (current: $CURRENT_COUNT, last: $LAST_COUNT)"
+            NEEDS_DEPLOY="true"
+          else
+            # Check for updated files only if count hasn't changed
+            for file in _site/feeds/*.xml; do
+              echo "Processing file: $file"
+              
+              if [ ! -f "$file" ]; then
+                echo "Skipping non-existent file: $file"
+                continue
               fi
-            else
-              echo "No lastBuildDate found in $file"
-            fi
-          done
+              
+              # Extract lastBuildDate using grep
+              LAST_BUILD=$(grep -oP '(?<=<lastBuildDate>)[^<]+' "$file" || echo "")
+              
+              if [ -n "$LAST_BUILD" ]; then
+                echo "Found lastBuildDate: $LAST_BUILD"
+                BUILD_TS=$(date -d "$LAST_BUILD" +%s 2>/dev/null || echo "0")
+                if [ "$BUILD_TS" != "0" ] && [ $BUILD_TS -gt $LAST_DEPLOY_TS ]; then
+                  echo "Feed $file has newer lastBuildDate ($LAST_BUILD) than last deployment ($LAST_DEPLOY_RFC822)"
+                  NEEDS_DEPLOY="true"
+                  break
+                fi
+              else
+                echo "No lastBuildDate found in $file"
+              fi
+            done
+          fi
           
           echo "needs_deploy=$NEEDS_DEPLOY" >> $GITHUB_OUTPUT
 
       - name: Generate index.html
+        if: steps.check_updates.outputs.needs_deploy == 'true'
         run: |      
           cat > _site/index.html << 'EOF'
           <!DOCTYPE html>
@@ -232,11 +256,14 @@ jobs:
           cat _site/index.html
 
       - name: Setup Pages
+        if: steps.check_updates.outputs.needs_deploy == 'true'
         uses: actions/configure-pages@v5
 
       - name: Upload Pages artifact
+        if: steps.check_updates.outputs.needs_deploy == 'true'
         uses: actions/upload-pages-artifact@v3
         
       - name: Deploy to GitHub Pages
+        if: steps.check_updates.outputs.needs_deploy == 'true'
         id: deployment
         uses: actions/deploy-pages@v4
