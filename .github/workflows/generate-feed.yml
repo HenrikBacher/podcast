@@ -66,6 +66,14 @@ jobs:
           echo "Downloading latest release from $LATEST_RELEASE_URL"
           curl -L $LATEST_RELEASE_URL -o ommer.jar
 
+      - name: Get host URL
+        id: get_host_url
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SITE_URL=$(gh api "repos/${GITHUB_REPOSITORY}/pages" --jq '.html_url')
+          echo "host_url=$SITE_URL" >> $GITHUB_OUTPUT
+
       - name: Set up Java 21
         uses: actions/setup-java@v4
         with:
@@ -76,7 +84,12 @@ jobs:
       - name: Execute parser for ${{ matrix.podcasts.slug }} feed
         uses: corrupt952/actions-retry-command@v1.0.7
         with:
-          command: java -jar ./ommer.jar --slug ${{ matrix.podcasts.slug }} --urn ${{ matrix.podcasts.urn }} --imageUrl ${{ matrix.podcasts.image }} --apiKey ${{ secrets.API_KEY }} --baseUrl ${{ secrets.HOST_URL }}
+          command: java -jar ./ommer.jar |
+            --slug ${{ matrix.podcasts.slug }} |
+            --urn ${{ matrix.podcasts.urn }} |
+            --imageUrl ${{ matrix.podcasts.image }} |
+            --apiKey ${{ secrets.API_KEY }} |
+            --baseUrl ${{ steps.get_host_url.outputs.host_url }}
           working_directory: ./
           max_attempts: 3
           retry_interval: 10
