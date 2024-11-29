@@ -118,16 +118,34 @@ jobs:
           LAST_DEPLOY_TS=$(date -d "$LAST_DEPLOY_RFC822" +%s)
           NEEDS_DEPLOY="false"
           
+          # Check if directory exists and has files
+          if [ ! -d "_site/feeds" ] || [ -z "$(ls -A _site/feeds/*.xml 2>/dev/null)" ]; then
+            echo "No XML files found in _site/feeds"
+            echo "needs_deploy=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
           for file in _site/feeds/*.xml; do
-            # Extract lastBuildDate from XML (already in RFC822 format)
-            LAST_BUILD=$(xmllint --xpath "string(/*[local-name()='rss']/*[local-name()='channel']/*[local-name()='lastBuildDate']/text())" "$file" 2>/dev/null)
+            echo "Processing file: $file"
+            
+            if [ ! -f "$file" ]; then
+              echo "Skipping non-existent file: $file"
+              continue
+            fi
+            
+            # Extract lastBuildDate with error handling
+            LAST_BUILD=$(xmllint --noblanks --xpath "string(/*[local-name()='rss']/*[local-name()='channel']/*[local-name()='lastBuildDate']/text())" "$file" 2>/dev/null || echo "")
+            
             if [ -n "$LAST_BUILD" ]; then
-              BUILD_TS=$(date -d "$LAST_BUILD" +%s)
-              if [ $BUILD_TS -gt $LAST_DEPLOY_TS ]; then
+              echo "Found lastBuildDate: $LAST_BUILD"
+              BUILD_TS=$(date -d "$LAST_BUILD" +%s 2>/dev/null || echo "0")
+              if [ "$BUILD_TS" != "0" ] && [ $BUILD_TS -gt $LAST_DEPLOY_TS ]; then
                 echo "Feed $file has newer lastBuildDate ($LAST_BUILD) than last deployment ($LAST_DEPLOY_RFC822)"
                 NEEDS_DEPLOY="true"
                 break
               fi
+            else
+              echo "No lastBuildDate found in $file"
             fi
           done
           
