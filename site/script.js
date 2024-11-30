@@ -27,7 +27,7 @@ function isPocketCastsInstalled() {
             const timeout = setTimeout(() => {
                 document.body.removeChild(iframe);
                 resolve(false);
-            }, 500);
+            }, 1500);
 
             window.onblur = () => {
                 clearTimeout(timeout);
