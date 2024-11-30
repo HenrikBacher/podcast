@@ -91,9 +91,8 @@ jobs:
             ${{ runner.os }}-gradle-
       
       - name: Build Kotlin app
-        env:
-          JAVA_HOME: ${{ env.JAVA_HOME_21_X64 }}
         run: |
+          export JAVA_HOME=$JAVA_HOME_21_X64
           echo "Using Java from: $JAVA_HOME"
           java --version
           chmod +x ./gradlew
