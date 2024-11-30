@@ -33,6 +33,7 @@ jobs:
 
       - name: Build Kotlin app
         run: |
+          java --version
           chmod +x ./gradlew
           ./gradlew build assemble
 
