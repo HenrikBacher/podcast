@@ -100,9 +100,7 @@ jobs:
         with:
           tag_name: v${{ steps.get_version.outputs.version }}
           prerelease: ${{ steps.get_version.outputs.is_prerelease }}
-          body: |
-            Release v${{ steps.get_version.outputs.version }}
-            
+          body: |            
             Changes in this release:
             ${{ steps.get_version.outputs.description }}
           files: |
