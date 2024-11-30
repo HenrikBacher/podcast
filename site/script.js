@@ -5,8 +5,20 @@ function copyToClipboard(text) {
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     const isAndroid = /Android/.test(navigator.userAgent);
     
-    navigator.clipboard.writeText(text).then(() => {
-        if (!isIOS && !isAndroid) {
+    if (isIOS || isAndroid) {
+        // Convert feed URL to Pocket Casts deep link format
+        const feedUrl = text.replace(/^https?:\/\//, '');
+        const pocketCastsUrl = `pktc://subscribe/${feedUrl}`;
+        
+        // Try opening Pocket Casts
+        window.location.href = pocketCastsUrl;
+        
+        // Fallback to clipboard copy after a delay if app doesn't open
+        setTimeout(() => {
+            navigator.clipboard.writeText(text);
+        }, 500);
+    } else {
+        navigator.clipboard.writeText(text).then(() => {
             const toast = document.createElement('div');
             toast.className = 'toast';
             toast.textContent = 'Feed URL copied to clipboard!';
@@ -17,8 +29,8 @@ function copyToClipboard(text) {
                     toast.remove();
                 }
             });
-        }
-    });
+        });
+    }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
