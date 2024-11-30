@@ -96,18 +96,13 @@ jobs:
           chmod +x ./gradlew
           ./gradlew build assemble
 
-      - name: Create Git tag
-        run: |
-          git tag ${{ steps.get_version.outputs.tag_name }}
-          git push origin ${{ steps.get_version.outputs.tag_name }}
-
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.get_version.outputs.tag_name }}
+          tag_name: v${{ steps.get_version.outputs.version }}
           prerelease: ${{ github.ref != 'refs/heads/main' }}
           body: |
-            ${{ steps.get_version.outputs.tag_name }}
+            Release v${{ steps.get_version.outputs.version }}
             
             Changes in this build:
             ${{ steps.get_version.outputs.description }}
