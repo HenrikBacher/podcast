@@ -19,16 +19,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Get build number
-        id: build_number
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Get the latest release version that contains a build number
-          LATEST_BUILD=$(gh api "repos/$GITHUB_REPOSITORY/releases" --jq '[.[] | select(.tag_name | test("-b\\d+"))] | .[0].tag_name | match("-b(\\d+)").captures[0].string // "0"')
-          BUILD_NUM=$((LATEST_BUILD + 1))
-          echo "number=$BUILD_NUM" >> $GITHUB_OUTPUT
-
       - name: Get version
         id: get_version
         run: |
@@ -36,7 +26,7 @@ jobs:
           BASE_VERSION=$(grep "^version = " build.gradle.kts | cut -d'"' -f2)
           # Split version into array
           IFS='.' read -ra PARTS <<< "$BASE_VERSION"
-          BUILD_NUM="${{ steps.build_number.outputs.number }}"
+          COMMIT_HASH=$(git rev-parse --short HEAD)
           IS_PRERELEASE=false
           
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
@@ -52,8 +42,8 @@ jobs:
               NEXT_VERSION="${PARTS[0]}.${PARTS[1]}.$((PARTS[2] + 1))"
             fi
             
-            # For PR builds, use special version format with build number
-            VERSION="$BASE_VERSION-PR${PR_NUMBER}-b${BUILD_NUM}"
+            # For PR builds, use special version format
+            VERSION="$BASE_VERSION-PR${PR_NUMBER}-${COMMIT_HASH}"
             IS_PRERELEASE=true
             
             # Extract description section from PR body
@@ -64,9 +54,9 @@ jobs:
             VERSION="$NEXT_VERSION"
             
           else
-            # For other branches, use branch name and build number
+            # For other branches, use branch name in version
             BRANCH_NAME=$(echo "${{ github.ref }}" | sed 's/refs\/heads\///')
-            VERSION="$BASE_VERSION-${BRANCH_NAME}-b${BUILD_NUM}"
+            VERSION="$BASE_VERSION-${BRANCH_NAME}-${COMMIT_HASH}"
             IS_PRERELEASE=true
           fi
           
