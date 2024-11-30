@@ -1,5 +1,6 @@
 let lastTap = 0;
 let isScrolling = false;
+let isPocketCastsAvailable = false;
 
 function isPocketCastsInstalled() {
     return new Promise((resolve) => {
@@ -27,7 +28,7 @@ function isPocketCastsInstalled() {
             const timeout = setTimeout(() => {
                 document.body.removeChild(iframe);
                 resolve(false);
-            }, 1500);
+            }, 500);
 
             window.onblur = () => {
                 clearTimeout(timeout);
@@ -45,27 +46,9 @@ function copyToClipboard(text) {
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     const isAndroid = /Android/.test(navigator.userAgent);
     
-    if (isIOS || isAndroid) {
-        isPocketCastsInstalled().then(isInstalled => {
-            if (isInstalled) {
-                const feedUrl = text.replace(/^https?:\/\//, '');
-                window.location.href = `pktc://subscribe/${feedUrl}`;
-            } else {
-                // Fall back to clipboard copy with toast on mobile
-                navigator.clipboard.writeText(text).then(() => {
-                    const toast = document.createElement('div');
-                    toast.className = 'toast';
-                    toast.textContent = 'Feed URL copied to clipboard!';
-                    document.body.appendChild(toast);
-                    
-                    toast.addEventListener('animationend', (e) => {
-                        if (e.animationName === 'fadeOut') {
-                            toast.remove();
-                        }
-                    });
-                });
-            }
-        });
+    if ((isIOS || isAndroid) && isPocketCastsAvailable) {
+        const feedUrl = text.replace(/^https?:\/\//, '');
+        window.location.href = `pktc://subscribe/${feedUrl}`;
     } else {
         navigator.clipboard.writeText(text).then(() => {
             const toast = document.createElement('div');
@@ -83,6 +66,16 @@ function copyToClipboard(text) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Check for Pocket Casts availability on page load
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isAndroid = /Android/.test(navigator.userAgent);
+    
+    if (isIOS || isAndroid) {
+        isPocketCastsInstalled().then(isInstalled => {
+            isPocketCastsAvailable = isInstalled;
+        });
+    }
+
     // Add scroll detection
     let scrollTimeout;
     document.addEventListener('scroll', () => {
