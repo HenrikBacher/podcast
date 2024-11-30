@@ -1,3 +1,6 @@
+let lastTap = 0;
+let isScrolling = false;
+
 document.querySelectorAll('.feed-link').forEach(link => {
     const url = link.href;
 
@@ -13,7 +16,6 @@ document.querySelectorAll('.feed-link').forEach(link => {
         }
         lastTap = now;
     });
-});
 });
 
 function convertToPocketCastsUrl(url) {
