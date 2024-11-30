@@ -37,8 +37,12 @@ jobs:
           java-version: '21'
           check-latest: true
           cache: 'gradle'
-          
-      - run: ./gradlew build --no-daemon
+
+      - name: Build Kotlin app
+        run: |
+          java --version
+          chmod +x ./gradlew
+          ./gradlew build assemble
 
       - name: Set the date
         id: set_date
