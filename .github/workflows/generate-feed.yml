@@ -24,6 +24,8 @@ on:
       - "site/**"
   schedule:
     - cron: "0 * * * *"
+  pull_request:
+    types: [closed]
 
 jobs:
   load-podcasts:
@@ -207,16 +209,26 @@ jobs:
     name: "Publish feeds"
     needs: [check-deployment]
     if: |
-      (github.ref == 'refs/heads/main') &&
-      (needs.check-deployment.outputs.needs_deploy == 'true' || github.event_name == 'push')
+      needs.check-deployment.outputs.needs_deploy == 'true' || 
+      github.event_name == 'push'
     environment:
-      name: github-pages
+      name: ${{ github.ref == 'refs/heads/main' && 'github-pages' || format('pr{0}', github.event.pull_request.number) }}
       url: ${{ steps.deployment.outputs.page_url }}
     permissions:
       pages: write
       id-token: write
+      deployments: write
     runs-on: ubuntu-24.04
     steps:
+      - name: Configure PR Environment
+        if: github.ref != 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api --method PUT /repos/${{ github.repository }}/environments/pr${{ github.event.pull_request.number }} \
+            --field deployment_branch_policy[protected_branches]=false \
+            --field deployment_branch_policy[custom_branches][]=${{ github.head_ref }}
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -264,3 +276,18 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  cleanup-pr-environment:
+    name: "Cleanup PR Environment"
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-24.04
+    permissions:
+      deployments: write
+    steps:
+      - name: Delete PR Environment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER=${{ github.event.pull_request.number }}
+          echo "Deleting environment pr$PR_NUMBER"
+          gh api --method DELETE "/repos/${{ github.repository }}/environments/pr$PR_NUMBER" || true
