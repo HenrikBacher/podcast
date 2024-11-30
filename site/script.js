@@ -1,5 +1,16 @@
 let lastTap = 0;
 let isScrolling = false;
+let hasPocketCasts = false;
+
+// Check for Pocket Casts on page load
+async function init() {
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isAndroid = /Android/.test(navigator.userAgent);
+    
+    if (isIOS || isAndroid) {
+        hasPocketCasts = await isPocketCastsInstalled();
+    }
+}
 
 document.querySelectorAll('.feed-link').forEach(link => {
     const url = link.href;
@@ -9,6 +20,14 @@ document.querySelectorAll('.feed-link').forEach(link => {
         const now = Date.now();
         const timeDiff = now - lastTap;
 
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        const isAndroid = /Android/.test(navigator.userAgent);
+
+        if ((isIOS || isAndroid) && hasPocketCasts) {
+            window.location.href = convertToPocketCastsUrl(url);
+            return;
+        }
+
         if (timeDiff < 300 && timeDiff > 0) {
             displayFeedContent(url);
         } else {
@@ -17,6 +36,9 @@ document.querySelectorAll('.feed-link').forEach(link => {
         lastTap = now;
     });
 });
+
+// Initialize on page load
+init();
 
 function convertToPocketCastsUrl(url) {
     return 'pktc://subscribe/' + url.replace(/^https?:\/\//, '');
@@ -76,7 +98,6 @@ async function copyToClipboard(text) {
     const isAndroid = /Android/.test(navigator.userAgent);
     
     if (isIOS || isAndroid) {
-        const hasPocketCasts = await isPocketCastsInstalled();
         if (hasPocketCasts) {
             text = convertToPocketCastsUrl(text);
         }
