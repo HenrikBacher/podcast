@@ -77,7 +77,7 @@ private suspend fun fetchEpisodes(
     apiKey: String,
 ): List<Item> {
     val items = mutableListOf<Item>()
-    var currentUri = "${baseUri.appendPath(urn)}/episodes?limit=256"
+    var currentUri = "${baseUri.appendPath(urn)}/episodes?limit=1024"
     var page = 1
     
     try {
