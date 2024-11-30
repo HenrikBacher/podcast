@@ -1,4 +1,3 @@
-let pressTimer;
 let lastTap = 0;
 let isScrolling = false;
 
@@ -22,6 +21,47 @@ function copyToClipboard(text) {
     });
 }
 
+async function displayFeedContent(url) {
+    // Create a container for episodes
+    const episodesContainer = document.createElement('div');
+    episodesContainer.className = 'episodes-container';
+    
+    // Add a back button
+    const backButton = document.createElement('button');
+    backButton.textContent = '← Back';
+    backButton.className = 'back-button';
+    backButton.onclick = () => {
+        document.body.classList.remove('showing-episodes');
+        episodesContainer.remove();
+    };
+    episodesContainer.appendChild(backButton);
+
+    try {
+        // Fetch feed content (you'll need a proxy/backend service for this)
+        const response = await fetch(`/api/feed?url=${encodeURIComponent(url)}`);
+        const episodes = await response.json();
+
+        // Create episodes list
+        const list = document.createElement('ul');
+        list.className = 'episodes';
+        episodes.forEach(episode => {
+            const li = document.createElement('li');
+            li.innerHTML = `
+                <h3>${episode.title}</h3>
+                <p>${episode.description}</p>
+                <audio controls src="${episode.audioUrl}"></audio>
+            `;
+            list.appendChild(li);
+        });
+        episodesContainer.appendChild(list);
+    } catch (error) {
+        episodesContainer.innerHTML += '<p class="error">Failed to load feed content</p>';
+    }
+
+    document.body.appendChild(episodesContainer);
+    document.body.classList.add('showing-episodes');
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     // Add scroll detection
     let scrollTimeout;
@@ -42,43 +82,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const timeDiff = now - lastTap;
             
             if (timeDiff < 300 && timeDiff > 0) {
-                window.open(url, '_blank');
+                displayFeedContent(url);
             } else {
                 copyToClipboard(url);
             }
             lastTap = now;
-        });
-        
-        link.addEventListener('mousedown', (e) => {
-            pressTimer = setTimeout(() => {
-                window.open(url, '_blank');
-            }, 500);
-        });
-        
-        link.addEventListener('mouseup', () => {
-            clearTimeout(pressTimer);
-        });
-        
-        link.addEventListener('mouseleave', () => {
-            clearTimeout(pressTimer);
-        });
-        
-        link.addEventListener('touchstart', (e) => {
-            if (!isScrolling) {
-                pressTimer = setTimeout(() => {
-                    window.open(url, '_blank');
-                }, 500);
-            }
-        });
-        
-        link.addEventListener('touchend', () => {
-            if (!isScrolling) {
-                clearTimeout(pressTimer);
-            }
-        });
-        
-        link.addEventListener('touchcancel', () => {
-            clearTimeout(pressTimer);
         });
     });
 });

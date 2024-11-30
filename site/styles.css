@@ -179,3 +179,60 @@ body {
         scroll-behavior: auto !important;
     }
 }
+
+.episodes-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: white;
+    z-index: 1000;
+    padding: 20px;
+    overflow-y: auto;
+    display: none;
+}
+
+.showing-episodes .episodes-container {
+    display: block;
+}
+
+.showing-episodes .feeds {
+    display: none;
+}
+
+.back-button {
+    padding: 10px 20px;
+    margin-bottom: 20px;
+    border: none;
+    background: #007bff;
+    color: white;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.episodes {
+    list-style: none;
+    padding: 0;
+}
+
+.episodes li {
+    margin-bottom: 20px;
+    padding: 15px;
+    border-radius: 8px;
+    background: #f5f5f5;
+}
+
+.episodes h3 {
+    margin: 0 0 10px 0;
+}
+
+.episodes audio {
+    width: 100%;
+    margin-top: 10px;
+}
+
+.error {
+    color: red;
+    text-align: center;
+}
