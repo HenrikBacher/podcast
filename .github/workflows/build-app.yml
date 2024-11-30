@@ -7,10 +7,11 @@ on:
   push:
     branches:
       - main
+    paths:
+      - ".github/workflows/build-app.yml"  # Only trigger on build-app.yml changes
     paths-ignore:
-      - ".github/**"
+      - ".github/workflows/generate-feed.yml"
       - "site/**"
-      - "**/generate-feed.yml"
       - "**/podcasts.json" 
 
 jobs:
