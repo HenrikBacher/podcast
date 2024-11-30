@@ -22,43 +22,62 @@ jobs:
       - name: Get version
         id: get_version
         run: |
-          # Extract version from build.gradle.kts
-          VERSION=$(grep "^version = " build.gradle.kts | cut -d'"' -f2)
+          # Extract base version from build.gradle.kts
+          BASE_VERSION=$(grep "^version = " build.gradle.kts | cut -d'"' -f2)
           # Split version into array
-          IFS='.' read -ra PARTS <<< "$VERSION"
+          IFS='.' read -ra PARTS <<< "$BASE_VERSION"
+          COMMIT_HASH=$(git rev-parse --short HEAD)
+          IS_PRERELEASE=false
           
-          # Determine version bump type
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             PR_BODY="${{ github.event.pull_request.body }}"
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+            
+            # Determine next version based on PR template
             if [[ $PR_BODY == *"[x] major"* ]]; then
-              NEW_VERSION="$((PARTS[0] + 1)).0.0"
+              NEXT_VERSION="$((PARTS[0] + 1)).0.0"
             elif [[ $PR_BODY == *"[x] minor"* ]]; then
-              NEW_VERSION="${PARTS[0]}.$((PARTS[1] + 1)).0"
+              NEXT_VERSION="${PARTS[0]}.$((PARTS[1] + 1)).0"
             else
-              NEW_VERSION="${PARTS[0]}.${PARTS[1]}.$((PARTS[2] + 1))"
+              NEXT_VERSION="${PARTS[0]}.${PARTS[1]}.$((PARTS[2] + 1))"
             fi
-
+            
+            # For PR builds, use special version format
+            VERSION="$BASE_VERSION-PR${PR_NUMBER}-${COMMIT_HASH}"
+            IS_PRERELEASE=true
+            
             # Extract description section from PR body
             DESCRIPTION=$(echo "$PR_BODY" | sed -n '/## Description/,/##/p' | sed '1d;$d')
+            
+          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            # On main branch, use the determined next version
+            VERSION="$NEXT_VERSION"
+            
+          else
+            # For other branches, use branch name in version
+            BRANCH_NAME=$(echo "${{ github.ref }}" | sed 's/refs\/heads\///')
+            VERSION="$BASE_VERSION-${BRANCH_NAME}-${COMMIT_HASH}"
+            IS_PRERELEASE=true
+          fi
+          
+          # Update version in build.gradle.kts if on main
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            sed -i "s/^version = .*/version = \"$VERSION\"/" build.gradle.kts
+            git config --global user.name "GitHub Actions"
+            git config --global user.email "actions@github.com"
+            git add build.gradle.kts
+            git commit -m "Bump version to $VERSION [skip ci]" || true
+            git push || true
+          fi
+          
+          # Set outputs
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "is_prerelease=$IS_PRERELEASE" >> $GITHUB_OUTPUT
+          if [[ -n "$DESCRIPTION" ]]; then
             echo "description<<EOF" >> $GITHUB_OUTPUT
             echo "$DESCRIPTION" >> $GITHUB_OUTPUT
             echo "EOF" >> $GITHUB_OUTPUT
-          else
-            # Default to patch bump for non-PR builds
-            NEW_VERSION="${PARTS[0]}.${PARTS[1]}.$((PARTS[2] + 1))"
-            echo "description=" >> $GITHUB_OUTPUT
           fi
-          
-          # Update version in build.gradle.kts
-          sed -i "s/^version = .*/version = \"$NEW_VERSION\"/" build.gradle.kts
-          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          
-          # Commit and push new version
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-          git add build.gradle.kts
-          git commit -m "Bump version to $NEW_VERSION [skip ci]" || true
-          git push || true
 
       - uses: actions/cache@v4
         with:
@@ -80,6 +99,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.get_version.outputs.version }}
+          prerelease: ${{ steps.get_version.outputs.is_prerelease }}
           body: |
             Release v${{ steps.get_version.outputs.version }}
             
