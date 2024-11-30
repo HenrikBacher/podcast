@@ -3,26 +3,41 @@ let isScrolling = false;
 
 function isPocketCastsInstalled() {
     return new Promise((resolve) => {
-        const iframe = document.createElement('iframe');
-        iframe.style.display = 'none';
-        document.body.appendChild(iframe);
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
         
-        // Try to open Pocket Casts
-        const timeout = setTimeout(() => {
-            document.body.removeChild(iframe);
-            resolve(false);
-        }, 500);
+        if (isIOS) {
+            // iOS: Try to open app and assume success if we don't return within timeout
+            const start = Date.now();
+            window.location.href = 'pktc://';
+            
+            setTimeout(() => {
+                // If we're still here after 500ms, app is not installed
+                if (document.hidden || Date.now() - start > 1500) {
+                    resolve(false);
+                } else {
+                    resolve(true);
+                }
+            }, 500);
+        } else {
+            // Android: Use iframe method
+            const iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            document.body.appendChild(iframe);
+            
+            const timeout = setTimeout(() => {
+                document.body.removeChild(iframe);
+                resolve(false);
+            }, 500);
 
-        // If we successfully return to the page, the app is installed
-        window.onblur = () => {
-            clearTimeout(timeout);
-            document.body.removeChild(iframe);
-            window.onblur = null;
-            resolve(true);
-        };
+            window.onblur = () => {
+                clearTimeout(timeout);
+                document.body.removeChild(iframe);
+                window.onblur = null;
+                resolve(true);
+            };
 
-        // Test the deep link
-        iframe.src = 'pktc://';
+            iframe.src = 'pktc://';
+        }
     });
 }
 
