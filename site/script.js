@@ -1,43 +1,15 @@
 let lastTap = 0;
 let isScrolling = false;
-let isPocketCastsAvailable = false;
 
-function isPocketCastsInstalled() {
-    return new Promise((resolve) => {
-        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-        
-        if (isIOS) {
-            // iOS: Try to open app and assume success if we don't return within timeout
-            const start = Date.now();
-            window.location.href = 'pktc://';
-            
-            setTimeout(() => {
-                // If we're still here after 500ms, app is not installed
-                if (document.hidden || Date.now() - start > 1500) {
-                    resolve(false);
-                } else {
-                    resolve(true);
-                }
-            }, 500);
-        } else {
-            // Android: Use iframe method
-            const iframe = document.createElement('iframe');
-            iframe.style.display = 'none';
-            document.body.appendChild(iframe);
-            
-            const timeout = setTimeout(() => {
-                document.body.removeChild(iframe);
-                resolve(false);
-            }, 500);
-
-            window.onblur = () => {
-                clearTimeout(timeout);
-                document.body.removeChild(iframe);
-                window.onblur = null;
-                resolve(true);
-            };
-
-            iframe.src = 'pktc://';
+function showToast(message) {
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    toast.addEventListener('animationend', (e) => {
+        if (e.animationName === 'fadeOut') {
+            toast.remove();
         }
     });
 }
@@ -46,36 +18,27 @@ function copyToClipboard(text) {
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     const isAndroid = /Android/.test(navigator.userAgent);
     
-    if ((isIOS || isAndroid) && isPocketCastsAvailable) {
+    if (isIOS || isAndroid) {
+        // Try to open in Pocket Casts first
         const feedUrl = text.replace(/^https?:\/\//, '');
-        window.location.href = `pktc://subscribe/${feedUrl}`;
+        const pocketCastsUrl = `pktc://subscribe/${feedUrl}`;
+        
+        // Fallback to clipboard after a delay
+        setTimeout(() => {
+            navigator.clipboard.writeText(text).then(() => {
+                showToast('Feed URL copied to clipboard!');
+            });
+        }, 300);
+
+        window.location.href = pocketCastsUrl;
     } else {
         navigator.clipboard.writeText(text).then(() => {
-            const toast = document.createElement('div');
-            toast.className = 'toast';
-            toast.textContent = 'Feed URL copied to clipboard!';
-            document.body.appendChild(toast);
-            
-            toast.addEventListener('animationend', (e) => {
-                if (e.animationName === 'fadeOut') {
-                    toast.remove();
-                }
-            });
+            showToast('Feed URL copied to clipboard!');
         });
     }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Check for Pocket Casts availability on page load
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    const isAndroid = /Android/.test(navigator.userAgent);
-    
-    if (isIOS || isAndroid) {
-        isPocketCastsInstalled().then(isInstalled => {
-            isPocketCastsAvailable = isInstalled;
-        });
-    }
-
     // Add scroll detection
     let scrollTimeout;
     document.addEventListener('scroll', () => {
