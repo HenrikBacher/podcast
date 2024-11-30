@@ -29,17 +29,18 @@ jobs:
           COMMIT_HASH=$(git rev-parse --short HEAD)
           IS_PRERELEASE=false
           
+          # Set next version (patch by default)
+          NEXT_VERSION="${PARTS[0]}.${PARTS[1]}.$((PARTS[2] + 1))"
+          
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             PR_BODY="${{ github.event.pull_request.body }}"
             PR_NUMBER="${{ github.event.pull_request.number }}"
             
-            # Determine next version based on PR template
+            # Override next version based on PR template
             if [[ $PR_BODY == *"[x] major"* ]]; then
               NEXT_VERSION="$((PARTS[0] + 1)).0.0"
             elif [[ $PR_BODY == *"[x] minor"* ]]; then
               NEXT_VERSION="${PARTS[0]}.$((PARTS[1] + 1)).0"
-            else
-              NEXT_VERSION="${PARTS[0]}.${PARTS[1]}.$((PARTS[2] + 1))"
             fi
             
             # For PR builds, use special version format
