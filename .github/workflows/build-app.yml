@@ -19,6 +19,26 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Get version
+        id: get_version
+        run: |
+          # Extract version from build.gradle.kts
+          VERSION=$(grep "^version = " build.gradle.kts | cut -d'"' -f2)
+          # Split version and increment patch
+          IFS='.' read -ra PARTS <<< "$VERSION"
+          PATCH=$((PARTS[2] + 1))
+          NEW_VERSION="${PARTS[0]}.${PARTS[1]}.$PATCH"
+          # Update version in build.gradle.kts
+          sed -i "s/^version = .*/version = \"$NEW_VERSION\"/" build.gradle.kts
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          
+          # Commit and push new version
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add build.gradle.kts
+          git commit -m "Bump version to $NEW_VERSION [skip ci]" || true
+          git push || true
+
       - name: Cache Gradle dependencies
         uses: actions/cache@v4
         id: cache-ommer
@@ -44,7 +64,11 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ env.TAG_NAME }}
-          body: "New release of ommer.jar on ${{ env.TAG_NAME }}"
+          tag_name: v${{ steps.get_version.outputs.version }}
+          body: |
+            Release v${{ steps.get_version.outputs.version }}
+            
+            Changes in this release:
+            - New build of ommer.jar
           files: |
             ./ommer/build/libs/ommer.jar
