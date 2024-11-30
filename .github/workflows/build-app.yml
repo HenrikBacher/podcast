@@ -30,12 +30,15 @@ jobs:
             ~/.gradle/configuration-cache
           key: ${{ runner.os }}-${{ hashFiles('./build.gradle.kts', './settings.gradle.kts', './gradle.properties', '**/gradle-wrapper.properties') }}
           restore-keys: ${{ runner.os }}
-
-      - name: Build Kotlin app
-        run: |
-          java --version
-          chmod +x ./gradlew
-          ./gradlew build assemble
+      
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          check-latest: true
+          cache: 'gradle'
+          
+      - run: ./gradlew build --no-daemon
 
       - name: Set the date
         id: set_date
