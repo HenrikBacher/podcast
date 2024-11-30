@@ -96,7 +96,7 @@ jobs:
           echo "Using Java from: $JAVA_HOME"
           java --version
           chmod +x ./gradlew
-          ./gradlew build assemble
+          ./gradlew build assemble -Dorg.gradle.java.home=$JAVA_HOME_21_X64
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
