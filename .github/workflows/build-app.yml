@@ -6,9 +6,8 @@ on:
     branches: ["main"]
   push:
     branches:
-      - main  # Only trigger on build-app.yml changes
+      - main
     paths-ignore:
-      - ".github/workflows/generate-feed.yml"
       - "site/**"
       - "**/podcasts.json" 
 
