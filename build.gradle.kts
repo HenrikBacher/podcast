@@ -6,6 +6,7 @@ plugins {
 group = "dr1ommer"
 version = "1.0.6"
 
+val javaVersion = 21
 val ktorVersion = "3.0.1"
 val coroutinesVersion = "1.9.0"
 
@@ -34,7 +35,7 @@ allprojects {
     }
 
     kotlin {
-        jvmToolchain(17)
+        jvmToolchain(javaVersion)
     }
 }
 
