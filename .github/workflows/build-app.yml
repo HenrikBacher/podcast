@@ -24,10 +24,24 @@ jobs:
         run: |
           # Extract version from build.gradle.kts
           VERSION=$(grep "^version = " build.gradle.kts | cut -d'"' -f2)
-          # Split version and increment patch
+          # Split version into array
           IFS='.' read -ra PARTS <<< "$VERSION"
-          PATCH=$((PARTS[2] + 1))
-          NEW_VERSION="${PARTS[0]}.${PARTS[1]}.$PATCH"
+          
+          # Determine version bump type
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            PR_BODY="${{ github.event.pull_request.body }}"
+            if [[ $PR_BODY == *"[x] major"* ]]; then
+              NEW_VERSION="$((PARTS[0] + 1)).0.0"
+            elif [[ $PR_BODY == *"[x] minor"* ]]; then
+              NEW_VERSION="${PARTS[0]}.$((PARTS[1] + 1)).0"
+            else
+              NEW_VERSION="${PARTS[0]}.${PARTS[1]}.$((PARTS[2] + 1))"
+            fi
+          else
+            # Default to patch bump for non-PR builds
+            NEW_VERSION="${PARTS[0]}.${PARTS[1]}.$((PARTS[2] + 1))"
+          fi
+          
           # Update version in build.gradle.kts
           sed -i "s/^version = .*/version = \"$NEW_VERSION\"/" build.gradle.kts
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
