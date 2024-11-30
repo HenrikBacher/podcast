@@ -1,6 +1,14 @@
 let lastTap = 0;
 let isScrolling = false;
 
+function isPocketCastsSupported() {
+    return /Android|iPhone|iPad|iPod/.test(navigator.userAgent);
+}
+
+function convertToPocketCastsUrl(feedUrl) {
+    return 'pktc://subscribe/' + feedUrl.replace(/^https?:\/\//, '');
+}
+
 function copyToClipboard(text) {
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     const isAndroid = /Android/.test(navigator.userAgent);
@@ -43,7 +51,16 @@ document.addEventListener('DOMContentLoaded', () => {
             if (timeDiff < 300 && timeDiff > 0) {
                 displayFeedContent(url);
             } else {
-                copyToClipboard(url);
+                if (isPocketCastsSupported()) {
+                    const pocketCastsUrl = convertToPocketCastsUrl(url);
+                    window.location.href = pocketCastsUrl;
+                    // Fallback to copying if app switch fails
+                    setTimeout(() => {
+                        copyToClipboard(url);
+                    }, 500);
+                } else {
+                    copyToClipboard(url);
+                }
             }
             lastTap = now;
         });
