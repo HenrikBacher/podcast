@@ -96,17 +96,13 @@ jobs:
           path: output/${{ matrix.podcasts.slug }}.xml
           retention-days: 1
 
-  publish-feed:
-    name: "Publish feeds"
-    needs: [update-feed, load-podcasts]
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'    
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    permissions:
-      pages: write
-      id-token: write
+  check-deployment:
+    name: "Check if deployment is needed"
+    needs: [ load-podcasts]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
     runs-on: ubuntu-24.04
+    outputs:
+      needs_deploy: ${{ steps.deployment_check.outputs.needs_deploy }}
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -131,7 +127,7 @@ jobs:
             LAST_DEPLOY="1970-01-01T00:00:00Z"
           fi
           echo "last_deploy_time=$LAST_DEPLOY" >> $GITHUB_OUTPUT
-          
+
       - name: Check for new feeds or feed changes
         id: deployment_check
         env:
@@ -188,8 +184,32 @@ jobs:
           
           echo "needs_deploy=$NEEDS_DEPLOY" >> $GITHUB_OUTPUT
 
+  publish-feed:
+    name: "Publish feeds"
+    needs: [check-deployment]
+    if: |
+      (github.ref == 'refs/heads/main') &&
+      (needs.check-deployment.outputs.needs_deploy == 'true' || github.event_name == 'push')
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: _site
+          merge-multiple: true
+
+      - name: Move feeds to correct location
+        run: |
+          mkdir -p _site/feeds
+          mv _site/*.xml _site/feeds/
+
       - name: Generate index.html
-        if: steps.deployment_check.outputs.needs_deploy == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
         run: |          
           # Generate feeds HTML
           feeds_html=""
@@ -217,14 +237,11 @@ jobs:
           sed -i "/<!-- BEGIN_FEEDS -->/,/<!-- END_FEEDS -->/c\        <!-- BEGIN_FEEDS -->\n        $feeds_html\n        <!-- END_FEEDS -->" _site/index.html
 
       - name: Setup Pages
-        if: steps.deployment_check.outputs.needs_deploy == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
         uses: actions/configure-pages@v5
 
       - name: Upload Pages artifact
-        if: steps.deployment_check.outputs.needs_deploy == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
         uses: actions/upload-pages-artifact@v3
         
       - name: Deploy to GitHub Pages
-        if: steps.deployment_check.outputs.needs_deploy == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
         id: deployment
         uses: actions/deploy-pages@v4
