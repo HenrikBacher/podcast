@@ -17,6 +17,16 @@ on:
       - "site/**"
   schedule:
     - cron: "0 * * * *"
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type to use (release/latest)'
+        required: false
+        default: 'release'
+        type: choice
+        options:
+          - release
+          - latest
 
 jobs:
   load-podcasts:
@@ -55,27 +65,31 @@ jobs:
     name: "Update ${{ matrix.podcasts.slug }} feed"
     needs: load-podcasts
     strategy:
-      # Stop all jobs if one fails
       fail-fast: true
       matrix: ${{ fromJson(needs.load-podcasts.outputs.podcasts) }}
     runs-on: ubuntu-24.04
     steps:
       - name: Get latest release
         id: get_latest_release
-        uses: actions/cache@v4
-        with:
-          path: ommer.jar
-          key: ${{ runner.os }}-ommer-${{ github.run_id }}
-          restore-keys: |
-            ${{ runner.os }}-ommer-
-        
-      - name: Download JAR if not cached
-        if: steps.get_latest_release.outputs.cache-hit != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUILD_TYPE: ${{ inputs.build_type || 'release' }}
         run: |
-          LATEST_RELEASE_URL=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq '.assets[0].browser_download_url')
-          curl -L $LATEST_RELEASE_URL -o ommer.jar
+          if [[ "$BUILD_TYPE" == "release" ]]; then
+            # Get latest semantic version release
+            RELEASE_URL=$(gh api "repos/$GITHUB_REPOSITORY/releases" \
+              --jq '[.[] | select(.prerelease == false)][0].assets[0].browser_download_url')
+          else
+            # Get latest tagged build (including prereleases)
+            RELEASE_URL=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" \
+              --jq '.assets[0].browser_download_url')
+          fi
+          echo "release_url=$RELEASE_URL" >> $GITHUB_OUTPUT
+
+      - name: Download JAR if not cached
+        if: steps.get_latest_release.outputs.cache-hit != 'true'
+        run: |
+          curl -L ${{ steps.get_latest_release.outputs.release_url }} -o ommer.jar
 
       - name: Get host URL
         id: get_host_url

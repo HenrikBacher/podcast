@@ -24,41 +24,77 @@ jobs:
         run: |
           # Extract version from build.gradle.kts
           VERSION=$(grep "^version = " build.gradle.kts | cut -d'"' -f2)
-          # Split version into array
-          IFS='.' read -ra PARTS <<< "$VERSION"
           
-          # Determine version bump type
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            PR_BODY="${{ github.event.pull_request.body }}"
-            if [[ $PR_BODY == *"[x] major"* ]]; then
-              NEW_VERSION="$((PARTS[0] + 1)).0.0"
-            elif [[ $PR_BODY == *"[x] minor"* ]]; then
-              NEW_VERSION="${PARTS[0]}.$((PARTS[1] + 1)).0"
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            # Semantic versioning only on main branch
+            IFS='.' read -ra PARTS <<< "$VERSION"
+            
+            # Check if the commit was from a merged PR
+            PR_NUMBER=$(git log -1 --pretty=%B | grep -oP '(?<=Merge pull request #)\d+')
+            if [[ -n "$PR_NUMBER" ]]; then
+              PR_BODY=$(gh pr view $PR_NUMBER --json body -q .body)
+              if [[ $PR_BODY == *"[x] major"* ]]; then
+                NEW_VERSION="$((PARTS[0] + 1)).0.0"
+              elif [[ $PR_BODY == *"[x] minor"* ]]; then
+                NEW_VERSION="${PARTS[0]}.$((PARTS[1] + 1)).0"
+              else
+                NEW_VERSION="${PARTS[0]}.${PARTS[1]}.$((PARTS[2] + 1))"
+              fi
+              DESCRIPTION=$(echo "$PR_BODY" | sed -n '/## Description/,/##/p' | sed '1d;$d')
             else
               NEW_VERSION="${PARTS[0]}.${PARTS[1]}.$((PARTS[2] + 1))"
+              DESCRIPTION=$(git log -1 --pretty=%B)
             fi
-
-            # Extract description section from PR body
-            DESCRIPTION=$(echo "$PR_BODY" | sed -n '/## Description/,/##/p' | sed '1d;$d')
-            echo "description<<EOF" >> $GITHUB_OUTPUT
-            echo "$DESCRIPTION" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
+            
+            TAG_NAME="v$NEW_VERSION"
+            # Update version in build.gradle.kts
+            sed -i "s/^version = .*/version = \"$NEW_VERSION\"/" build.gradle.kts
+            
+            # Commit and push new version
+            git config --global user.name "GitHub Actions"
+            git config --global user.email "actions@github.com"
+            git add build.gradle.kts
+            git commit -m "Bump version to $NEW_VERSION [skip ci]" || true
+            git push || true
           else
-            # Default to patch bump for non-PR builds
-            NEW_VERSION="${PARTS[0]}.${PARTS[1]}.$((PARTS[2] + 1))"
-            echo "description=" >> $GITHUB_OUTPUT
+            # For PR or other branches, create development tag
+            if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+              BRANCH_NAME="pr-${{ github.event.pull_request.number }}"
+              DESCRIPTION=$(echo "${{ github.event.pull_request.body }}" | sed -n '/## Description/,/##/p' | sed '1d;$d')
+            else
+              BRANCH_NAME=$(echo ${{ github.ref_name }} | sed 's/[^a-zA-Z0-9]/-/g')
+              DESCRIPTION=$(git log -1 --pretty=%B)
+            fi
+            TIMESTAMP=$(date +%Y%m%d%H%M%S)
+            TAG_NAME="dev-${BRANCH_NAME}-${TIMESTAMP}"
+            NEW_VERSION="${VERSION}-${TAG_NAME}"
           fi
           
-          # Update version in build.gradle.kts
-          sed -i "s/^version = .*/version = \"$NEW_VERSION\"/" build.gradle.kts
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          
-          # Commit and push new version
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-          git add build.gradle.kts
-          git commit -m "Bump version to $NEW_VERSION [skip ci]" || true
-          git push || true
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "description<<EOF" >> $GITHUB_OUTPUT
+          echo "$DESCRIPTION" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Cleanup prerelease builds
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Check if this was a PR merge
+          PR_NUMBER=$(git log -1 --pretty=%B | grep -oP '(?<=Merge pull request #)\d+')
+          if [[ -n "$PR_NUMBER" ]]; then
+            echo "Cleaning up prerelease builds for PR #$PR_NUMBER"
+            # Find and delete prerelease tags and releases for this PR
+            gh api repos/$GITHUB_REPOSITORY/releases \
+              --jq '.[] | select(.prerelease == true and .tag_name | contains("pr-'$PR_NUMBER'"))' \
+              | jq -r '.id' \
+              | xargs -I {} gh api -X DELETE repos/$GITHUB_REPOSITORY/releases/{}
+            
+            # Delete associated tags
+            git fetch --tags
+            git tag -l "dev-pr-$PR_NUMBER-*" | xargs -I {} git push --delete origin {}
+          fi
 
       - uses: actions/cache@v4
         with:
@@ -79,11 +115,12 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.get_version.outputs.version }}
+          tag_name: ${{ steps.get_version.outputs.tag_name }}
+          prerelease: ${{ github.ref != 'refs/heads/main' }}
           body: |
-            Release v${{ steps.get_version.outputs.version }}
+            ${{ github.ref == 'refs/heads/main' && 'Release' || 'Development build' }} ${{ steps.get_version.outputs.version }}
             
-            Changes in this release:
+            Changes in this build:
             ${{ steps.get_version.outputs.description }}
           files: |
             ./ommer/build/libs/ommer.jar
