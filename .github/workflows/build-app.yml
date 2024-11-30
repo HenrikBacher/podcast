@@ -84,16 +84,21 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
-        
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: "8.11.1"
       
-      - name: Build Kotlin app
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/configuration-cache
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Build app
         run: |
           java --version
-          gradle build
+          ./gradlew build
 
       - name:  Create Release
         uses: softprops/action-gh-release@v2
