@@ -18,7 +18,7 @@ on:
 jobs:
   load-podcasts:
     name: Load Podcasts
-    runs-on: macos-latest
+    runs-on: ubuntu-24.04
     outputs:
       podcasts: ${{ steps.load_data.outputs.podcasts }}
     steps:
@@ -55,7 +55,7 @@ jobs:
       # Stop all jobs if one fails
       fail-fast: true
       matrix: ${{ fromJson(needs.load-podcasts.outputs.podcasts) }}
-    runs-on: macos-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Get latest release
         id: get_latest_release
@@ -85,7 +85,7 @@ jobs:
       - name: Execute parser for ${{ matrix.podcasts.slug }} feed
         uses: corrupt952/actions-retry-command@v1.0.7
         with:
-          command: java -Xmx256m -XX:+UseParallelGC -jar ./ommer.jar --slug ${{ matrix.podcasts.slug }} --urn ${{ matrix.podcasts.urn }} --imageUrl ${{ matrix.podcasts.image }} --apiKey ${{ secrets.API_KEY }} --baseUrl ${{ steps.get_host_url.outputs.host_url }}
+          command: ${{ vars.JAVA_HOME_21_X64 }}/bin/java -Xmx256m -XX:+UseParallelGC -jar ./ommer.jar --slug ${{ matrix.podcasts.slug }} --urn ${{ matrix.podcasts.urn }} --imageUrl ${{ matrix.podcasts.image }} --apiKey ${{ secrets.API_KEY }} --baseUrl ${{ steps.get_host_url.outputs.host_url }}
           working_directory: ./
           max_attempts: 3
           retry_interval: 10
@@ -101,7 +101,7 @@ jobs:
     name: "Check if deployment is needed"
     needs: [update-feed]
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-    runs-on: macos-latest
+    runs-on: ubuntu-24.04
     outputs:
       needs_deploy: ${{ steps.deployment_check.outputs.needs_deploy }}
     steps:
@@ -197,7 +197,7 @@ jobs:
     permissions:
       pages: write
       id-token: write
-    runs-on: macos-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
