@@ -1,6 +1,6 @@
-
 let pressTimer;
 let lastTap = 0;
+let isScrolling = false;
 
 function copyToClipboard(text) {
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
@@ -23,6 +23,16 @@ function copyToClipboard(text) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Add scroll detection
+    let scrollTimeout;
+    document.addEventListener('scroll', () => {
+        isScrolling = true;
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(() => {
+            isScrolling = false;
+        }, 150);
+    });
+
     document.querySelectorAll('.feed-link').forEach(link => {
         const url = link.href;
         
@@ -54,13 +64,17 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         
         link.addEventListener('touchstart', (e) => {
-            pressTimer = setTimeout(() => {
-                window.open(url, '_blank');
-            }, 500);
+            if (!isScrolling) {
+                pressTimer = setTimeout(() => {
+                    window.open(url, '_blank');
+                }, 500);
+            }
         });
         
         link.addEventListener('touchend', () => {
-            clearTimeout(pressTimer);
+            if (!isScrolling) {
+                clearTimeout(pressTimer);
+            }
         });
         
         link.addEventListener('touchcancel', () => {
