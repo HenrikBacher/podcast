@@ -218,6 +218,7 @@ jobs:
       pages: write
       id-token: write
       deployments: write
+      actions: write
     runs-on: ubuntu-24.04
     steps:
       - name: Configure PR Environment
@@ -283,6 +284,7 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       deployments: write
+      actions: write
     steps:
       - name: Delete PR Environment
         env:
