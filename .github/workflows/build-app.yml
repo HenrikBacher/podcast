@@ -37,9 +37,16 @@ jobs:
             else
               NEW_VERSION="${PARTS[0]}.${PARTS[1]}.$((PARTS[2] + 1))"
             fi
+
+            # Extract description section from PR body
+            DESCRIPTION=$(echo "$PR_BODY" | sed -n '/## Description/,/##/p' | sed '1d;$d')
+            echo "description<<EOF" >> $GITHUB_OUTPUT
+            echo "$DESCRIPTION" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
           else
             # Default to patch bump for non-PR builds
             NEW_VERSION="${PARTS[0]}.${PARTS[1]}.$((PARTS[2] + 1))"
+            echo "description=" >> $GITHUB_OUTPUT
           fi
           
           # Update version in build.gradle.kts
@@ -77,6 +84,6 @@ jobs:
             Release v${{ steps.get_version.outputs.version }}
             
             Changes in this release:
-            - New build of ommer.jar
+            ${{ steps.get_version.outputs.description }}
           files: |
             ./ommer/build/libs/ommer.jar
