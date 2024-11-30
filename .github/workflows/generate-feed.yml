@@ -4,7 +4,7 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-on: # Allow this workflow to be called by other workflows
+on:
   workflow_run:
     workflows: ["build-app"]  # Run after build-app workflow
     types:
