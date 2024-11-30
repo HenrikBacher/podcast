@@ -10,6 +10,13 @@ on:
     types:
       - completed
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      usePrerelease:
+        description: 'Use pre-release versions'
+        required: false
+        type: boolean
+        default: false
   push:
     paths:
       - "**/generate-feed.yml"
@@ -54,6 +61,8 @@ jobs:
   update-feed:
     name: "Update ${{ matrix.podcasts.slug }} feed"
     needs: load-podcasts
+    env:
+      usePrerelease: ${{ inputs.usePrerelease || false }}
     strategy:
       # Stop all jobs if one fails
       fail-fast: true
@@ -74,8 +83,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          LATEST_RELEASE_URL=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq '.assets[0].browser_download_url')
-          curl -L $LATEST_RELEASE_URL -o ommer.jar
+          RELEASE_URL=$(gh api "repos/$GITHUB_REPOSITORY/releases" \
+              --jq "[.[] | select(.prerelease == $usePrerelease)][0].assets[0].browser_download_url")
+          echo "Downloading from: $RELEASE_URL"
+          curl -L $RELEASE_URL -o ommer.jar
 
       - name: Get host URL
         id: get_host_url
