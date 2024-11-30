@@ -19,22 +19,7 @@ on: # Allow this workflow to be called by other workflows
     - cron: "0 * * * *"
 
 jobs:
-  # Only proceed if not triggered by workflow_run or if build-app succeeded
-  check-trigger:
-    runs-on: ubuntu-24.04
-    outputs:
-      should_run: ${{ steps.check.outputs.should_run }}
-    steps:
-      - id: check
-        run: |
-          if [[ "${{ github.event_name }}" != "workflow_run" ]] || [[ "${{ github.event.workflow_run.conclusion }}" == "success" ]]; then
-            echo "should_run=true" >> $GITHUB_OUTPUT
-          else
-            echo "should_run=false" >> $GITHUB_OUTPUT
-
   load-podcasts:
-    needs: check-trigger
-    if: needs.check-trigger.outputs.should_run == 'true'
     name: Load Podcasts
     runs-on: ubuntu-24.04
     outputs:
