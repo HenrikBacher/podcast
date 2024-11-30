@@ -19,6 +19,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/configuration-cache
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
       - name: Get version
         id: get_version
         run: |
@@ -80,25 +90,21 @@ jobs:
             echo "EOF" >> $GITHUB_OUTPUT
           fi
 
-      - uses: actions/cache@v4
+      - uses: actions/setup-java@v3
         with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/configuration-cache
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+          distribution: temurin
+          java-version: 21
+        
+      - uses: gradle/gradle-build-action@v2
+        with:
+          gradle-version: 8.11.2
       
       - name: Build Kotlin app
         run: |
-          export JAVA_HOME=$JAVA_HOME_21_X64
-          echo "Using Java from: $JAVA_HOME"
           java --version
-          chmod +x ./gradlew
-          gradle build assemble -Dorg.gradle.java.home=/usr/lib/jvm/temurin-21-jdk-amd64
+          gradle build assemble
 
-      - name: Create Release
+      - name:  Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.get_version.outputs.version }}
