@@ -1,3 +1,21 @@
+document.querySelectorAll('.feed-link').forEach(link => {
+    const url = link.href;
+
+    link.addEventListener('click', (e) => {
+        e.preventDefault();
+        const now = Date.now();
+        const timeDiff = now - lastTap;
+
+        if (timeDiff < 300 && timeDiff > 0) {
+            displayFeedContent(url);
+        } else {
+            copyToClipboard(url);
+        }
+        lastTap = now;
+    });
+});
+});
+
 function convertToPocketCastsUrl(url) {
     return 'pktc://subscribe/' + url.replace(/^https?:\/\//, '');
 }

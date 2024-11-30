@@ -207,6 +207,7 @@ jobs:
     name: "Publish feeds"
     needs: [check-deployment]
     if: |
+      (github.ref == 'refs/heads/main') &&
       (needs.check-deployment.outputs.needs_deploy == 'true' || github.event_name == 'push')
     environment:
       name: github-pages
