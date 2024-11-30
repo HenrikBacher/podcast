@@ -1,22 +1,40 @@
 name: Update feeds
 
-# Add concurrency to cancel redundant workflow runs
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-on:
+on: # Allow this workflow to be called by other workflows
+  workflow_run:
+    workflows: ["build-app"]  # Run after build-app workflow
+    types:
+      - completed
+    branches: [main]
   push:
     paths:
       - "**/generate-feed.yml"
       - "**/podcasts.json"
       - "site/**"
   schedule:
-    - cron: "0 * * * *"  # Run at minute 0 of every hour
-  workflow_dispatch:
+    - cron: "0 * * * *"
 
 jobs:
+  # Only proceed if not triggered by workflow_run or if build-app succeeded
+  check-trigger:
+    runs-on: ubuntu-24.04
+    outputs:
+      should_run: ${{ steps.check.outputs.should_run }}
+    steps:
+      - id: check
+        run: |
+          if [[ "${{ github.event_name }}" != "workflow_run" ]] || [[ "${{ github.event.workflow_run.conclusion }}" == "success" ]]; then
+            echo "should_run=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_run=false" >> $GITHUB_OUTPUT
+
   load-podcasts:
+    needs: check-trigger
+    if: needs.check-trigger.outputs.should_run == 'true'
     name: Load Podcasts
     runs-on: ubuntu-24.04
     outputs:
@@ -86,7 +104,7 @@ jobs:
         uses: corrupt952/actions-retry-command@v1.0.7
         with:
           command: java -Xmx256m -XX:+UseParallelGC -jar ./ommer.jar --slug ${{ matrix.podcasts.slug }} --urn ${{ matrix.podcasts.urn }} --imageUrl ${{ matrix.podcasts.image }} --apiKey ${{ secrets.API_KEY }} --baseUrl ${{ steps.get_host_url.outputs.host_url }}
-          working_directory: ./
+          working_directory: ./ 
           max_attempts: 3
           retry_interval: 10
 
@@ -100,7 +118,6 @@ jobs:
   check-deployment:
     name: "Check if deployment is needed"
     needs: [update-feed]
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
     runs-on: ubuntu-24.04
     outputs:
       needs_deploy: ${{ steps.deployment_check.outputs.needs_deploy }}
