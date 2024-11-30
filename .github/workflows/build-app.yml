@@ -80,23 +80,28 @@ jobs:
             echo "EOF" >> $GITHUB_OUTPUT
           fi
 
+      - uses: actions/setup-java@v3
+        with:
+          distribution: temurin
+          java-version: 21
+      
       - uses: actions/cache@v4
         with:
           path: |
             ~/.gradle/caches
             ~/.gradle/configuration-cache
             ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
           restore-keys: |
             ${{ runner.os }}-gradle-
-      
-      - name: Build Kotlin app
+
+      - name: Build app
         run: |
           java --version
           chmod +x ./gradlew
-          ./gradlew build assemble
+          ./gradlew build
 
-      - name: Create Release
+      - name:  Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.get_version.outputs.version }}

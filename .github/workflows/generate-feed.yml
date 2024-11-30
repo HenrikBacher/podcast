@@ -88,6 +88,11 @@ jobs:
           echo "Downloading from: $RELEASE_URL"
           curl -L $RELEASE_URL -o ommer.jar
 
+      - uses: actions/setup-java@v3
+        with:
+          distribution: temurin
+          java-version: 21
+
       - name: Get host URL
         id: get_host_url
         env:
@@ -99,7 +104,7 @@ jobs:
       - name: Execute parser for ${{ matrix.podcasts.slug }} feed
         uses: corrupt952/actions-retry-command@v1.0.7
         with:
-          command: java -Xmx256m -XX:+UseParallelGC -jar ./ommer.jar --slug ${{ matrix.podcasts.slug }} --urn ${{ matrix.podcasts.urn }} --imageUrl ${{ matrix.podcasts.image }} --apiKey ${{ secrets.API_KEY }} --baseUrl ${{ steps.get_host_url.outputs.host_url }}
+          command: java -Xmx2048m -XX:+UseParallelGC -jar ./ommer.jar --slug ${{ matrix.podcasts.slug }} --urn ${{ matrix.podcasts.urn }} --imageUrl ${{ matrix.podcasts.image }} --apiKey ${{ secrets.API_KEY }} --baseUrl ${{ steps.get_host_url.outputs.host_url }}
           working_directory: ./ 
           max_attempts: 3
           retry_interval: 10
