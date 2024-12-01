@@ -79,6 +79,11 @@
       "slug": "p1-debat",
       "urn": "urn:dr:radio:series:5fa26a12330eac2f135b9c24",
       "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:66f27e90b75d19480fa4401d.jpg"
+    },
+    {
+      "slug": "bakspejl", 
+      "urn": "urn:dr:radio:series:5fa2623a330eac2f135b751f", 
+      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:66f67fce075f92789902ab5b.jpg"
     }
   ]
 }
