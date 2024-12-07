@@ -230,9 +230,12 @@ jobs:
 
       - name: Generate index.html
         run: |          
+          # Add timestamp in ISO 8601 format
+          current_time=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          
           # Generate feeds HTML and shuffle the order
           feeds_html=""
-          find _site/feeds -name "*.xml" -printf "%f\n" | shuf | while read -r xml_file; do
+          for feed in _site/feeds/*.xml; do
             filename=$(basename "$xml_file" .xml)
             formatted_title=$(echo "$filename" | sed 's/-/ /g')
             
@@ -251,6 +254,9 @@ jobs:
               feeds_html+="<li><a class='feed-link' href='feeds/$filename.xml'><div class='feed-icon'></div><span class='feed-title'>$formatted_title</span></a></li>"
             fi
           done
+          
+          # Insert deployment timestamp meta tag after opening head tag
+          sed -i '/<head>/a \    <meta name="deployment-time" content="'"$current_time"'">' _site/index.html
           
           # Replace entire section between markers with generated feeds
           sed -i "/<!-- BEGIN_FEEDS -->/,/<!-- END_FEEDS -->/c\        <!-- BEGIN_FEEDS -->\n        $feeds_html\n        <!-- END_FEEDS -->" _site/index.html
