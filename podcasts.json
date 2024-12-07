@@ -84,6 +84,11 @@
       "slug": "bakspejl", 
       "urn": "urn:dr:radio:series:5fa2623a330eac2f135b751f", 
       "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:66f67fce075f92789902ab5b.jpg"
+    },
+    {
+      "slug": "fonk-det-er-podcast", 
+      "urn": "urn:dr:radio:series:5fa15b12da351264f87b5ca2", 
+      "image": "https://static.pocketcasts.com/discover/images/400/81002aa0-2453-0134-2f00-737688e4d168.jpg"
     }
   ]
 }
