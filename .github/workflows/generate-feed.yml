@@ -230,10 +230,10 @@ jobs:
 
       - name: Generate index.html
         run: |          
-          # Generate feeds HTML
+          # Generate feeds HTML and shuffle the order
           feeds_html=""
-          for feed in _site/feeds/*.xml; do
-            filename=$(basename "$feed" .xml)
+          find _site/feeds -name "*.xml" -printf "%f\n" | shuf | while read -r xml_file; do
+            filename=$(basename "$xml_file" .xml)
             formatted_title=$(echo "$filename" | sed 's/-/ /g')
             
             # Look for local icon file with any supported extension
