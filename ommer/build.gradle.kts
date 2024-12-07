@@ -1,6 +1,6 @@
 plugins { 
     id("com.gradleup.shadow") version "8.3.5" 
-    id("com.guardsquare.proguard") version "7.5.0"
+    id("com.guardsquare.proguard-gradle") version "7.5.0"
 }
 
 val mainClass = "ommer.client.ClientKt"
