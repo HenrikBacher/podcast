@@ -1,6 +1,12 @@
 plugins { 
     id("com.gradleup.shadow") version "8.3.5" 
-    id("com.guardsquare.proguard-gradle") version "7.5.0"
+    id("com.guardsquare:proguard-gradle") version "7.5.0"
+}
+
+repositories {
+    mavenCentral()
+    gradlePluginPortal()
+    maven("https://jitpack.io")
 }
 
 val mainClass = "ommer.client.ClientKt"
