@@ -4,10 +4,10 @@ plugins {
 }
 
 group = "dr1ommer"
-version = "1.0.11"
+version = "1.0.12"
 
 val javaVersion = 21
-val ktorVersion = "3.0.1"
+val ktorVersion = "3.0.2"
 val coroutinesVersion = "1.9.0"
 
 allprojects {
