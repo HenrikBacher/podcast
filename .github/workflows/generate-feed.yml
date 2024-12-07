@@ -229,14 +229,14 @@ jobs:
           mv _site/*.xml _site/feeds/
 
       - name: Generate index.html
-        run: |          
-          # Add timestamp in ISO 8601 format
+        run: |       
+          # Get current timestamp in ISO 8601 format
           current_time=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           
-          # Generate feeds HTML and shuffle the order
+          # Generate feeds HTML
           feeds_html=""
           for feed in _site/feeds/*.xml; do
-            filename=$(basename "$xml_file" .xml)
+            filename=$(basename "$feed" .xml)
             formatted_title=$(echo "$filename" | sed 's/-/ /g')
             
             # Look for local icon file with any supported extension
