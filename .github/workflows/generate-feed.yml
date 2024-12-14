@@ -61,6 +61,8 @@ jobs:
   update-feed:
     name: "Update ${{ matrix.podcasts.slug }} feed"
     needs: load-podcasts
+    outputs:
+      has_changes: ${{ steps.check_changes.outputs.has_changes }}
     env:
       usePrerelease: ${{ inputs.usePrerelease || false }}
     strategy:
@@ -110,11 +112,49 @@ jobs:
           max_attempts: 3
           retry_interval: 10
 
+      - name: Calculate feed hash
+        id: feed_hash
+        run: |
+          HASH=$(sha256sum "output/${{ matrix.podcasts.slug }}.xml" | cut -d ' ' -f1)
+          echo "hash=$HASH" >> $GITHUB_OUTPUT
+
+      - name: Check for feed changes
+        id: check_changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SITE_URL=$(gh api "repos/${GITHUB_REPOSITORY}/pages" --jq '.html_url')
+          
+          # Get current hash
+          CURRENT_HASH=$(sha256sum "output/${{ matrix.podcasts.slug }}.xml" | cut -d ' ' -f1)
+          
+          # Try to get deployed file hash
+          DEPLOYED_HASH=$(curl -sL --max-time 10 "${SITE_URL}feeds/${{ matrix.podcasts.slug }}.xml" | sha256sum | cut -d ' ' -f1 || echo "none")
+          
+          echo "Current hash: $CURRENT_HASH"
+          echo "Deployed hash: $DEPLOYED_HASH"
+          
+          if [ "$CURRENT_HASH" != "$DEPLOYED_HASH" ]; then
+            echo "Feed content changed"
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "No changes detected"
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+
       - name: Upload feed artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.podcasts.slug }}
           path: output/${{ matrix.podcasts.slug }}.xml
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Upload hash artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.podcasts.slug }}-hash
+          path: |
+            echo "${{ steps.feed_hash.outputs.hash }}" > ${{ matrix.podcasts.slug }}.hash
           retention-days: 1
 
   check-deployment:
@@ -135,71 +175,31 @@ jobs:
           mkdir -p _site/feeds
           mv _site/*.xml _site/feeds/
 
-      - name: Get last deployment time
-        id: last_deploy
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          LAST_DEPLOY=$(gh api "repos/$GITHUB_REPOSITORY/deployments" \
-            --jq '.[0].created_at // empty' \
-            -q '.[] | select(.environment == "github-pages") | .created_at' | head -n1)
-          if [ -z "$LAST_DEPLOY" ]; then
-            LAST_DEPLOY="1970-01-01T00:00:00Z"
-          fi
-          echo "last_deploy_time=$LAST_DEPLOY" >> $GITHUB_OUTPUT
-
-      - name: Check for new feeds or feed changes
+      - name: Check for deployment changes
         id: deployment_check
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          SITE_URL=$(gh api "repos/${GITHUB_REPOSITORY}/pages" --jq '.html_url')
           NEEDS_DEPLOY="false"
-
-          SITE_URL=$(gh api "repos/${GITHUB_REPOSITORY}/pages" --jq '.html_url')          
-          echo "Site URL: $SITE_URL"
-
-          LAST_DEPLOY="${{ steps.last_deploy.outputs.last_deploy_time }}"
-          LAST_DEPLOY_RFC822=$(date -d "$LAST_DEPLOY" "+%a, %d %b %Y %H:%M:%S %z")
-          LAST_DEPLOY_TS=$(date -d "$LAST_DEPLOY_RFC822" +%s)
           
-          # Get current feed count from website by counting feed-link classes
-          LIVE_COUNT=$(curl -sL --max-time 10 $SITE_URL | grep -o "class='feed-link'" | wc -l || echo "0")
-          
-          # Count current XML files
-          CURRENT_COUNT=$(find "_site/feeds" -name "*.xml" 2>/dev/null | wc -l)
-          
-          echo "Current XML file count: $CURRENT_COUNT"
-          echo "Live deployment feed count: $LIVE_COUNT"
-          
-          # Check if number of files changed
-          if [ "$CURRENT_COUNT" != "$LIVE_COUNT" ]; then
-            echo "Number of XML files changed (current: $CURRENT_COUNT, live: $LIVE_COUNT)"
+          # Check if any feed reported changes
+          if [[ "${{ contains(needs.update-feed.*.outputs.has_changes, 'true') }}" == "true" ]]; then
+            echo "Changes detected in one or more feeds"
             NEEDS_DEPLOY="true"
           else
-            # Check for updated files only if count hasn't changed
-            for file in _site/feeds/*.xml; do
-              echo "Processing file: $file"
-              
-              if [ ! -f "$file" ]; then
-                echo "Skipping non-existent file: $file"
-                continue
-              fi
-              
-              # Extract lastBuildDate using grep
-              LAST_BUILD=$(grep -oP '(?<=<lastBuildDate>)[^<]+' "$file" || echo "")
-              
-              if [ -n "$LAST_BUILD" ]; then
-                echo "Found lastBuildDate: $LAST_BUILD"
-                BUILD_TS=$(date -d "$LAST_BUILD" +%s 2>/dev/null || echo "0")
-                if [ "$BUILD_TS" != "0" ] && [ $BUILD_TS -gt $LAST_DEPLOY_TS ]; then
-                  echo "Feed $file has newer lastBuildDate ($LAST_BUILD) than last deployment ($LAST_DEPLOY_RFC822)"
-                  NEEDS_DEPLOY="true"
-                  break
-                fi
-              else
-                echo "No lastBuildDate found in $file"
-              fi
-            done
+            # Get current feed count from website
+            LIVE_COUNT=$(curl -sL --max-time 10 $SITE_URL | grep -o "class='feed-link'" | wc -l || echo "0")
+            CURRENT_COUNT=$(find "_site/feeds" -name "*.xml" 2>/dev/null | wc -l)
+            
+            echo "Current XML file count: $CURRENT_COUNT"
+            echo "Live deployment feed count: $LIVE_COUNT"
+            
+            # Check if number of files changed
+            if [ "$CURRENT_COUNT" != "$LIVE_COUNT" ]; then
+              echo "Number of XML files changed (current: $CURRENT_COUNT, live: $LIVE_COUNT)"
+              NEEDS_DEPLOY="true"
+            fi
           fi
           
           echo "needs_deploy=$NEEDS_DEPLOY" >> $GITHUB_OUTPUT
@@ -208,7 +208,7 @@ jobs:
     name: "Publish feeds"
     needs: [check-deployment]
     if: |
-      (needs.check-deployment.outputs.needs_deploy == 'true' || github.event_name == 'push')
+      needs.check-deployment.outputs.needs_deploy == 'true' || github.event_name == 'push'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
