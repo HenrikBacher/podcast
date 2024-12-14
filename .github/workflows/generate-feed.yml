@@ -179,6 +179,7 @@ jobs:
           # Check if any feed reported changes
           if [[ "${{ contains(needs.update-feed.*.outputs.has_changes, 'true') }}" == "true" ]]; then
             echo "Changes detected in one or more feeds"
+            echo "Needs deploy because of feed changes"
             NEEDS_DEPLOY="true"
           else
             # Get current feed count from website
@@ -191,6 +192,7 @@ jobs:
             # Check if number of files changed
             if [ "$CURRENT_COUNT" != "$LIVE_COUNT" ]; then
               echo "Number of XML files changed (current: $CURRENT_COUNT, live: $LIVE_COUNT)"
+              echo "Needs deploy because of file count change"
               NEEDS_DEPLOY="true"
             fi
           fi
@@ -201,7 +203,7 @@ jobs:
     name: "Publish feeds"
     needs: [check-deployment]
     if: |
-      needs.check-deployment.outputs.needs_deploy == 'true' || github.event_name == 'push'
+      (needs.check-deployment.outputs.needs_deploy == 'true' || github.event_name == 'push')
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
