@@ -174,13 +174,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           SITE_URL=$(gh api "repos/${GITHUB_REPOSITORY}/pages" --jq '.html_url')
-          NEEDS_DEPLOY="false"
-          
+                    
           # Check if any feed reported changes
           if [[ "${{ contains(needs.update-feed.*.outputs.has_changes, 'true') }}" == "true" ]]; then
             echo "Changes detected in one or more feeds"
             echo "Needs deploy because of feed changes"
-            NEEDS_DEPLOY="true"
+            echo "needs_deploy=true" >> $GITHUB_OUTPUT
           else
             # Get current feed count from website
             LIVE_COUNT=$(curl -sL --max-time 10 $SITE_URL | grep -o "class='feed-link'" | wc -l || echo "0")
@@ -193,12 +192,13 @@ jobs:
             if [ "$CURRENT_COUNT" != "$LIVE_COUNT" ]; then
               echo "Number of XML files changed (current: $CURRENT_COUNT, live: $LIVE_COUNT)"
               echo "Needs deploy because of file count change"
-              NEEDS_DEPLOY="true"
+              echo "needs_deploy=true" >> $GITHUB_OUTPUT
+            else
+              echo "No changes detected"
+              echo "needs_deploy=false" >> $GITHUB_OUTPUT
             fi
           fi
           
-          echo "needs_deploy=$NEEDS_DEPLOY" >> $GITHUB_OUTPUT
-
   publish-feed:
     name: "Publish feeds"
     needs: [check-deployment]
