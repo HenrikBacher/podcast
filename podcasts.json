@@ -89,6 +89,11 @@
       "slug": "fonk-det-er-podcast", 
       "urn": "urn:dr:radio:series:5fa15b12da351264f87b5ca2", 
       "image": "https://static.pocketcasts.com/discover/images/400/81002aa0-2453-0134-2f00-737688e4d168.jpg"
+    },
+    {
+      "slug": "korfix-og-kaffe", 
+      "urn": "urn:dr:radio:series:5fa25b1e330eac2f135b4d2b", 
+      "image": "https://static.pocketcasts.com/discover/images/400/51ae2f20-d6cd-0135-9e60-5bb073f92b78.jpg"
     }
   ]
 }
