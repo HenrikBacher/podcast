@@ -150,14 +150,6 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
-      - name: Upload hash artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.podcasts.slug }}-hash
-          path: |
-            echo "${{ steps.feed_hash.outputs.hash }}" > ${{ matrix.podcasts.slug }}.hash
-          retention-days: 1
-
   check-deployment:
     name: "Check if deployment is needed"
     needs: [update-feed]
