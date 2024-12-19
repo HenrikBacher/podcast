@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "dr1ommer"
-version = "1.0.28"
+version = "1.0.29"
 
 val javaVersion = 21
 val ktorVersion = "3.0.3"
