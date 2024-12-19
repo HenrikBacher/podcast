@@ -22,8 +22,13 @@ jobs:
       - name: Get version
         id: get_version
         run: |
-          # Extract base version from build.gradle.kts
-          BASE_VERSION=$(grep "^version = " build.gradle.kts | cut -d'"' -f2)
+          # Extract base version from build.gradle.kts - only the version line
+          BASE_VERSION=$(grep "^version = " build.gradle.kts | head -n 1 | cut -d'"' -f2)
+          if [ -z "$BASE_VERSION" ]; then
+            echo "Error: Could not extract version from build.gradle.kts"
+            exit 1
+          fi
+          
           # Split version into array
           IFS='.' read -ra PARTS <<< "$BASE_VERSION"
           COMMIT_HASH=$(git rev-parse --short HEAD)
@@ -36,11 +41,20 @@ jobs:
             PR_BODY="${{ github.event.pull_request.body }}"
             PR_NUMBER="${{ github.event.pull_request.number }}"
             
+            # Default to patch bump unless explicitly specified
+            FOUND_VERSION_INFO=false
+            
             # Override next version based on PR template
             if [[ $PR_BODY == *"[x] major"* ]]; then
               NEXT_VERSION="$((PARTS[0] + 1)).0.0"
+              FOUND_VERSION_INFO=true
             elif [[ $PR_BODY == *"[x] minor"* ]]; then
               NEXT_VERSION="${PARTS[0]}.$((PARTS[1] + 1)).0"
+              FOUND_VERSION_INFO=true
+            fi
+            
+            if [[ "$FOUND_VERSION_INFO" == "false" ]]; then
+              echo "No version bump info found in PR, defaulting to patch bump"
             fi
             
             # For PR builds, use special version format
@@ -84,7 +98,7 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
-      
+          
       - uses: actions/cache@v4
         with:
           path: |
