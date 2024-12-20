@@ -31,7 +31,9 @@ jobs:
           
           if [ "${{ github.event_name }}" == "pull_request" ]; then
             PR_NUMBER="${{ github.event.pull_request.number }}"
-            PR_DESCRIPTION=$(gh api /repos/${{ github.repository }}/pulls/$PR_NUMBER --jq .body)
+            PR_DATA=$(gh api /repos/${{ github.repository }}/pulls/$PR_NUMBER --jq '{body: .body, title: .title}')
+            PR_DESCRIPTION=$(echo "$PR_DATA" | jq -r .body)
+            PR_TITLE=$(echo "$PR_DATA" | jq -r .title)
             
             if [[ $PR_DESCRIPTION == *"- [x] major"* ]]; then
               NEW_VERSION="$((major + 1)).0.0"
@@ -40,8 +42,22 @@ jobs:
             else
               NEW_VERSION="${major}.${minor}.$((patch + 1))"
             fi
+
+            # Clean up PR description for release notes
+            RELEASE_NOTES=$(echo "$PR_DESCRIPTION" | sed -n '/^## Description/,/^## Version Bump/p' | sed '/^## /d' | sed '/^$/d' | sed '/^- \[ \]/d')
+            echo "description<<EOF" >> $GITHUB_OUTPUT
+            echo "$PR_TITLE" >> $GITHUB_OUTPUT
+            echo "" >> $GITHUB_OUTPUT
+            echo "$RELEASE_NOTES" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
           else
             NEW_VERSION="${major}.${minor}.$((patch + 1))"
+            COMMIT_MSG=$(git log -1 --pretty=%B)
+            echo "description<<EOF" >> $GITHUB_OUTPUT
+            echo "Direct commit to main branch" >> $GITHUB_OUTPUT
+            echo "" >> $GITHUB_OUTPUT
+            echo "$COMMIT_MSG" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
           fi
           
           echo "New version: $NEW_VERSION"
@@ -69,13 +85,11 @@ jobs:
           chmod +x ./gradlew
           ./gradlew build
 
-      - name:  Create Release
+      - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.get_version.outputs.version }}
           prerelease: ${{ steps.get_version.outputs.is_prerelease }}
-          body: |            
-            Changes in this release:
-            ${{ steps.get_version.outputs.description }}
+          body: ${{ steps.get_version.outputs.description }}
           files: |
             ./ommer/build/libs/ommer.jar
