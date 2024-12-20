@@ -41,28 +41,33 @@ jobs:
             PR_BODY="${{ github.event.pull_request.body }}"
             PR_NUMBER="${{ github.event.pull_request.number }}"
             
-            # Default to patch bump unless explicitly specified
-            FOUND_VERSION_INFO=false
-            
-            # Override next version based on PR template
-            if [[ $PR_BODY == *"[x] major"* ]]; then
-              NEXT_VERSION="$((PARTS[0] + 1)).0.0"
-              FOUND_VERSION_INFO=true
-            elif [[ $PR_BODY == *"[x] minor"* ]]; then
-              NEXT_VERSION="${PARTS[0]}.$((PARTS[1] + 1)).0"
-              FOUND_VERSION_INFO=true
-            fi
-            
-            if [[ "$FOUND_VERSION_INFO" == "false" ]]; then
-              echo "No version bump info found in PR, defaulting to patch bump"
+            # Check if this is a Dependabot PR
+            if [[ "${{ github.actor }}" == "dependabot[bot]" ]]; then
+              # For Dependabot PRs, always use patch version
+              DESCRIPTION="Automated dependency update by Dependabot"
+            else
+              # For manual PRs, check version bump type
+              FOUND_VERSION_INFO=false
+              
+              if [[ $PR_BODY == *"[x] major"* ]]; then
+                NEXT_VERSION="$((PARTS[0] + 1)).0.0"
+                FOUND_VERSION_INFO=true
+              elif [[ $PR_BODY == *"[x] minor"* ]]; then
+                NEXT_VERSION="${PARTS[0]}.$((PARTS[1] + 1)).0"
+                FOUND_VERSION_INFO=true
+              fi
+              
+              if [[ "$FOUND_VERSION_INFO" == "false" ]]; then
+                echo "No version bump info found in PR, defaulting to patch bump"
+              fi
+              
+              # Extract description section from PR body
+              DESCRIPTION=$(echo "$PR_BODY" | sed -n '/## Description/,/##/p' | sed '1d;$d')
             fi
             
             # For PR builds, use special version format
             VERSION="$BASE_VERSION-PR${PR_NUMBER}-${COMMIT_HASH}"
             IS_PRERELEASE=true
-            
-            # Extract description section from PR body
-            DESCRIPTION=$(echo "$PR_BODY" | sed -n '/## Description/,/##/p' | sed '1d;$d')
             
           elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
             # On main branch, use the determined next version
