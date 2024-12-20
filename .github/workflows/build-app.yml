@@ -19,73 +19,34 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Get version
+      - name: Get Version
         id: get_version
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          # Extract base version from build.gradle.kts - only the version line
-          BASE_VERSION=$(grep "^version = " build.gradle.kts | head -n 1 | cut -d'"' -f2)
-          if [ -z "$BASE_VERSION" ]; then
-            echo "Error: Could not extract version from build.gradle.kts"
-            exit 1
-          fi
+          CURRENT_VERSION=$(grep "version = \".*\"" build.gradle.kts | cut -d'"' -f2)
+          echo "Current version: $CURRENT_VERSION"
           
-          # Split version into array
-          IFS='.' read -ra PARTS <<< "$BASE_VERSION"
-          COMMIT_HASH=$(git rev-parse --short HEAD)
-          IS_PRERELEASE=false
+          IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
           
-          # Set next version (patch by default)
-          NEXT_VERSION="${PARTS[0]}.${PARTS[1]}.$((PARTS[2] + 1))"
-          
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            PR_BODY="${{ github.event.pull_request.body }}"
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
             PR_NUMBER="${{ github.event.pull_request.number }}"
+            PR_DESCRIPTION=$(gh api /repos/${{ github.repository }}/pulls/$PR_NUMBER --jq .body)
             
-            # For Dependabot PRs, always use patch version
-            if [[ "${{ github.actor }}" == "dependabot[bot]" ]]; then
-              DESCRIPTION="Automated dependency update by Dependabot"
+            if [[ $PR_DESCRIPTION == *"- [x] major"* ]]; then
+              NEW_VERSION="$((major + 1)).0.0"
+            elif [[ $PR_DESCRIPTION == *"- [x] minor"* ]]; then
+              NEW_VERSION="${major}.$((minor + 1)).0"
             else
-              # For manual PRs, check version bump type
-              if [[ $PR_BODY == *"[x] major"* ]]; then
-                NEXT_VERSION="$((PARTS[0] + 1)).0.0"
-              elif [[ $PR_BODY == *"[x] minor"* ]]; then
-                NEXT_VERSION="${PARTS[0]}.$((PARTS[1] + 1)).0"
-              fi
-              
-              # Extract description section from PR body
-              DESCRIPTION=$(echo "$PR_BODY" | sed -n '/## Description/,/##/p' | sed '1d;$d')
+              NEW_VERSION="${major}.${minor}.$((patch + 1))"
             fi
-            
-            # For PR builds, use special version format
-            VERSION="$BASE_VERSION-PR${PR_NUMBER}-${COMMIT_HASH}"
-            IS_PRERELEASE=true
-          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            VERSION="$NEXT_VERSION"
-            IS_PRERELEASE=false
           else
-            BRANCH_NAME=$(echo "${{ github.ref }}" | sed 's/refs\/heads\///')
-            VERSION="$BASE_VERSION-${BRANCH_NAME}-${COMMIT_HASH}"
-            IS_PRERELEASE=true
+            NEW_VERSION="${major}.${minor}.$((patch + 1))"
           fi
           
-          # Update version in build.gradle.kts if on main
-          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            sed -i "s/^version = .*/version = \"$VERSION\"/" build.gradle.kts
-            git config --global user.name "GitHub Actions"
-            git config --global user.email "actions@github.com"
-            git add build.gradle.kts
-            git commit -m "Bump version to $VERSION [skip ci]" || true
-            git push || true
-          fi
-          
-          # Set outputs
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "is_prerelease=$IS_PRERELEASE" >> $GITHUB_OUTPUT
-          [[ -n "$DESCRIPTION" ]] && {
-            echo "description<<EOF" >> $GITHUB_OUTPUT
-            echo "$DESCRIPTION" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
-          }
+          echo "New version: $NEW_VERSION"
+          sed -i "s/version = \".*\"/version = \"$NEW_VERSION\"/" build.gradle.kts
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
       - uses: actions/setup-java@v4
         with:

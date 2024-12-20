@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "dr1ommer"
-version = ""
+version = "1.1.0"
 
 val javaVersion = 21
 val ktorVersion = "3.0.3"
@@ -38,7 +38,6 @@ allprojects {
         jvmToolchain(javaVersion)
     }
 }
-
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
     compilerOptions {
