@@ -94,6 +94,16 @@
       "slug": "flyvende-tallerken",
       "urn": "urn:dr:radio:series:600173276c12863ced19ea7e",
       "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:66f29a3bb75d19480fa4ae94.jpg"
+    }, 
+    {
+      "slug": "tabloid",
+      "urn": "urn:dr:radio:series:618c5172c928eef30f91d62d",
+      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:66f55ddf075f927899fe2668.jpg"
+    }, 
+    {
+      "slug": "ugens-gaest",
+      "urn": "urn:dr:radio:series:5fa2699c330eac2f135b9988",
+      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:66f487affd6dd215a97c4c36.jpg"
     }
   ]
 }
