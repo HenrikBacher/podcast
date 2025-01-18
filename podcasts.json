@@ -66,16 +66,6 @@
       "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6617e347fc491910acd58311.jpg"
     },
     {
-      "slug": "krig", 
-      "urn": "urn:dr:radio:series:63bbfd20d2052f8a013504ce", 
-      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:66f2977eb75d19480fa4a3a3.jpg"
-    },
-    {
-      "slug": "kvinder-i-krig", 
-      "urn": "urn:dr:radio:series:600173506c12863ced19eb55", 
-      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:66f87c51075f9278990a9c2c.jpg"
-    },
-    {
       "slug": "p1-debat",
       "urn": "urn:dr:radio:series:5fa26a12330eac2f135b9c24",
       "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:66f27e90b75d19480fa4401d.jpg"
