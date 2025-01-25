@@ -28,6 +28,7 @@ allprojects {
         implementation("ch.qos.logback:logback-classic:1.5.16")
         implementation("com.google.code.gson:gson:2.11.0")
         implementation("org.jetbrains.kotlinx:kotlinx-cli:0.3.6")
+        implementation("com.rometools:rome:2.1.0")
     }
 
     tasks.test {

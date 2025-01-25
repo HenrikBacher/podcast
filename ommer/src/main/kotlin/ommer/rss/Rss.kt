@@ -1,5 +1,12 @@
 package ommer.rss
 
+import com.rometools.rome.feed.module.ITunes
+import com.rometools.rome.feed.synd.*
+import com.rometools.rome.io.SyndFeedOutput
+import org.slf4j.LoggerFactory
+import java.io.File
+import java.util.*
+
 // Java standard
 import java.io.File
 
@@ -70,98 +77,51 @@ private val log = LoggerFactory.getLogger(Feed::class.java)
 
 fun Feed.generate(feedFile: File) {
     try {
-        log.info("Creating XML document for feed: $title")
-        val documentBuilder = DocumentBuilderFactory.newInstance().apply {
-            isNamespaceAware = true
-        }.newDocumentBuilder()
-        val document = documentBuilder.newDocument()
-        document.xmlStandalone = true
-        
-        log.debug("Building RSS feed structure")
-        DSL(document).run {
-            element("rss") {
-                setAttribute("xmlns:atom", "http://www.w3.org/2005/Atom")
-                setAttribute("xmlns:media", "http://search.yahoo.com/mrss/")
-                setAttribute("xmlns:itunes", "http://www.itunes.com/dtds/podcast-1.0.dtd")
-                setAttribute("version", "2.0")
-
-                element("channel") {
-                    element("atom:link") {
-                        setAttribute("href", feedUrl)
-                        setAttribute("rel", "self")
-                        setAttribute("type", "application/rss+xml")
+        log.info("Creating RSS feed for: $title")
+        val feed = SyndFeedImpl().apply {
+            feedType = "rss_2.0"
+            title = this@generate.title
+            link = this@generate.link
+            description = this@generate.description
+            language = language
+            copyright = copyright
+            publishedDate = Calendar.getInstance().time
+            modules = listOf(ITunes.Builder().apply {
+                withAuthor(author)
+                withImage(imageUrl)
+                withExplicit(explicit)
+                withOwnerEmail(email)
+                withOwnerName(ownerName)
+                withBlock(true)
+                withNewFeedUrl(feedUrl)
+            }.build())
+            
+            entries = items.map { item ->
+                SyndEntryImpl().apply {
+                    title = item.title
+                    link = item.link
+                    description = SyndContentImpl().apply { 
+                        type = "text/plain"
+                        value = item.description 
                     }
-                    text("title", title)
-                    text("link", link)
-                    text("description", description)
-                    text("language", language)
-                    text("copyright", copyright)
-                    text("managingEditor", email)
-                    text("lastBuildDate", lastBuildDate)
-                    text("itunes:explicit", if (explicit) "yes" else "no")
-                    text("itunes:author", author)
-                    text("itunes:block", "yes")
-                    element("itunes:owner") {
-                        text("itunes:email", email)
-                        text("itunes:name", ownerName)
-                    }
-                    text("itunes:new-feed-url", feedUrl)
-                    element("itunes:image") {
-                        setAttribute("href", imageUrl)
-                    }
-                    element("image") {
-                        text("url", imageUrl)
-                        text("title", title)
-                        text("link", link)
-                    }
-                    text("itunes:category", category)
-                    text("media:restriction", mediaRestrictionCountry) {
-                        setAttribute("type", "country")
-                        setAttribute("relationship", "allow")
-                    }
-                    items.forEach { i ->
-                        i.run {
-                            element("item") {
-                                text("guid", guid) { setAttribute("isPermalink", "false") }
-                                text("link", link)
-                                text("title", title)
-                                text("description", description)
-                                text("pubDate", pubDate)
-                                text("explicit", if (explicit) "yes" else "no")
-                                text("itunes:author", author)
-                                text("itunes:duration", duration)
-                                text("media:restriction", mediaRestrictionCountry) {
-                                    setAttribute("type", "country")
-                                    setAttribute("relationship", "allow")
-                                }
-                                element("enclosure") {
-                                    setAttribute("url", enclosureUrl)
-                                    setAttribute("type", "audio/mpeg")
-                                    setAttribute("length", enclosureByteLength.toString())
-                                }
-                            }
-                        }
-                    }
+                    enclosures = listOf(SyndEnclosureImpl().apply {
+                        url = item.enclosureUrl
+                        type = "audio/mpeg"
+                        length = item.enclosureByteLength
+                    })
+                    modules = listOf(ITunes.Builder().apply {
+                        withAuthor(item.author)
+                        withDuration(item.duration)
+                        withExplicit(item.explicit)
+                    }.build())
                 }
             }
         }
-        
-        log.debug("Configuring XML transformer")
-        val transformer = TransformerFactory.newInstance().newTransformer().apply {
-            setOutputProperty(OutputKeys.INDENT, "yes")
-            setOutputProperty(OutputKeys.METHOD, "xml")
-            setOutputProperty(OutputKeys.ENCODING, "UTF-8")
-            setOutputProperty("{http://xml.apache.org/xslt}indent-amount", "2")
-            setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "no")
-            setOutputProperty(OutputKeys.STANDALONE, "yes")
+
+        feedFile.bufferedWriter(Charsets.UTF_8).use { writer ->
+            SyndFeedOutput().output(feed, writer)
         }
-        
-        log.info("Writing feed to file: ${feedFile.absolutePath}")
-        val source = DOMSource(document)
-        feedFile.bufferedWriter(Charsets.UTF_8, DEFAULT_BUFFER_SIZE).use { writer ->
-            transformer.transform(source, StreamResult(writer))
-        }
-        log.info("Successfully wrote feed file")
+        log.info("Successfully wrote feed to: ${feedFile.absolutePath}")
         
     } catch (e: Exception) {
         log.error("Failed to generate RSS feed", e)
