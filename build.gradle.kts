@@ -7,7 +7,7 @@ group = "dr1ommer"
 version = "1.1.1"
 
 val javaVersion = 21
-val ktorVersion = "3.1.0"
+val ktorVersion = "3.1.1"
 val coroutinesVersion = "1.10.1"
 
 allprojects {
