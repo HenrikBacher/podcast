@@ -8,7 +8,7 @@ version = "1.1.9"
 
 val javaVersion = 21
 val ktorVersion = "3.1.2"
-val coroutinesVersion = "1.10.1"
+val coroutinesVersion = "1.10.2"
 
 allprojects {
     apply(plugin = "kotlin")
