@@ -66,16 +66,6 @@
       "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6617e347fc491910acd58311.jpg"
     },
     {
-      "slug": "krig", 
-      "urn": "urn:dr:radio:series:63bbfd20d2052f8a013504ce", 
-      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:66f2977eb75d19480fa4a3a3.jpg"
-    },
-    {
-      "slug": "kvinder-i-krig", 
-      "urn": "urn:dr:radio:series:600173506c12863ced19eb55", 
-      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:66f87c51075f9278990a9c2c.jpg"
-    },
-    {
       "slug": "p1-debat",
       "urn": "urn:dr:radio:series:5fa26a12330eac2f135b9c24",
       "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:66f27e90b75d19480fa4401d.jpg"
@@ -100,6 +90,21 @@
       "urn": "urn:dr:radio:series:5fa2605b330eac2f135b6a3f",
       "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:66f5db0e075f927899001a02.jpg"
     }, 
+    {
+      "slug": "flyvende-tallerken",
+      "urn": "urn:dr:radio:series:600173276c12863ced19ea7e",
+      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:66f29a3bb75d19480fa4ae94.jpg"
+    }, 
+    {
+      "slug": "tabloid",
+      "urn": "urn:dr:radio:series:618c5172c928eef30f91d62d",
+      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:66f55ddf075f927899fe2668.jpg"
+    }, 
+    {
+      "slug": "ugens-gaest",
+      "urn": "urn:dr:radio:series:5fa2699c330eac2f135b9988",
+      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:66f487affd6dd215a97c4c36.jpg"
+    },
     {
       "slug": "tyran",
       "urn": "urn:dr:radio:series:65857ad8163dfa22d54c3d73",
