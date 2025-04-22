@@ -99,6 +99,11 @@
       "slug": "vildt-naturligt",
       "urn": "urn:dr:radio:series:5fa2605b330eac2f135b6a3f",
       "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:66f5db0e075f927899001a02.jpg"
+    }, 
+    {
+      "slug": "tyran",
+      "urn": "urn:dr:radio:series:65857ad8163dfa22d54c3d73",
+      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:67e4690acf7296d2cea5a482.jpg"
     }
   ]
 }
