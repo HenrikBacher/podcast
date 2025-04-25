@@ -26,7 +26,7 @@ allprojects {
         implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutinesVersion")
         implementation("org.slf4j:slf4j-simple:2.0.17")
         implementation("ch.qos.logback:logback-classic:1.5.18")
-        implementation("com.google.code.gson:gson:2.13.0")
+        implementation("com.google.code.gson:gson:2.13.1")
         implementation("org.jetbrains.kotlinx:kotlinx-cli:0.3.6")
     }
 
