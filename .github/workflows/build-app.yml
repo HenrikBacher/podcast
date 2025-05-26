@@ -26,7 +26,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT_VERSION=$(grep "<Version>" OmmerCSharp/Ommer/Ommer.csproj | sed -n 's/.*<Version>\(.*\)<\/Version>.*/\1/p' || echo "1.0.0")
+          CURRENT_VERSION=$(grep -oP '<Version>\K[^<]+' OmmerCSharp/Ommer/Ommer.csproj || echo "1.0.0")
           echo "Current version: $CURRENT_VERSION"
           
           IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
