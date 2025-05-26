@@ -26,7 +26,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT_VERSION=$(grep "version = \".*\"" build.gradle.kts | cut -d'"' -f2)
+          CURRENT_VERSION=$(grep "<Version>" OmmerCSharp/Ommer/Ommer.csproj | sed -n 's/.*<Version>\(.*\)<\/Version>.*/\1/p' || echo "1.0.0")
           echo "Current version: $CURRENT_VERSION"
           
           IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
@@ -44,7 +44,7 @@ jobs:
               NEW_VERSION="${major}.$((minor + 1)).0"
               echo "type=minor" >> $GITHUB_OUTPUT
             else
-              NEW_VERSION="${major}.${minor}.$((patch + 1))"
+              NEW_VERSION="${major}.${minor}.$((patch + 1)}"
               echo "type=patch" >> $GITHUB_OUTPUT
             fi
 
@@ -71,38 +71,28 @@ jobs:
             echo "EOF" >> $GITHUB_OUTPUT
             
             # Actually update version file on merge
-            sed -i "s/version = \".*\"/version = \"$NEW_VERSION\"/" build.gradle.kts
+            sed -i "s/<Version>.*<\/Version>/<Version>$NEW_VERSION<\/Version>/" OmmerCSharp/Ommer/Ommer.csproj
           fi
           
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
-      - uses: actions/setup-java@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
         with:
-          distribution: temurin
-          java-version: 21
+          dotnet-version: '8.0.x'
           
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/configuration-cache
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
-
-      - name: Build app
+      - name: Build and publish app
         run: |
-          java --version
-          chmod +x ./gradlew
-          ./gradlew build
+          dotnet --version
+          cd OmmerCSharp/Ommer
+          dotnet publish -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -o ../../publish/
 
       - name: Commit version bump
         if: github.event_name == 'push'
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add build.gradle.kts
+          git add OmmerCSharp/Ommer/Ommer.csproj
           git commit -m "Bump version to ${{ steps.get_version.outputs.version }}"
           git push
 
@@ -113,4 +103,4 @@ jobs:
           tag_name: v${{ steps.get_version.outputs.version }}
           body: ${{ steps.get_version.outputs.description }}
           files: |
-            ./ommer/build/libs/ommer.jar
+            ./publish/Ommer
