@@ -21,65 +21,79 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Get Version
-        id: get_version
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          CURRENT_VERSION=$(grep -oP '<Version>\K[^<]+' OmmerCSharp/Ommer/Ommer.csproj || echo "1.0.0")
-          echo "Current version: $CURRENT_VERSION"
-          
-          IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
-          
-          if [ "${{ github.event_name }}" == "pull_request" ]; then
-            PR_NUMBER="${{ github.event.pull_request.number }}"
-            PR_DATA=$(gh api /repos/${{ github.repository }}/pulls/$PR_NUMBER --jq '{body: .body, title: .title}')
-            PR_DESCRIPTION=$(echo "$PR_DATA" | jq -r .body)
-            PR_TITLE=$(echo "$PR_DATA" | jq -r .title)
-            
-            if [[ $PR_DESCRIPTION == *"- [x] major"* ]]; then
-              NEW_VERSION="$((major + 1)).0.0"
-              echo "type=major" >> $GITHUB_OUTPUT
-            elif [[ $PR_DESCRIPTION == *"- [x] minor"* ]]; then
-              NEW_VERSION="${major}.$((minor + 1)).0"
-              echo "type=minor" >> $GITHUB_OUTPUT
-            else
-              NEW_VERSION="${major}.${minor}.$((patch + 1)}"
-              echo "type=patch" >> $GITHUB_OUTPUT
-            fi
-
-            # Clean up PR description for release notes
-            RELEASE_NOTES=$(echo "$PR_DESCRIPTION" | sed -n '/^## Description/,/^## Version Bump/p' | sed '/^## /d' | sed '/^$/d' | sed '/^- \[ \]/d')
-            echo "description<<EOF" >> $GITHUB_OUTPUT
-            echo "$PR_TITLE" >> $GITHUB_OUTPUT
-            echo "" >> $GITHUB_OUTPUT
-            echo "$RELEASE_NOTES" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
-          else
-            # On merge/push, get the PR type from commit message
-            PR_TITLE=$(git log -1 --pretty=%B)
-            if [[ $PR_TITLE == *"[major]"* ]]; then
-              NEW_VERSION="$((major + 1)).0.0"
-            elif [[ $PR_TITLE == *"[minor]"* ]]; then
-              NEW_VERSION="${major}.$((minor + 1)).0"
-            else
-              NEW_VERSION="${major}.${minor}.$((patch + 1))"
-            fi
-            
-            echo "description<<EOF" >> $GITHUB_OUTPUT
-            echo "$PR_TITLE" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
-            
-            # Actually update version file on merge
-            sed -i "s/<Version>.*<\/Version>/<Version>$NEW_VERSION<\/Version>/" OmmerCSharp/Ommer/Ommer.csproj
-          fi
-          
-          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
-
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+
+      - name: Get version and bump info
+        id: get_version
+        run: |
+          cd OmmerCSharp/Ommer
+          CURRENT_VERSION=$(grep '<Version>' Ommer.csproj | sed 's/.*<Version>\(.*\)<\/Version>.*/\1/')
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            # For PR builds, use current version with commit suffix
+            SHORT_SHA=$(echo ${{ github.event.pull_request.head.sha }} | cut -c1-7)
+            VERSION_WITH_SUFFIX="${CURRENT_VERSION}-pr-${SHORT_SHA}"
+            echo "version=$VERSION_WITH_SUFFIX" >> $GITHUB_OUTPUT
+            echo "description=Pre-release build from PR #${{ github.event.number }}" >> $GITHUB_OUTPUT
+            echo "should_bump=false" >> $GITHUB_OUTPUT
+          else
+            # For push to main, determine version bump from PR body
+            BUMP_TYPE="patch"  # default
+            
+            # Get the most recent merged PR
+            LATEST_PR=$(gh pr list --state merged --limit 1 --json number,body --jq '.[0]')
+            if [ "$LATEST_PR" != "null" ]; then
+              PR_BODY=$(echo "$LATEST_PR" | jq -r '.body // ""')
+              
+              if echo "$PR_BODY" | grep -q "\[x\] major"; then
+                BUMP_TYPE="major"
+              elif echo "$PR_BODY" | grep -q "\[x\] minor"; then
+                BUMP_TYPE="minor"
+              elif echo "$PR_BODY" | grep -q "\[x\] patch"; then
+                BUMP_TYPE="patch"
+              fi
+            fi
+            
+            # Parse current version
+            IFS='.' read -r -a VERSION_PARTS <<< "$CURRENT_VERSION"
+            MAJOR=${VERSION_PARTS[0]}
+            MINOR=${VERSION_PARTS[1]}
+            PATCH=${VERSION_PARTS[2]}
+            
+            # Bump version based on type
+            case $BUMP_TYPE in
+              "major")
+                MAJOR=$((MAJOR + 1))
+                MINOR=0
+                PATCH=0
+                ;;
+              "minor")
+                MINOR=$((MINOR + 1))
+                PATCH=0
+                ;;
+              "patch")
+                PATCH=$((PATCH + 1))
+                ;;
+            esac
+            
+            NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+            echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+            echo "description=Release $NEW_VERSION ($BUMP_TYPE bump)" >> $GITHUB_OUTPUT
+            echo "should_bump=true" >> $GITHUB_OUTPUT
+            echo "bump_type=$BUMP_TYPE" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update version in csproj
+        if: github.event_name == 'push' && steps.get_version.outputs.should_bump == 'true'
+        run: |
+          cd OmmerCSharp/Ommer
+          sed -i "s/<Version>.*<\/Version>/<Version>${{ steps.get_version.outputs.version }}<\/Version>/" Ommer.csproj
           
       - name: Build and publish app
         run: |
@@ -88,7 +102,7 @@ jobs:
           dotnet publish -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -o ../../publish/
 
       - name: Commit version bump
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && steps.get_version.outputs.should_bump == 'true'
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
@@ -97,7 +111,7 @@ jobs:
           git push
 
       - name: Create Release
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && steps.get_version.outputs.should_bump == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.get_version.outputs.version }}
