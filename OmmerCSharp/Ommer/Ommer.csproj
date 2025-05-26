@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>Ommer</AssemblyName>
-    <Version>1.0.0</Version>
+    <Version>v1.1.17</Version>
   </PropertyGroup>
 
   <ItemGroup>

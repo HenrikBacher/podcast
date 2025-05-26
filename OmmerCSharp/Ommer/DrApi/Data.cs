@@ -20,7 +20,7 @@ public record Show(
     [property: JsonPropertyName("isAvailableOnDemand")] string? IsAvailableOnDemand,
     [property: JsonPropertyName("latestEpisodeStartTime")] string LatestEpisodeStartTime,
     [property: JsonPropertyName("learnId")] string? LearnId,
-    [property: JsonPropertyName("numberOfEpisodes")] string? NumberOfEpisodes,
+    [property: JsonPropertyName("numberOfEpisodes")] int? NumberOfEpisodes,
     [property: JsonPropertyName("ocsUrn")] string? OcsUrn,
     [property: JsonPropertyName("podcastUrl")] string? PodcastUrl,
     [property: JsonPropertyName("presentationType")] string? PresentationType,
