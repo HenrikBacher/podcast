@@ -75,17 +75,6 @@ jobs:
           key: ${{ runner.os }}-ommer-${{ github.run_id }}
           restore-keys: |
             ${{ runner.os }}-ommer-
-        
-      - name: Download .NET executable if not cached
-        if: steps.get_latest_release.outputs.cache-hit != 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          RELEASE_URL=$(gh api "repos/$GITHUB_REPOSITORY/releases" \
-              --jq "[.[] | select(.prerelease == $usePrerelease)][0].assets[0].browser_download_url")
-          echo "Downloading from: $RELEASE_URL"
-          curl -L $RELEASE_URL -o Ommer
-          chmod +x Ommer
 
       - name: Get host URL
         id: get_host_url
