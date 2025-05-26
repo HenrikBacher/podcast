@@ -17,7 +17,7 @@ public record Show(
     [property: JsonPropertyName("description")] string Description,
     [property: JsonPropertyName("id")] string Id,
     [property: JsonPropertyName("imageAssets")] List<ImageAsset> ImageAssets,
-    [property: JsonPropertyName("isAvailableOnDemand")] string? IsAvailableOnDemand,
+    [property: JsonPropertyName("isAvailableOnDemand")] bool? IsAvailableOnDemand,
     [property: JsonPropertyName("latestEpisodeStartTime")] string LatestEpisodeStartTime,
     [property: JsonPropertyName("learnId")] string? LearnId,
     [property: JsonPropertyName("numberOfEpisodes")] int? NumberOfEpisodes,
