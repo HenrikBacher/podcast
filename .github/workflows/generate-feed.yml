@@ -83,7 +83,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p app
-          gh release download "${{ steps.get_release_tag.outputs.tag }}" --repo "$GITHUB_REPOSITORY" --pattern "DrPodcast.dll" --dir app
+          gh release download "${{ steps.get_release_tag.outputs.tag }}" --repo "$GITHUB_REPOSITORY" --pattern "DrPodcast" --dir app
           gh release download "${{ steps.get_release_tag.outputs.tag }}" --repo "$GITHUB_REPOSITORY" --pattern "podcasts.json" --dir app || true
 
       - name: Run feed generator
