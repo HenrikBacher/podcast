@@ -8,7 +8,7 @@
     {
       "slug": "genstart-dox",
       "urn": "urn:dr:radio:series:65cb475de80d2a267cd12ae9",
-      "image": "https://asset.dr.dk/drlyd/images/urn:dr:radio:image:6821f2ad002e131c0a93fb95?im=AspectCrop%3D%28384%2C384%29%2CxPosition%3D.5%2CyPosition%3D.5%3BResize%3D%28384%2C384%29"
+      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:67001f85fd6dd215a9aaa921.jpg"
     },
     {
       "slug": "sara-og-monopolet",
@@ -109,11 +109,6 @@
       "slug": "tyran",
       "urn": "urn:dr:radio:series:65857ad8163dfa22d54c3d73",
       "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:67e4690acf7296d2cea5a482.jpg"
-    }, 
-    {
-      "slug": "med-oererne-paa-stilke",
-      "urn": "urn:dr:radio:series:67ea4457f9117b6029e933bb",
-      "image": "https://asset.dr.dk/drlyd/images/urn:dr:radio:image:67ea8ebaee7033184f6b8bec?im=AspectCrop%3D%28172%2C172%29%2CxPosition%3D.5%2CyPosition%3D.5%3BResize%3D%28172%2C172%29"
     }
   ]
 }

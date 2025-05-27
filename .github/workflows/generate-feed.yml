@@ -59,61 +59,31 @@ jobs:
           retention-days: 1
 
   update-feed:
-    name: "Update ${{ matrix.podcasts.slug }} feed"
+    name: "Update feeds"
     needs: load-podcasts
-    env:
-      usePrerelease: ${{ inputs.usePrerelease || false }}
-    strategy:
-      fail-fast: true
-      matrix: ${{ fromJson(needs.load-podcasts.outputs.podcasts) }}
     runs-on: ubuntu-24.04
     steps:
-      - name: Get latest release
-        id: get_latest_release
-        uses: actions/cache@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download app artifact
+        uses: actions/download-artifact@v4
         with:
-          path: ommer.jar
-          key: ${{ runner.os }}-ommer-${{ github.run_id }}
-          restore-keys: |
-            ${{ runner.os }}-ommer-
-        
-      - name: Download JAR if not cached
-        if: steps.get_latest_release.outputs.cache-hit != 'true'
+          name: drpodcast
+          path: app
+
+      - name: Run feed generator
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          API_KEY: ${{ secrets.API_KEY }}
+          BASE_URL: ${{ secrets.BASE_URL }}
         run: |
-          RELEASE_URL=$(gh api "repos/$GITHUB_REPOSITORY/releases" \
-              --jq "[.[] | select(.prerelease == $usePrerelease)][0].assets[0].browser_download_url")
-          echo "Downloading from: $RELEASE_URL"
-          curl -L $RELEASE_URL -o ommer.jar
+          dotnet ./app/DrPodcast.dll --podcasts podcasts.json
 
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-package: jre
-          java-version: 21
-
-      - name: Get host URL
-        id: get_host_url
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          SITE_URL=$(gh api "repos/${GITHUB_REPOSITORY}/pages" --jq '.html_url')
-          echo "host_url=$SITE_URL" >> $GITHUB_OUTPUT
-
-      - name: Execute parser for ${{ matrix.podcasts.slug }} feed
-        uses: corrupt952/actions-retry-command@v1.0.7
-        with:
-          command: java -Xmx2048m -XX:+UseParallelGC -jar ./ommer.jar --slug ${{ matrix.podcasts.slug }} --urn ${{ matrix.podcasts.urn }} --imageUrl ${{ matrix.podcasts.image }} --apiKey ${{ secrets.API_KEY }} --baseUrl ${{ steps.get_host_url.outputs.host_url }}
-          working_directory: ./ 
-          max_attempts: 3
-          retry_interval: 10
-
-      - name: Upload feed artifact
+      - name: Upload feed artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.podcasts.slug }}
-          path: output/${{ matrix.podcasts.slug }}.xml
+          name: feeds
+          path: output/*.xml
           retention-days: 1
           if-no-files-found: error
 
