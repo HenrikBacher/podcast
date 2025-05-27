@@ -66,11 +66,25 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download app artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: drpodcast
-          path: app
+      - name: Determine release tag
+        id: get_release_tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ github.event.inputs.usePrerelease }}" = "true" ]; then
+            TAG=$(gh release list --limit 10 --repo "$GITHUB_REPOSITORY" --json tagName,isPrerelease | jq -r '.[] | select(.isPrerelease==true) | .tagName' | head -n1)
+          else
+            TAG=$(gh release list --limit 10 --repo "$GITHUB_REPOSITORY" --json tagName,isPrerelease | jq -r '.[] | select(.isPrerelease==false) | .tagName' | head -n1)
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Download app artifact from release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p app
+          gh release download "${{ steps.get_release_tag.outputs.tag }}" --repo "$GITHUB_REPOSITORY" --pattern "DrPodcast.dll" --dir app
+          gh release download "${{ steps.get_release_tag.outputs.tag }}" --repo "$GITHUB_REPOSITORY" --pattern "podcasts.json" --dir app || true
 
       - name: Run feed generator
         env:
