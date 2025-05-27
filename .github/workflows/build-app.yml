@@ -103,3 +103,22 @@ jobs:
           body: ${{ steps.get_version.outputs.description }}
           files: |
             publish/**
+
+      - name: Create Pre-release (PR)
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Get version and commit id
+          VERSION=${{ steps.get_version.outputs.version }}
+          COMMIT_ID=$(git rev-parse --short HEAD)
+          PR_VERSION="$VERSION-pr-$COMMIT_ID"
+          echo "Pre-release version: $PR_VERSION"
+
+          # Create a pre-release with the version and commit id
+          gh release create "v$PR_VERSION" ./publish/** \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$PR_VERSION" \
+            --notes "PR build for $PR_VERSION" \
+            --prerelease \
+            --target "$COMMIT_ID" || echo "Pre-release may already exist."
