@@ -91,7 +91,7 @@ jobs:
           API_KEY: ${{ secrets.API_KEY }}
           BASE_URL: ${{ secrets.BASE_URL }}
         run: |
-          dotnet ./app/DrPodcast.dll --podcasts podcasts.json
+          dotnet ./app/DrPodcast --podcasts ./app/podcasts.json
 
       - name: Upload feed artifacts
         uses: actions/upload-artifact@v4
