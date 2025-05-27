@@ -13,7 +13,7 @@ on:
 
 jobs:
   build-app:
-    name: "Build ommer"
+    name: "Build DrPodcast"
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
@@ -26,17 +26,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT_VERSION=$(grep "version = \".*\"" build.gradle.kts | cut -d'"' -f2)
-          echo "Current version: $CURRENT_VERSION"
-          
-          IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
-          
+          # Get latest release version from GitHub
+          LATEST_VERSION=$(gh release list --limit 1 --repo ${{ github.repository }} --json tagName --jq '.[0].tagName' | sed 's/^v//')
+          echo "Latest release version: $LATEST_VERSION"
+
+          IFS='.' read -r major minor patch <<< "$LATEST_VERSION"
+
           if [ "${{ github.event_name }}" == "pull_request" ]; then
             PR_NUMBER="${{ github.event.pull_request.number }}"
             PR_DATA=$(gh api /repos/${{ github.repository }}/pulls/$PR_NUMBER --jq '{body: .body, title: .title}')
             PR_DESCRIPTION=$(echo "$PR_DATA" | jq -r .body)
             PR_TITLE=$(echo "$PR_DATA" | jq -r .title)
-            
+
             if [[ $PR_DESCRIPTION == *"- [x] major"* ]]; then
               NEW_VERSION="$((major + 1)).0.0"
               echo "type=major" >> $GITHUB_OUTPUT
@@ -65,44 +66,32 @@ jobs:
             else
               NEW_VERSION="${major}.${minor}.$((patch + 1))"
             fi
-            
+
             echo "description<<EOF" >> $GITHUB_OUTPUT
             echo "$PR_TITLE" >> $GITHUB_OUTPUT
             echo "EOF" >> $GITHUB_OUTPUT
-            
-            # Actually update version file on merge
-            sed -i "s/version = \".*\"/version = \"$NEW_VERSION\"/" build.gradle.kts
+
+            # Actually update version in csproj file
+            sed -i "s|<Version>.*</Version>|<Version>$NEW_VERSION</Version>|" DrPodcast.csproj
           fi
-          
+
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 21
-          
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/configuration-cache
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+      - name: Restore dependencies
+        run: dotnet restore DrPodcast.sln
 
-      - name: Build app
-        run: |
-          java --version
-          chmod +x ./gradlew
-          ./gradlew build
+      - name: Build & Publish app
+        run: dotnet publish -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -o /publish/
+
+      - name: Copy podcasts.json to publish folder
+        run: cp podcasts.json ./publish/
 
       - name: Commit version bump
         if: github.event_name == 'push'
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add build.gradle.kts
+          git add DrPodcast.csproj
           git commit -m "Bump version to ${{ steps.get_version.outputs.version }}"
           git push
 
@@ -113,4 +102,4 @@ jobs:
           tag_name: v${{ steps.get_version.outputs.version }}
           body: ${{ steps.get_version.outputs.description }}
           files: |
-            ./ommer/build/libs/ommer.jar
+            publish/**
