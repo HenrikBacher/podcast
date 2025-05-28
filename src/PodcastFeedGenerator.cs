@@ -7,23 +7,41 @@ using System.Linq;
 using System.Xml.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Http;
+using Polly;
+using Polly.Extensions.Http;
 using DrPodcast;
 
 class Program
 {
     static async Task Main(string[] args)
     {
+        // Configure services with HttpClientFactory and Polly
+        var services = new ServiceCollection();
+        
+        // Get apiKey from environment variables, fallback to defaults if not set
+        string apiKey = Environment.GetEnvironmentVariable("API_KEY") ?? "";
+        
+        // Configure HttpClient with Polly retry policy
+        services.AddHttpClient("DrApi", client =>
+        {
+            client.DefaultRequestHeaders.Add("X-Apikey", apiKey);
+            client.Timeout = TimeSpan.FromSeconds(30);
+        })
+        .AddPolicyHandler(GetRetryPolicy());
+
+        var serviceProvider = services.BuildServiceProvider();
+        var httpClientFactory = serviceProvider.GetRequiredService<IHttpClientFactory>();
+
         // Deserialize podcasts.json using strongly typed models
         string podcastsJson = File.ReadAllText("podcasts.json");
         var podcastList = System.Text.Json.JsonSerializer.Deserialize<global::DrPodcast.PodcastList>(podcastsJson);
-        // Get baseUrl and apiKey from environment variables, fallback to defaults if not set
+        // Get baseUrl from environment variables, fallback to defaults if not set
         string baseUrl = Environment.GetEnvironmentVariable("BASE_URL") ?? "https://example.com";
-        string apiKey = Environment.GetEnvironmentVariable("API_KEY") ?? "";
         string episodesApiUrl = "https://api.dr.dk/radio/v2/series/";
         string seriesApiUrl = "https://api.dr.dk/radio/v2/series/";
-
-        using var httpClient = new HttpClient();
-        httpClient.DefaultRequestHeaders.Add("X-Apikey", apiKey);
 
         Directory.CreateDirectory("output");
 
@@ -35,6 +53,8 @@ class Program
             string seriesUrl = seriesApiUrl + urn;
             try
             {
+                using var httpClient = httpClientFactory.CreateClient("DrApi");
+                
                 // First, fetch series information
                 var seriesResponse = await httpClient.GetAsync(seriesUrl);
                 seriesResponse.EnsureSuccessStatusCode();
@@ -254,5 +274,19 @@ class Program
             }
         }
         return null;
+    }
+
+    static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
+    {
+        return HttpPolicyExtensions
+            .HandleTransientHttpError()
+            .OrResult(msg => !msg.IsSuccessStatusCode)
+            .WaitAndRetryAsync(
+                retryCount: 3,
+                sleepDurationProvider: retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
+                onRetry: (outcome, timespan, retryCount, context) =>
+                {
+                    Console.WriteLine($"Retry {retryCount} after {timespan} seconds delay");
+                });
     }
 }
