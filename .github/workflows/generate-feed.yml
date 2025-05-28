@@ -37,6 +37,7 @@ jobs:
       - name: Copy site files
         run: |
           mkdir -p output/_site
+          mkdir -p output/_site/feeds
           cp -r site/* output/_site/
           cp -r output/*.xml output/_site/feeds/
 
