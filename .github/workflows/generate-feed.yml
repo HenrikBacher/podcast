@@ -44,7 +44,7 @@ jobs:
       - name: Upload feed artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: feeds
+          name: site
           path: output/_site/*
           retention-days: 1
           if-no-files-found: error
