@@ -220,6 +220,7 @@ class Program
                                     item.Add(new XElement("category", cat));
                             }
                         }
+                        channel.Add(item);
                     }
                 }
 
