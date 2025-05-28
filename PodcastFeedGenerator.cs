@@ -64,7 +64,7 @@ class Program
                         ? lastEpisode.ToString("ddd, dd MMM yyyy HH:mm:ss zzz", System.Globalization.CultureInfo.InvariantCulture)
                         : DateTime.Now.ToString("ddd, dd MMM yyyy HH:mm:ss zzz", System.Globalization.CultureInfo.InvariantCulture),
                     Explicit = series?.ExplicitContent == true ? "yes" : "no",
-                    Author = series?.Channel?.Title ?? "DR",
+                    Author = "DR",
                     Block = "yes",
                     Owner = new global::DrPodcast.ChannelOwner { Email = "podcast@dr.dk", Name = series?.Channel?.Title ?? "DR" },
                     NewFeedUrl = $"{baseUrl}/{slug}.xml",
