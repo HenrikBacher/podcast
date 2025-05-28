@@ -120,9 +120,9 @@ jobs:
       - name: Download feed artifacts
         uses: actions/download-artifact@v4
         with:
-          name: feeds
-          path: _site/feeds
-
+          name: site
+          path: _site
+          
       - name: Generate index.html
         run: |
           # Get current timestamp in ISO 8601 format
