@@ -147,6 +147,7 @@ class Program
                         string epExplicit = "no";
                         string epAuthor = "DR";
                         string epCountry = "dk";
+                        string? epImage = GetImageUrlFromAssets(ep.ImageAssets) ?? channelModel.Image;
 
                         // Select the highest quality mp3 file available from audioAssets
                         string epAudio = "";
@@ -180,7 +181,7 @@ class Program
                             new XElement("pubDate", DateTime.TryParse(epPubDate, out var dt) ? dt.ToString("ddd, dd MMM yyyy HH:mm:ss zzz", System.Globalization.CultureInfo.InvariantCulture) : epPubDate),
                             new XElement("explicit", epExplicit),
                             new XElement(itunes + "author", epAuthor),
-                            new XElement(itunes + "image", GetImageUrlFromAssets(ep.ImageAssets) ?? GetImageUrlFromAssets(podcast.ImageAssets)),
+                            new XElement(itunes + "image", epImage),
                             new XElement(itunes + "duration", itunesDuration),
                             new XElement(media + "restriction",
                                 new XAttribute("relationship", "allow"),
