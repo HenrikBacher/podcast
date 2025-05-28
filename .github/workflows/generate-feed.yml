@@ -123,6 +123,7 @@ jobs:
 
       - name: Generate index.html
         run: |
+          touch _site/index.html
           # Get current timestamp in ISO 8601 format
           current_time=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           
