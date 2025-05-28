@@ -61,16 +61,8 @@ class Program
                 string seriesContent = await seriesResponse.Content.ReadAsStringAsync();
                 var series = System.Text.Json.JsonSerializer.Deserialize<global::DrPodcast.Series>(seriesContent);
 
-                // Then fetch episodes
-                var episodesResponse = await httpClient.GetAsync(episodesUrl);
-                episodesResponse.EnsureSuccessStatusCode();
-                string episodesContent = await episodesResponse.Content.ReadAsStringAsync();
-                // Deserialize episodes using strongly typed models
-                var feedDoc = System.Text.Json.JsonDocument.Parse(episodesContent);
-                var itemsProp = feedDoc.RootElement.TryGetProperty("items", out var items) ? items : default;
-                var episodes = itemsProp.ValueKind == System.Text.Json.JsonValueKind.Array
-                    ? System.Text.Json.JsonSerializer.Deserialize<List<global::DrPodcast.Episode>>(itemsProp.GetRawText())
-                    : null;
+                // Fetch all episodes, handling pagination
+                var episodes = await FetchAllEpisodesAsync(episodesApiUrl + urn + "/episodes?limit=256", httpClient);
 
                 // Build strongly typed channel model using rich series data
                 var channelModel = new global::DrPodcast.Channel
@@ -283,5 +275,36 @@ class Program
                 {
                     Console.WriteLine($"Retry {retryCount} after {timespan} seconds delay");
                 });
+    }
+
+    // Helper method to fetch all episodes with pagination
+    static async Task<List<global::DrPodcast.Episode>?> FetchAllEpisodesAsync(string initialUrl, HttpClient httpClient)
+    {
+        var allEpisodes = new List<global::DrPodcast.Episode>();
+        string? nextUrl = initialUrl;
+        while (!string.IsNullOrEmpty(nextUrl))
+        {
+            var response = await httpClient.GetAsync(nextUrl);
+            response.EnsureSuccessStatusCode();
+            string content = await response.Content.ReadAsStringAsync();
+            using var doc = System.Text.Json.JsonDocument.Parse(content);
+            var root = doc.RootElement;
+            if (root.TryGetProperty("items", out var items) && items.ValueKind == System.Text.Json.JsonValueKind.Array)
+            {
+                var episodes = System.Text.Json.JsonSerializer.Deserialize<List<global::DrPodcast.Episode>>(items.GetRawText());
+                if (episodes != null)
+                    allEpisodes.AddRange(episodes);
+            }
+            // Check for next property
+            if (root.TryGetProperty("next", out var nextProp) && nextProp.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                nextUrl = nextProp.GetString();
+            }
+            else
+            {
+                nextUrl = null;
+            }
+        }
+        return allEpisodes;
     }
 }
