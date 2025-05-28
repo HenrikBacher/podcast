@@ -34,13 +34,25 @@ jobs:
         run: |
           dotnet run --project DrPodcast.csproj -c Release -- --podcasts podcasts.json
 
+      - name: Copy site files
+        run: |
+          mkdir -p output/_site
+          cp -r site/* output/_site/
+          cp -r output/*.xml output/_site/feeds/
+
       - name: Upload feed artifacts
         uses: actions/upload-artifact@v4
         with:
           name: feeds
-          path: output/*.xml
+          path: output/_site/*
           retention-days: 1
           if-no-files-found: error
+
+      - name: site artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: site
+          path: _site
 
   check-deployment:
     name: "Check if deployment is needed"
@@ -52,13 +64,8 @@ jobs:
       - name: Download feed artifacts
         uses: actions/download-artifact@v4
         with:
-          name: feeds
+          name: site
           path: _site
-
-      - name: Move feeds to correct location
-        run: |
-          mkdir -p _site/feeds
-          mv _site/*.xml _site/feeds/
 
       - name: Check for deployment changes
         id: deployment_check
@@ -123,7 +130,6 @@ jobs:
 
       - name: Generate index.html
         run: |
-          touch _site/index.html
           # Get current timestamp in ISO 8601 format
           current_time=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           
