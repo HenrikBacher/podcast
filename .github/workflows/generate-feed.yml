@@ -5,115 +5,47 @@ concurrency:
   cancel-in-progress: true
 
 on:
-  workflow_run:
-    workflows: ["build-app"]  # Run after build-app workflow
-    types:
-      - completed
-    branches: [main]
   workflow_dispatch:
-    inputs:
-      usePrerelease:
-        description: 'Use pre-release versions'
-        required: false
-        type: boolean
-        default: false
   push:
     paths:
       - "**/generate-feed.yml"
       - "**/podcasts.json"
       - "site/**"
+      - "**/*.cs"
+      - "**/*.csproj"
   schedule:
     - cron: "0 * * * *"
 
 jobs:
-  load-podcasts:
-    name: Load Podcasts
+  update-feed:
+    name: "Update feeds"
     runs-on: ubuntu-24.04
-    outputs:
-      podcasts: ${{ steps.load_data.outputs.podcasts }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Load Podcasts Data
-        id: load_data
-        run: |
-          echo "podcasts=$(jq -c . < podcasts.json)" >> $GITHUB_OUTPUT
+      - name: Restore dependencies
+        run: dotnet restore DrPodcast.csproj
 
-      - name: Download podcast icons
+      - name: Run feed generator
+        env:
+          API_KEY: ${{ secrets.API_KEY }}
+          BASE_URL: ${{ secrets.BASE_URL }}
         run: |
-          mkdir -p site/icons
-          jq -c '.podcasts[]' podcasts.json | while read -r podcast; do
-            slug=$(echo $podcast | jq -r '.slug')
-            image=$(echo $podcast | jq -r '.image')
-            ext=$(echo "$image" | grep -oP '\.(?:png|jpg|jpeg|gif|webp)$' || echo '.jpg')
-            echo "Downloading icon for $slug from $image"
-            curl -L "$image" -o "site/icons/$slug$ext"
-          done
+          dotnet run --project DrPodcast.csproj -c Release -- --podcasts podcasts.json
 
-      - name: Upload template artifact
+      - name: Copy site files
+        run: |
+          mkdir -p output/_site
+          mkdir -p output/_site/feeds
+          cp -r site/* output/_site/
+          cp -r output/*.xml output/_site/feeds/
+
+      - name: Upload feed artifacts
         uses: actions/upload-artifact@v4
         with:
           name: site
-          path: site
-          retention-days: 1
-
-  update-feed:
-    name: "Update ${{ matrix.podcasts.slug }} feed"
-    needs: load-podcasts
-    env:
-      usePrerelease: ${{ inputs.usePrerelease || false }}
-    strategy:
-      fail-fast: true
-      matrix: ${{ fromJson(needs.load-podcasts.outputs.podcasts) }}
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Get latest release
-        id: get_latest_release
-        uses: actions/cache@v4
-        with:
-          path: ommer.jar
-          key: ${{ runner.os }}-ommer-${{ github.run_id }}
-          restore-keys: |
-            ${{ runner.os }}-ommer-
-        
-      - name: Download JAR if not cached
-        if: steps.get_latest_release.outputs.cache-hit != 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          RELEASE_URL=$(gh api "repos/$GITHUB_REPOSITORY/releases" \
-              --jq "[.[] | select(.prerelease == $usePrerelease)][0].assets[0].browser_download_url")
-          echo "Downloading from: $RELEASE_URL"
-          curl -L $RELEASE_URL -o ommer.jar
-
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-package: jre
-          java-version: 21
-
-      - name: Get host URL
-        id: get_host_url
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          SITE_URL=$(gh api "repos/${GITHUB_REPOSITORY}/pages" --jq '.html_url')
-          echo "host_url=$SITE_URL" >> $GITHUB_OUTPUT
-
-      - name: Execute parser for ${{ matrix.podcasts.slug }} feed
-        uses: corrupt952/actions-retry-command@v1.0.7
-        with:
-          command: java -Xmx2048m -XX:+UseParallelGC -jar ./ommer.jar --slug ${{ matrix.podcasts.slug }} --urn ${{ matrix.podcasts.urn }} --imageUrl ${{ matrix.podcasts.image }} --apiKey ${{ secrets.API_KEY }} --baseUrl ${{ steps.get_host_url.outputs.host_url }}
-          working_directory: ./ 
-          max_attempts: 3
-          retry_interval: 10
-
-      - name: Upload feed artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.podcasts.slug }}
-          path: output/${{ matrix.podcasts.slug }}.xml
+          path: output/_site/*
           retention-days: 1
           if-no-files-found: error
 
@@ -124,16 +56,11 @@ jobs:
     outputs:
       needs_deploy: ${{ steps.deployment_check.outputs.needs_deploy }}
     steps:
-      - name: Download all artifacts
+      - name: Download feed artifacts
         uses: actions/download-artifact@v4
         with:
+          name: site
           path: _site
-          merge-multiple: true
-
-      - name: Move feeds to correct location
-        run: |
-          mkdir -p _site/feeds
-          mv _site/*.xml _site/feeds/
 
       - name: Check for deployment changes
         id: deployment_check
@@ -190,19 +117,14 @@ jobs:
       id-token: write
     runs-on: ubuntu-24.04
     steps:
-      - name: Download all artifacts
+      - name: Download feed artifacts
         uses: actions/download-artifact@v4
         with:
+          name: site
           path: _site
-          merge-multiple: true
-
-      - name: Move feeds to correct location
-        run: |
-          mkdir -p _site/feeds
-          mv _site/*.xml _site/feeds/
-
+          
       - name: Generate index.html
-        run: |       
+        run: |
           # Get current timestamp in ISO 8601 format
           current_time=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           
@@ -212,17 +134,11 @@ jobs:
             filename=$(basename "$feed" .xml)
             formatted_title=$(echo "$filename" | sed 's/-/ /g')
             
-            # Look for local icon file with any supported extension
-            icon_path=""
-            for ext in jpg jpeg png gif webp; do
-              if [ -f "_site/icons/$filename.$ext" ]; then
-                icon_path="icons/$filename.$ext"
-                break
-              fi
-            done
+            # Extract image URL from the RSS feed's itunes:image element
+            image_url=$(grep -o '<itunes:image[^>]*href="[^"]*"' "$feed" | sed 's/.*href="//;s/".*//' | head -1 || echo "")
             
-            if [ -n "$icon_path" ]; then
-              feeds_html+="<li><a class='feed-link' href='feeds/$filename.xml'><img class='feed-icon' src='$icon_path' loading='lazy' alt='$formatted_title'><span class='feed-title'>$formatted_title</span></a></li>"
+            if [ -n "$image_url" ]; then
+              feeds_html+="<li><a class='feed-link' href='feeds/$filename.xml'><img class='feed-icon' src='$image_url' loading='lazy' alt='$formatted_title'><span class='feed-title'>$formatted_title</span></a></li>"
             else
               feeds_html+="<li><a class='feed-link' href='feeds/$filename.xml'><div class='feed-icon'></div><span class='feed-title'>$formatted_title</span></a></li>"
             fi
