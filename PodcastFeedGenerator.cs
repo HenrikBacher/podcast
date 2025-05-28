@@ -17,9 +17,10 @@ class Program
         string podcastsJson = File.ReadAllText("podcasts.json");
         var podcastList = System.Text.Json.JsonSerializer.Deserialize<global::DrPodcast.PodcastList>(podcastsJson);
         // Get baseUrl and apiKey from environment variables, fallback to defaults if not set
-        string baseUrl = Environment.GetEnvironmentVariable("BASE_URL");
-        string apiKey = Environment.GetEnvironmentVariable("API_KEY");
-        string apiUrl = "https://api.dr.dk/radio/v2/series/";
+        string baseUrl = Environment.GetEnvironmentVariable("BASE_URL") ?? "https://example.com";
+        string apiKey = Environment.GetEnvironmentVariable("API_KEY") ?? "";
+        string episodesApiUrl = "https://api.dr.dk/radio/v2/series/";
+        string seriesApiUrl = "https://api.dr.dk/radio/v2/series/";
 
         using var httpClient = new HttpClient();
         httpClient.DefaultRequestHeaders.Add("X-Apikey", apiKey);
@@ -30,34 +31,44 @@ class Program
         {
             string urn = podcast.Urn;
             string slug = podcast.Slug;
-            string url = apiUrl + urn + "/episodes?limit=1024";
+            string episodesUrl = episodesApiUrl + urn + "/episodes?limit=1024";
+            string seriesUrl = seriesApiUrl + urn;
             try
             {
-                var response = await httpClient.GetAsync(url);
-                response.EnsureSuccessStatusCode();
-                string content = await response.Content.ReadAsStringAsync();
+                // First, fetch series information
+                var seriesResponse = await httpClient.GetAsync(seriesUrl);
+                seriesResponse.EnsureSuccessStatusCode();
+                string seriesContent = await seriesResponse.Content.ReadAsStringAsync();
+                var series = System.Text.Json.JsonSerializer.Deserialize<global::DrPodcast.Series>(seriesContent);
+
+                // Then fetch episodes
+                var episodesResponse = await httpClient.GetAsync(episodesUrl);
+                episodesResponse.EnsureSuccessStatusCode();
+                string episodesContent = await episodesResponse.Content.ReadAsStringAsync();
                 // Deserialize episodes using strongly typed models
-                var feedDoc = System.Text.Json.JsonDocument.Parse(content);
+                var feedDoc = System.Text.Json.JsonDocument.Parse(episodesContent);
                 var itemsProp = feedDoc.RootElement.TryGetProperty("items", out var items) ? items : default;
                 var episodes = itemsProp.ValueKind == System.Text.Json.JsonValueKind.Array
                     ? System.Text.Json.JsonSerializer.Deserialize<List<global::DrPodcast.Episode>>(itemsProp.GetRawText())
                     : null;
 
-                // Build strongly typed channel model
+                // Build strongly typed channel model using rich series data
                 var channelModel = new global::DrPodcast.Channel
                 {
-                    Title = slug,
-                    Link = $"https://www.dr.dk/lyd/special-radio/{slug}",
-                    Description = $"Feed for {slug}",
+                    Title = series?.Title ?? slug,
+                    Link = series?.PresentationUrl ?? $"https://www.dr.dk/lyd/special-radio/{slug}",
+                    Description = series?.Description ?? series?.Punchline ?? $"Feed for {slug}",
                     Language = "da",
                     Copyright = "DR",
-                    LastBuildDate = DateTime.Now.ToString("ddd, dd MMM yyyy HH:mm:ss zzz", System.Globalization.CultureInfo.InvariantCulture),
-                    Explicit = "no",
-                    Author = "DR",
+                    LastBuildDate = DateTime.TryParse(series?.LatestEpisodeStartTime, out var lastEpisode)
+                        ? lastEpisode.ToString("ddd, dd MMM yyyy HH:mm:ss zzz", System.Globalization.CultureInfo.InvariantCulture)
+                        : DateTime.Now.ToString("ddd, dd MMM yyyy HH:mm:ss zzz", System.Globalization.CultureInfo.InvariantCulture),
+                    Explicit = series?.ExplicitContent == true ? "yes" : "no",
+                    Author = series?.Channel?.Title ?? "DR",
                     Block = "yes",
-                    Owner = new global::DrPodcast.ChannelOwner { Email = "podcast@dr.dk", Name = "DR" },
-                    NewFeedUrl = $"baseUrlfeeds/{slug}.xml",
-                    Image = GetImageUrlFromAssets(podcast.ImageAssets)
+                    Owner = new global::DrPodcast.ChannelOwner { Email = "podcast@dr.dk", Name = series?.Channel?.Title ?? "DR" },
+                    NewFeedUrl = $"{baseUrl}/{slug}.xml",
+                    Image = GetImageUrlFromAssets(series?.ImageAssets) ?? GetImageUrlFromAssets(podcast.ImageAssets)
                 };
 
                 // Add required namespaces for iTunes and media
@@ -67,7 +78,7 @@ class Program
 
                 var channel = new XElement("channel",
                     new XElement(atom + "link",
-                        new XAttribute("href", $"baseUrlfeeds/{slug}.xml"),
+                        new XAttribute("href", $"{baseUrl}/{slug}.xml"),
                         new XAttribute("rel", "self"),
                         new XAttribute("type", "application/rss+xml")
                     ),
@@ -85,8 +96,32 @@ class Program
                         new XElement(itunes + "name", channelModel.Owner?.Name)
                     ),
                     new XElement(itunes + "new-feed-url", channelModel.NewFeedUrl),
-                    new XElement(itunes + "image", channelModel.Image)
+                    new XElement(itunes + "image", new XAttribute("href", channelModel.Image ?? ""))
                 );
+
+                // Add iTunes categories from series data
+                if (series?.Categories != null && series.Categories.Count > 0)
+                {
+                    foreach (var category in series.Categories)
+                    {
+                        if (!string.IsNullOrEmpty(category))
+                        {
+                            channel.Add(new XElement(itunes + "category", new XAttribute("text", category)));
+                        }
+                    }
+                }
+
+                // Add series summary/subtitle if available
+                if (!string.IsNullOrEmpty(series?.Punchline))
+                {
+                    channel.Add(new XElement(itunes + "subtitle", series.Punchline));
+                }
+
+                // Add series summary
+                if (!string.IsNullOrEmpty(series?.Description))
+                {
+                    channel.Add(new XElement(itunes + "summary", series.Description));
+                }
 
                 if (episodes != null)
                 {
@@ -189,7 +224,7 @@ class Program
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Failed to fetch {url}: {ex.Message}");
+                Console.WriteLine($"Failed to fetch series {urn}: {ex.Message}");
             }
         }).ToArray();
 

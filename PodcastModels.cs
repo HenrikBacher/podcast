@@ -126,4 +126,127 @@ namespace DrPodcast
         [JsonPropertyName("name")]
         public string? Name { get; set; }
     }
+
+    public class Series
+    {
+        [JsonPropertyName("type")]
+        public string? Type { get; set; }
+
+        [JsonPropertyName("learnId")]
+        public string? LearnId { get; set; }
+
+        [JsonPropertyName("sortLetter")]
+        public string? SortLetter { get; set; }
+
+        [JsonPropertyName("channel")]
+        public SeriesChannel? Channel { get; set; }
+
+        [JsonPropertyName("isUmbrella")]
+        public bool IsUmbrella { get; set; }
+
+        [JsonPropertyName("categories")]
+        public List<string>? Categories { get; set; }
+
+        [JsonPropertyName("numberOfEpisodes")]
+        public int NumberOfEpisodes { get; set; }
+
+        [JsonPropertyName("numberOfSeries")]
+        public int NumberOfSeries { get; set; }
+
+        [JsonPropertyName("presentationType")]
+        public string? PresentationType { get; set; }
+
+        [JsonPropertyName("groupingType")]
+        public string? GroupingType { get; set; }
+
+        [JsonPropertyName("latestEpisodeStartTime")]
+        public string? LatestEpisodeStartTime { get; set; }
+
+        [JsonPropertyName("presentationUrl")]
+        public string? PresentationUrl { get; set; }
+
+        [JsonPropertyName("podcastUrl")]
+        public string? PodcastUrl { get; set; }
+
+        [JsonPropertyName("ocsUrn")]
+        public string? OcsUrn { get; set; }
+
+        [JsonPropertyName("productionNumber")]
+        public string? ProductionNumber { get; set; }
+
+        [JsonPropertyName("isAvailableOnDemand")]
+        public bool IsAvailableOnDemand { get; set; }
+
+        [JsonPropertyName("hasVideo")]
+        public bool HasVideo { get; set; }
+
+        [JsonPropertyName("explicitContent")]
+        public bool ExplicitContent { get; set; }
+
+        [JsonPropertyName("defaultOrder")]
+        public string? DefaultOrder { get; set; }
+
+        [JsonPropertyName("id")]
+        public string? Id { get; set; }
+
+        [JsonPropertyName("slug")]
+        public string? Slug { get; set; }
+
+        [JsonPropertyName("title")]
+        public string? Title { get; set; }
+
+        [JsonPropertyName("punchline")]
+        public string? Punchline { get; set; }
+
+        [JsonPropertyName("description")]
+        public string? Description { get; set; }
+
+        [JsonPropertyName("imageAssets")]
+        public List<ImageAsset>? ImageAssets { get; set; }
+
+        [JsonPropertyName("visualIdentity")]
+        public VisualIdentity? VisualIdentity { get; set; }
+    }
+
+    public class SeriesChannel
+    {
+        [JsonPropertyName("title")]
+        public string? Title { get; set; }
+
+        [JsonPropertyName("id")]
+        public string? Id { get; set; }
+
+        [JsonPropertyName("slug")]
+        public string? Slug { get; set; }
+
+        [JsonPropertyName("type")]
+        public string? Type { get; set; }
+
+        [JsonPropertyName("presentationUrl")]
+        public string? PresentationUrl { get; set; }
+    }
+
+    public class VisualIdentity
+    {
+        [JsonPropertyName("gradient")]
+        public Gradient? Gradient { get; set; }
+
+        [JsonPropertyName("colors")]
+        public Colors? Colors { get; set; }
+    }
+
+    public class Gradient
+    {
+        [JsonPropertyName("colors")]
+        public List<string>? Colors { get; set; }
+    }
+
+    public class Colors
+    {
+        [JsonPropertyName("dark")]
+        public string? Dark { get; set; }
+
+        [JsonPropertyName("light")]
+        public string? Light { get; set; }
+    }
 }
