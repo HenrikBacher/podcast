@@ -17,41 +17,8 @@ on:
     - cron: "0 * * * *"
 
 jobs:
-  load-podcasts:
-    name: Load Podcasts
-    runs-on: ubuntu-24.04
-    outputs:
-      podcasts: ${{ steps.load_data.outputs.podcasts }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Load Podcasts Data
-        id: load_data
-        run: |
-          echo "podcasts=$(jq -c . < podcasts.json)" >> $GITHUB_OUTPUT
-
-      - name: Download podcast icons
-        run: |
-          mkdir -p site/icons
-          jq -c '.podcasts[]' podcasts.json | while read -r podcast; do
-            slug=$(echo $podcast | jq -r '.slug')
-            image=$(echo $podcast | jq -r '.image')
-            ext=$(echo "$image" | grep -oP '\.(?:png|jpg|jpeg|gif|webp)$' || echo '.jpg')
-            echo "Downloading icon for $slug from $image"
-            curl -L "$image" -o "site/icons/$slug$ext"
-          done
-
-      - name: Upload template artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: site
-          path: site
-          retention-days: 1
-
   update-feed:
     name: "Update feeds"
-    needs: load-podcasts
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
@@ -82,11 +49,11 @@ jobs:
     outputs:
       needs_deploy: ${{ steps.deployment_check.outputs.needs_deploy }}
     steps:
-      - name: Download all artifacts
+      - name: Download feed artifacts
         uses: actions/download-artifact@v4
         with:
+          name: feeds
           path: _site
-          merge-multiple: true
 
       - name: Move feeds to correct location
         run: |
@@ -148,19 +115,20 @@ jobs:
       id-token: write
     runs-on: ubuntu-24.04
     steps:
-      - name: Download all artifacts
+      - name: Download feed artifacts
         uses: actions/download-artifact@v4
         with:
+          name: feeds
           path: _site
-          merge-multiple: true
 
-      - name: Move feeds to correct location
+      - name: Setup site structure
         run: |
           mkdir -p _site/feeds
           mv _site/*.xml _site/feeds/
+          cp -r site/* _site/
 
       - name: Generate index.html
-        run: |       
+        run: |
           # Get current timestamp in ISO 8601 format
           current_time=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           
@@ -170,17 +138,11 @@ jobs:
             filename=$(basename "$feed" .xml)
             formatted_title=$(echo "$filename" | sed 's/-/ /g')
             
-            # Look for local icon file with any supported extension
-            icon_path=""
-            for ext in jpg jpeg png gif webp; do
-              if [ -f "_site/icons/$filename.$ext" ]; then
-                icon_path="icons/$filename.$ext"
-                break
-              fi
-            done
+            # Extract image URL from the RSS feed's itunes:image element
+            image_url=$(grep -o '<itunes:image[^>]*href="[^"]*"' "$feed" | sed 's/.*href="//;s/".*//' | head -1 || echo "")
             
-            if [ -n "$icon_path" ]; then
-              feeds_html+="<li><a class='feed-link' href='feeds/$filename.xml'><img class='feed-icon' src='$icon_path' loading='lazy' alt='$formatted_title'><span class='feed-title'>$formatted_title</span></a></li>"
+            if [ -n "$image_url" ]; then
+              feeds_html+="<li><a class='feed-link' href='feeds/$filename.xml'><img class='feed-icon' src='$image_url' loading='lazy' alt='$formatted_title'><span class='feed-title'>$formatted_title</span></a></li>"
             else
               feeds_html+="<li><a class='feed-link' href='feeds/$filename.xml'><div class='feed-icon'></div><span class='feed-title'>$formatted_title</span></a></li>"
             fi
