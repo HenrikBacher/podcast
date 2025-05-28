@@ -188,6 +188,7 @@ class Program
                             new XElement("pubDate", DateTime.TryParse(epPubDate, out var dt) ? dt.ToString("ddd, dd MMM yyyy HH:mm:ss zzz", System.Globalization.CultureInfo.InvariantCulture) : epPubDate),
                             new XElement("explicit", epExplicit),
                             new XElement(itunes + "author", epAuthor),
+                            new XElement(itunes + "image", new XAttribute("href", episodeImageUrl ?? ""))
                             new XElement(itunes + "duration", itunesDuration),
                             new XElement(media + "restriction",
                                 new XAttribute("relationship", "allow"),
@@ -219,13 +220,6 @@ class Program
                                     item.Add(new XElement("category", cat));
                             }
                         }
-                        // Select episode image from imageAssets array if available
-                        var episodeImageUrl = GetImageUrlFromAssets(ep.ImageAssets);
-                        if (!string.IsNullOrEmpty(episodeImageUrl))
-                        {
-                            item.Add(new XElement(media + "thumbnail", new XAttribute("url", episodeImageUrl)));
-                        }
-                        channel.Add(item);
                     }
                 }
 
