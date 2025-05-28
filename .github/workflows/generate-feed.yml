@@ -119,13 +119,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: feeds
-          path: _site
-
-      - name: Setup site structure
-        run: |
-          mkdir -p _site/feeds
-          mv _site/*.xml _site/feeds/
-          cp -r site/* _site/
+          path: _site/feeds
 
       - name: Generate index.html
         run: |
