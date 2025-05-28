@@ -188,7 +188,7 @@ class Program
                             new XElement("pubDate", DateTime.TryParse(epPubDate, out var dt) ? dt.ToString("ddd, dd MMM yyyy HH:mm:ss zzz", System.Globalization.CultureInfo.InvariantCulture) : epPubDate),
                             new XElement("explicit", epExplicit),
                             new XElement(itunes + "author", epAuthor),
-                            new XElement(itunes + "image", new XAttribute("href", episodeImageUrl ?? ""))
+                            new XElement(itunes + "image", GetImageUrlFromAssets(ep.ImageAssets)),
                             new XElement(itunes + "duration", itunesDuration),
                             new XElement(media + "restriction",
                                 new XAttribute("relationship", "allow"),
