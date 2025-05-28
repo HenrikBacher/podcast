@@ -2,113 +2,95 @@
   "podcasts": [
     {
       "slug": "genstart",
-      "urn": "urn:dr:radio:series:5fa25ef8330eac2f135b62d6",
-      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6593ba22846e9f8fc0338958.jpg"
+      "urn": "urn:dr:radio:series:5fa25ef8330eac2f135b62d6"
     },
     {
       "slug": "genstart-dox",
-      "urn": "urn:dr:radio:series:65cb475de80d2a267cd12ae9",
-      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:67001f85fd6dd215a9aaa921.jpg"
+      "urn": "urn:dr:radio:series:65cb475de80d2a267cd12ae9"
     },
     {
       "slug": "sara-og-monopolet",
-      "urn": "urn:dr:radio:series:5fa15704da351264f87b46ce",
-      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6523bd03443243f95e2c39b0.jpg"
+      "urn": "urn:dr:radio:series:5fa15704da351264f87b46ce"
     },
     {
       "slug": "hjernekassen",
-      "urn": "urn:dr:radio:series:5fa2684c330eac2f135b9254",
-      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6523bd76443243f95e2c4866.jpg"
+      "urn": "urn:dr:radio:series:5fa2684c330eac2f135b9254"
     },
     {
       "slug": "tiden",
-      "urn": "urn:dr:radio:series:6303281409585a83f19bfae0",
-      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6593b98a846e9f8fc03386f8.jpg"
+      "urn": "urn:dr:radio:series:6303281409585a83f19bfae0"
     },
     {
       "slug": "kampen-om-historien",
-      "urn": "urn:dr:radio:series:610bd147214d9c8f19f2e2d2",
-      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6523bd0e443243f95e2c3b00.jpg"
+      "urn": "urn:dr:radio:series:610bd147214d9c8f19f2e2d2"
     },
     {
       "slug": "prompt",
-      "urn": "urn:dr:radio:series:64a66bcdc7644ff3cc5147a0",
-      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6523c17c7d0c1a140697e108.jpg"
+      "urn": "urn:dr:radio:series:64a66bcdc7644ff3cc5147a0"
     },
     {
       "slug": "magten",
-      "urn": "urn:dr:radio:series:5fa15f17da351264f87b7455",
-      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:68120639b83699fa7807efc1.jpg"
+      "urn": "urn:dr:radio:series:5fa15f17da351264f87b7455"
     },
     {
       "slug": "udsyn",
-      "urn": "urn:dr:radio:series:5fa269fc330eac2f135b9b9f",
-      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6593ba97a838f3bbb32a050f.jpg"
+      "urn": "urn:dr:radio:series:5fa269fc330eac2f135b9b9f"
     },
     {
       "slug": "brinkmanns-briks",
-      "urn": "urn:dr:radio:series:5fa25a95330eac2f135b4a6c",
-      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6523bd6b7d0c1a140697a576.jpg"
+      "urn": "urn:dr:radio:series:5fa25a95330eac2f135b4a6c"
     },
     {
       "slug": "tyvstart",
-      "urn": "urn:dr:radio:series:63bc0839d2052f8a01353d1c",
-      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6523c1747d0c1a140697e0ef.jpg"
+      "urn": "urn:dr:radio:series:63bc0839d2052f8a01353d1c"
     },
     {
       "slug": "ubegribeligt", 
-      "urn": "urn:dr:radio:series:626931758679fdf8af8a0e26", 
-      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6523bf677d0c1a140697cae5.jpg"
+      "urn": "urn:dr:radio:series:626931758679fdf8af8a0e26"
     },
     {
       "slug": "sorte-tal", 
-      "urn": "urn:dr:radio:series:5fa160a9da351264f87b7df0", 
-      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:6617e347fc491910acd58311.jpg"
+      "urn": "urn:dr:radio:series:5fa160a9da351264f87b7df0"
     },
     {
       "slug": "p1-debat",
-      "urn": "urn:dr:radio:series:5fa26a12330eac2f135b9c24",
-      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:66f27e90b75d19480fa4401d.jpg"
+      "urn": "urn:dr:radio:series:5fa26a12330eac2f135b9c24"
     },
     {
       "slug": "bakspejl", 
-      "urn": "urn:dr:radio:series:5fa2623a330eac2f135b751f", 
-      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:66f67fce075f92789902ab5b.jpg"
+      "urn": "urn:dr:radio:series:5fa2623a330eac2f135b751f"
     },
     {
       "slug": "fonk-det-er-podcast", 
-      "urn": "urn:dr:radio:series:5fa15b12da351264f87b5ca2", 
-      "image": "https://static.pocketcasts.com/discover/images/400/81002aa0-2453-0134-2f00-737688e4d168.jpg"
+      "urn": "urn:dr:radio:series:5fa15b12da351264f87b5ca2"
     },
     {
       "slug": "korfix-og-kaffe", 
-      "urn": "urn:dr:radio:series:5fa25b1e330eac2f135b4d2b", 
-      "image": "https://static.pocketcasts.com/discover/images/400/51ae2f20-d6cd-0135-9e60-5bb073f92b78.jpg"
+      "urn": "urn:dr:radio:series:5fa25b1e330eac2f135b4d2b"
     }, 
     {
       "slug": "vildt-naturligt",
-      "urn": "urn:dr:radio:series:5fa2605b330eac2f135b6a3f",
-      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:66f5db0e075f927899001a02.jpg"
+      "urn": "urn:dr:radio:series:5fa2605b330eac2f135b6a3f"
     }, 
     {
       "slug": "flyvende-tallerken",
-      "urn": "urn:dr:radio:series:600173276c12863ced19ea7e",
-      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:66f29a3bb75d19480fa4ae94.jpg"
+      "urn": "urn:dr:radio:series:600173276c12863ced19ea7e"
     }, 
     {
       "slug": "tabloid",
-      "urn": "urn:dr:radio:series:618c5172c928eef30f91d62d",
-      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:66f55ddf075f927899fe2668.jpg"
+      "urn": "urn:dr:radio:series:618c5172c928eef30f91d62d"
     }, 
     {
       "slug": "ugens-gaest",
-      "urn": "urn:dr:radio:series:5fa2699c330eac2f135b9988",
-      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:66f487affd6dd215a97c4c36.jpg"
+      "urn": "urn:dr:radio:series:5fa2699c330eac2f135b9988"
     },
     {
       "slug": "tyran",
-      "urn": "urn:dr:radio:series:65857ad8163dfa22d54c3d73",
-      "image": "https://api.dr.dk/podcasts/v1/images/urn:dr:podcast:image:67e4690acf7296d2cea5a482.jpg"
+      "urn": "urn:dr:radio:series:65857ad8163dfa22d54c3d73"
+    },
+    {
+      "slug": "hvem-er",
+      "urn": "urn:dr:radio:series:5fa25dc3330eac2f135b5c34"
     }
   ]
 }
