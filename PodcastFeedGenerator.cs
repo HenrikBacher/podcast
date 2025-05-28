@@ -55,7 +55,7 @@ class Program
                 // Build strongly typed channel model using rich series data
                 var channelModel = new global::DrPodcast.Channel
                 {
-                    Title = series?.Title + "(Reproduceret feed)",
+                    Title = series?.Title + " (Reproduceret feed)",
                     Link = series?.PresentationUrl ?? $"https://www.dr.dk/lyd/special-radio/{slug}",
                     Description = series?.Description ?? series?.Punchline ?? $"Feed for {slug}",
                     Language = "da",
@@ -66,7 +66,7 @@ class Program
                     Explicit = series?.ExplicitContent == true ? "yes" : "no",
                     Author = "DR",
                     Block = "yes",
-                    Owner = new global::DrPodcast.ChannelOwner { Email = "podcast@dr.dk", Name = series?.Channel?.Title ?? "DR" },
+                    Owner = new global::DrPodcast.ChannelOwner { Email = "podcast@dr.dk", Name = "DR" },
                     NewFeedUrl = $"{baseUrl}/{slug}.xml",
                     Image = GetImageUrlFromAssets(series?.ImageAssets) ?? GetImageUrlFromAssets(podcast.ImageAssets)
                 };
