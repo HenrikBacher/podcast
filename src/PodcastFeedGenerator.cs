@@ -35,14 +35,14 @@ class Program
 
         // Deserialize podcasts.json using strongly typed models
         string podcastsJson = File.ReadAllText("podcasts.json");
-        var podcastList = System.Text.Json.JsonSerializer.Deserialize<global::DrPodcast.PodcastList>(podcastsJson);
+        var podcastList = JsonSerializer.Deserialize<PodcastList>(podcastsJson);
         // Get baseUrl from environment variables, fallback to defaults if not set
         string baseUrl = Environment.GetEnvironmentVariable("BASE_URL") ?? "https://example.com";
         string apiUrl = "https://api.dr.dk/radio/v2/series/";
 
         Directory.CreateDirectory("output");
 
-        var tasks = podcastList?.Podcasts.Select(async (global::DrPodcast.Podcast podcast) =>
+        var tasks = podcastList?.Podcasts.Select(async (Podcast podcast) =>
         {
             string urn = podcast.Urn;
             string slug = podcast.Slug;
@@ -55,13 +55,13 @@ class Program
                 var seriesResponse = await httpClient.GetAsync(seriesUrl);
                 seriesResponse.EnsureSuccessStatusCode();
                 string seriesContent = await seriesResponse.Content.ReadAsStringAsync();
-                var series = System.Text.Json.JsonSerializer.Deserialize<global::DrPodcast.Series>(seriesContent);
+                var series = JsonSerializer.Deserialize<Series>(seriesContent);
 
                 // Fetch all episodes, handling pagination
                 var episodes = await FetchAllEpisodesAsync(apiUrl + urn + "/episodes?limit=256", httpClient);
 
                 // Build strongly typed channel model using rich series data
-                var channelModel = new global::DrPodcast.Channel
+                var channelModel = new Channel
                 {
                     Title = series?.Title + " (Reproduceret feed)",
                     Link = series?.PresentationUrl ?? $"https://www.dr.dk/lyd/special-radio/{slug}",
@@ -74,7 +74,7 @@ class Program
                     Explicit = series?.ExplicitContent == true ? "yes" : "no",
                     Author = "DR",
                     Block = "yes",
-                    Owner = new global::DrPodcast.ChannelOwner { Email = "podcast@dr.dk", Name = "DR" },
+                    Owner = new ChannelOwner { Email = "podcast@dr.dk", Name = "DR" },
                     NewFeedUrl = $"{baseUrl}/{slug}.xml",
                     Image = GetImageUrlFromAssets(series?.ImageAssets) ?? GetImageUrlFromAssets(podcast.ImageAssets)
                 };
@@ -198,7 +198,7 @@ class Program
                         ? episodes.OrderBy(ep => DateTime.TryParse(ep.PublishTime, out var dt) ? dt : DateTime.MinValue).ToList()
                         : episodes.OrderByDescending(ep => DateTime.TryParse(ep.PublishTime, out var dt) ? dt : DateTime.MinValue).ToList();
                     
-                    foreach (global::DrPodcast.Episode episode in sortedEpisodes)
+                    foreach (Episode episode in sortedEpisodes)
                     {
                         string epTitle = episode.Title ?? "";
                         string epDesc = episode.Description ?? "";
@@ -313,7 +313,7 @@ class Program
         Console.WriteLine("All podcast feeds fetched.");
     }
 
-    static string? GetImageUrlFromAssets(List<global::DrPodcast.ImageAsset>? imageAssets)
+    static string? GetImageUrlFromAssets(List<ImageAsset>? imageAssets)
     {
         if (imageAssets != null && imageAssets.Count > 0)
         {
@@ -352,25 +352,25 @@ class Program
     }
 
     // Helper method to fetch all episodes with pagination
-    static async Task<List<global::DrPodcast.Episode>?> FetchAllEpisodesAsync(string initialUrl, HttpClient httpClient)
+    static async Task<List<Episode>?> FetchAllEpisodesAsync(string initialUrl, HttpClient httpClient)
     {
-        var allEpisodes = new List<global::DrPodcast.Episode>();
+        var allEpisodes = new List<Episode>();
         string? nextUrl = initialUrl;
         while (!string.IsNullOrEmpty(nextUrl))
         {
             var response = await httpClient.GetAsync(nextUrl);
             response.EnsureSuccessStatusCode();
             string content = await response.Content.ReadAsStringAsync();
-            using var doc = System.Text.Json.JsonDocument.Parse(content);
+            using var doc = JsonDocument.Parse(content);
             var root = doc.RootElement;
-            if (root.TryGetProperty("items", out var items) && items.ValueKind == System.Text.Json.JsonValueKind.Array)
+            if (root.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array)
             {
-                var episodes = System.Text.Json.JsonSerializer.Deserialize<List<global::DrPodcast.Episode>>(items.GetRawText());
+                var episodes = JsonSerializer.Deserialize<List<Episode>>(items.GetRawText());
                 if (episodes != null)
                     allEpisodes.AddRange(episodes);
             }
             // Check for next property
-            if (root.TryGetProperty("next", out var nextProp) && nextProp.ValueKind == System.Text.Json.JsonValueKind.String)
+            if (root.TryGetProperty("next", out var nextProp) && nextProp.ValueKind == JsonValueKind.String)
             {
                 nextUrl = nextProp.GetString();
             }
