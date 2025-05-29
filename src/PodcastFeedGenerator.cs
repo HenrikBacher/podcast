@@ -140,11 +140,11 @@ class Program
                     switch (series.DefaultOrder.ToLowerInvariant())
                     {
                         case "Desc":
-                            itunesType = "serial";
+                            itunesType = "episodic";
                             break;
                         case "Asc":
                         default:
-                            itunesType = "episodic";
+                            itunesType = "serial";
                             break;
                     }
                 }
@@ -155,10 +155,10 @@ class Program
                     switch (series.PresentationType.ToLowerInvariant())
                     {
                         case "Ongoing":
-                            itunesType = "serial";
+                            itunesType = "episodic";
                             break;
                         case "Show":
-                            itunesType = "episodic";
+                            itunesType = "serial";
                             break;
                     }
                 }
@@ -169,10 +169,10 @@ class Program
                     switch (series.GroupingType.ToLowerInvariant())
                     {
                         case "Yearly":
-                            itunesType = "serial";
+                            itunesType = "episodic";
                             break;
                         case "Seasons":
-                            itunesType = "episodic";
+                            itunesType = "serial";
                             break;
                     }
                 }
