@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
@@ -138,9 +137,6 @@ namespace DrPodcast
         [JsonPropertyName("type")]
         public string? Type { get; set; }
 
-        [JsonPropertyName("channel")]
-        public SeriesChannel? Channel { get; set; }
-
         [JsonPropertyName("categories")]
         public List<string>? Categories { get; set; }
 
@@ -189,23 +185,5 @@ namespace DrPodcast
         [JsonPropertyName("imageAssets")]
         public List<ImageAsset>? ImageAssets { get; set; }
 
-    }
-
-    public class SeriesChannel
-    {
-        [JsonPropertyName("title")]
-        public string? Title { get; set; }
-
-        [JsonPropertyName("id")]
-        public string? Id { get; set; }
-
-        [JsonPropertyName("slug")]
-        public string? Slug { get; set; }
-
-        [JsonPropertyName("type")]
-        public string? Type { get; set; }
-
-        [JsonPropertyName("presentationUrl")]
-        public string? PresentationUrl { get; set; }
     }
 }

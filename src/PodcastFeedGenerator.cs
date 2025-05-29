@@ -38,8 +38,7 @@ class Program
         var podcastList = System.Text.Json.JsonSerializer.Deserialize<global::DrPodcast.PodcastList>(podcastsJson);
         // Get baseUrl from environment variables, fallback to defaults if not set
         string baseUrl = Environment.GetEnvironmentVariable("BASE_URL") ?? "https://example.com";
-        string episodesApiUrl = "https://api.dr.dk/radio/v2/series/";
-        string seriesApiUrl = "https://api.dr.dk/radio/v2/series/";
+        string apiUrl = "https://api.dr.dk/radio/v2/series/";
 
         Directory.CreateDirectory("output");
 
@@ -47,8 +46,7 @@ class Program
         {
             string urn = podcast.Urn;
             string slug = podcast.Slug;
-            string episodesUrl = episodesApiUrl + urn + "/episodes?limit=1024";
-            string seriesUrl = seriesApiUrl + urn;
+            string seriesUrl = apiUrl + urn;
             try
             {
                 using var httpClient = httpClientFactory.CreateClient("DrApi");
@@ -60,7 +58,7 @@ class Program
                 var series = System.Text.Json.JsonSerializer.Deserialize<global::DrPodcast.Series>(seriesContent);
 
                 // Fetch all episodes, handling pagination
-                var episodes = await FetchAllEpisodesAsync(episodesApiUrl + urn + "/episodes?limit=256", httpClient);
+                var episodes = await FetchAllEpisodesAsync(apiUrl + urn + "/episodes?limit=256", httpClient);
 
                 // Build strongly typed channel model using rich series data
                 var channelModel = new global::DrPodcast.Channel
@@ -139,7 +137,7 @@ class Program
                 // First check defaultOrder
                 if (!string.IsNullOrEmpty(series?.DefaultOrder))
                 {
-                    switch (series.DefaultOrder.ToLower())
+                    switch (series.DefaultOrder.ToLowerInvariant())
                     {
                         case "Desc":
                             itunesType = "serial";
@@ -154,7 +152,7 @@ class Program
                 // Override with presentationType if available
                 if (!string.IsNullOrEmpty(series?.PresentationType))
                 {
-                    switch (series.PresentationType.ToLower())
+                    switch (series.PresentationType.ToLowerInvariant())
                     {
                         case "Ongoing":
                             itunesType = "serial";
@@ -168,7 +166,7 @@ class Program
                 // Further refine with groupingType if available
                 if (!string.IsNullOrEmpty(series?.GroupingType))
                 {
-                    switch (series.GroupingType.ToLower())
+                    switch (series.GroupingType.ToLowerInvariant())
                     {
                         case "Yearly":
                             itunesType = "serial";
@@ -183,7 +181,7 @@ class Program
                 
                 // Add season information if the groupingType suggests seasonal content
                 if (!string.IsNullOrEmpty(series?.GroupingType) &&
-                    series.GroupingType.ToLower().Contains("Seasons"))
+                    series.GroupingType.Contains("Seasons", StringComparison.OrdinalIgnoreCase))
                 {
                     // Use numberOfSeasons if available, otherwise fall back to numberOfSeries
                     int seasonCount = series.NumberOfSeasons > 0 ? series.NumberOfSeasons : series.NumberOfSeries;
@@ -207,9 +205,6 @@ class Program
                         string epPubDate = episode.PublishTime ?? "";
                         string epGuid = episode.Id ?? Guid.NewGuid().ToString();
                         string epLink = episode.PresentationUrl ?? "";
-                        string epExplicit = "no";
-                        string epAuthor = "DR";
-                        string epCountry = "dk";
                         string? epImage = GetImageUrlFromAssets(episode.ImageAssets) ?? channelModel.Image;
 
                         // Select the highest quality mp3 file available from audioAssets
@@ -242,14 +237,14 @@ class Program
                             new XElement("title", epTitle),
                             new XElement("description", epDesc),
                             new XElement("pubDate", DateTime.TryParse(epPubDate, out var dt) ? dt.ToString("ddd, dd MMM yyyy HH:mm:ss zzz", System.Globalization.CultureInfo.InvariantCulture) : epPubDate),
-                            new XElement("explicit", epExplicit),
-                            new XElement(itunes + "author", epAuthor),
+                            new XElement("explicit", "no"),
+                            new XElement(itunes + "author", "DR"),
                             new XElement(itunes + "image", epImage),
                             new XElement(itunes + "duration", itunesDuration),
                             new XElement(media + "restriction",
                                 new XAttribute("relationship", "allow"),
                                 new XAttribute("type", "country"),
-                                epCountry
+                                "dk"
                             )
                         );
                         
@@ -323,13 +318,13 @@ class Program
         if (imageAssets != null && imageAssets.Count > 0)
         {
             // Prefer target 'podcast' with ratio '1:1', then 'default' with ratio '1:1', then any 'podcast', then any 'default'
-            var img = imageAssets.FirstOrDefault(a => a?.Target?.ToLower() == "podcast" && a?.Ratio == "1:1");
+            var img = imageAssets.FirstOrDefault(a => string.Equals(a?.Target, "podcast", StringComparison.OrdinalIgnoreCase) && a?.Ratio == "1:1");
             if (img == null)
-                img = imageAssets.FirstOrDefault(a => a?.Target?.ToLower() == "default" && a?.Ratio == "1:1");
+                img = imageAssets.FirstOrDefault(a => string.Equals(a?.Target, "default", StringComparison.OrdinalIgnoreCase) && a?.Ratio == "1:1");
             if (img == null)
-                img = imageAssets.FirstOrDefault(a => a?.Target?.ToLower() == "podcast");
+                img = imageAssets.FirstOrDefault(a => string.Equals(a?.Target, "podcast", StringComparison.OrdinalIgnoreCase));
             if (img == null)
-                img = imageAssets.FirstOrDefault(a => a?.Target?.ToLower() == "default");
+                img = imageAssets.FirstOrDefault(a => string.Equals(a?.Target, "default", StringComparison.OrdinalIgnoreCase));
             if (img != null)
             {
                 var imgId = img.Id;
