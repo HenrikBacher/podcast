@@ -282,8 +282,7 @@ class Program
                         {
                             foreach (var cat in categories)
                             {
-                                if (!string.IsNullOrEmpty(cat))
-                                    item.Add(new XElement("category", cat));
+                                item.Add(new XElement(itunes + "category", new XAttribute("text", cat)));
                             }
                         }
                         channel.Add(item);
