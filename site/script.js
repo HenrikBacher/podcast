@@ -49,7 +49,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const timeDiff = now - lastTap;
             
             if (timeDiff < 300 && timeDiff > 0) {
-                displayFeedContent(url);
+                // Double-tap to open feed in new tab
+                window.open(url, '_blank');
             } else {
                 if (isPocketCastsSupported()) {
                     const pocketCastsUrl = convertToPocketCastsUrl(url);
