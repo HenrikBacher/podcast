@@ -17,9 +17,15 @@ on:
     - cron: "0 * * * *"
 
 jobs:
-  update-feed:
-    name: "Update feeds"
+  update-and-deploy-feeds:
+    name: "Update and deploy feeds"
     runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -64,27 +70,6 @@ jobs:
           cp -r site/* output/_site/
           cp -r output/*.xml output/_site/feeds/
 
-      - name: Upload feed artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: site
-          path: output/_site/*
-          retention-days: 1
-          if-no-files-found: error
-
-  check-deployment:
-    name: "Check if deployment is needed"
-    needs: [update-feed]
-    runs-on: ubuntu-24.04
-    outputs:
-      needs_deploy: ${{ steps.deployment_check.outputs.needs_deploy }}
-    steps:
-      - name: Download feed artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: site
-          path: _site
-
       - name: Check for deployment changes
         id: deployment_check
         env:
@@ -92,9 +77,9 @@ jobs:
         run: |
           SITE_URL=$(gh api "repos/${GITHUB_REPOSITORY}/pages" --jq '.html_url')
           NEEDS_DEPLOY=false
-          
+
           # Check each feed for changes
-          for feed in _site/feeds/*.xml; do
+          for feed in output/_site/feeds/*.xml; do
             filename=$(basename "$feed")
             
             # Get current hash
@@ -113,47 +98,29 @@ jobs:
               break
             fi
           done
-          
+
           if [ "$NEEDS_DEPLOY" = "false" ]; then
             # Check if number of files changed
             LIVE_COUNT=$(curl -sL --max-time 10 $SITE_URL | grep -o "class='feed-link'" | wc -l || echo "0")
-            CURRENT_COUNT=$(find "_site/feeds" -name "*.xml" 2>/dev/null | wc -l)
+            CURRENT_COUNT=$(find "output/_site/feeds" -name "*.xml" 2>/dev/null | wc -l)
             
             if [ "$CURRENT_COUNT" != "$LIVE_COUNT" ]; then
               echo "Number of XML files changed (current: $CURRENT_COUNT, live: $LIVE_COUNT)"
               NEEDS_DEPLOY=true
             fi
           fi
-          
+
           echo "needs_deploy=$NEEDS_DEPLOY" >> $GITHUB_OUTPUT
 
-  publish-feed:
-    name: "Publish feeds"
-    needs: [check-deployment]
-    if: |
-      needs.check-deployment.outputs.needs_deploy == 'true'
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    permissions:
-      pages: write
-      id-token: write
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Download feed artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: site
-          path: _site
-          
       - name: Generate index.html
+        if: steps.deployment_check.outputs.needs_deploy == 'true'
         run: |
           # Get current timestamp in ISO 8601 format
           current_time=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          
+
           # Generate feeds HTML
           feeds_html=""
-          for feed in _site/feeds/*.xml; do
+          for feed in output/_site/feeds/*.xml; do
             filename=$(basename "$feed" .xml)
             formatted_title=$(echo "$filename" | sed 's/-/ /g')
             
@@ -166,19 +133,24 @@ jobs:
               feeds_html+="<li><a class='feed-link' href='feeds/$filename.xml'><div class='feed-icon'></div><span class='feed-title'>$formatted_title</span></a></li>"
             fi
           done
-          
+
           # Insert deployment timestamp meta tag after opening head tag
-          sed -i '/<head>/a \    <meta name="deployment-time" content="'"$current_time"'">' _site/index.html
-          
+          sed -i '/<head>/a \    <meta name="deployment-time" content="'"$current_time"'">' output/_site/index.html
+
           # Replace entire section between markers with generated feeds
-          sed -i "/<!-- BEGIN_FEEDS -->/,/<!-- END_FEEDS -->/c\        <!-- BEGIN_FEEDS -->\n        $feeds_html\n        <!-- END_FEEDS -->" _site/index.html
+          sed -i "/<!-- BEGIN_FEEDS -->/,/<!-- END_FEEDS -->/c\        <!-- BEGIN_FEEDS -->\n        $feeds_html\n        <!-- END_FEEDS -->" output/_site/index.html
 
       - name: Setup Pages
+        if: steps.deployment_check.outputs.needs_deploy == 'true'
         uses: actions/configure-pages@v5
 
       - name: Upload Pages artifact
+        if: steps.deployment_check.outputs.needs_deploy == 'true'
         uses: actions/upload-pages-artifact@v3
-        
+        with:
+          path: output/_site
+
       - name: Deploy to GitHub Pages
+        if: steps.deployment_check.outputs.needs_deploy == 'true'
         id: deployment
         uses: actions/deploy-pages@v4
