@@ -135,26 +135,91 @@ class Program
                     channel.Add(new XElement(itunes + "summary", series.Description));
                 }
 
+                // Add iTunes type based on defaultOrder, presentationType, and groupingType properties
+                string itunesType = "episodic"; // Default to episodic
+                
+                // First check defaultOrder
+                if (!string.IsNullOrEmpty(series?.DefaultOrder))
+                {
+                    switch (series.DefaultOrder.ToLower())
+                    {
+                        case "Desc":
+                            itunesType = "serial";
+                            break;
+                        case "Asc":
+                        default:
+                            itunesType = "episodic";
+                            break;
+                    }
+                }
+                
+                // Override with presentationType if available
+                if (!string.IsNullOrEmpty(series?.PresentationType))
+                {
+                    switch (series.PresentationType.ToLower())
+                    {
+                        case "Ongoing":
+                            itunesType = "serial";
+                            break;
+                        case "Show":
+                            itunesType = "episodic";
+                            break;
+                    }
+                }
+                
+                // Further refine with groupingType if available
+                if (!string.IsNullOrEmpty(series?.GroupingType))
+                {
+                    switch (series.GroupingType.ToLower())
+                    {
+                        case "Yearly":
+                            itunesType = "serial";
+                            break;
+                        case "Seasons":
+                            itunesType = "episodic";
+                            break;
+                    }
+                }
+                
+                channel.Add(new XElement(itunes + "type", itunesType));
+                
+                // Add season information if the groupingType suggests seasonal content
+                if (!string.IsNullOrEmpty(series?.GroupingType) &&
+                    series.GroupingType.ToLower().Contains("Seasons"))
+                {
+                    // Use numberOfSeasons if available, otherwise fall back to numberOfSeries
+                    int seasonCount = series.NumberOfSeasons > 0 ? series.NumberOfSeasons : series.NumberOfSeries;
+                    if (seasonCount > 0)
+                    {
+                        channel.Add(new XElement(itunes + "season", seasonCount));
+                    }
+                }
+
                 if (episodes != null)
                 {
-                    foreach (global::DrPodcast.Episode ep in episodes)
+                    // Sort episodes based on the determined podcast type
+                    var sortedEpisodes = itunesType == "serial"
+                        ? episodes.OrderBy(ep => DateTime.TryParse(ep.PublishTime, out var dt) ? dt : DateTime.MinValue).ToList()
+                        : episodes.OrderByDescending(ep => DateTime.TryParse(ep.PublishTime, out var dt) ? dt : DateTime.MinValue).ToList();
+                    
+                    foreach (global::DrPodcast.Episode episode in sortedEpisodes)
                     {
-                        string epTitle = ep.Title ?? "";
-                        string epDesc = ep.Description ?? "";
-                        string epPubDate = ep.PublishTime ?? "";
-                        string epGuid = ep.Id ?? Guid.NewGuid().ToString();
-                        string epLink = ep.PresentationUrl ?? "";
+                        string epTitle = episode.Title ?? "";
+                        string epDesc = episode.Description ?? "";
+                        string epPubDate = episode.PublishTime ?? "";
+                        string epGuid = episode.Id ?? Guid.NewGuid().ToString();
+                        string epLink = episode.PresentationUrl ?? "";
                         string epExplicit = "no";
                         string epAuthor = "DR";
                         string epCountry = "dk";
-                        string? epImage = GetImageUrlFromAssets(ep.ImageAssets) ?? channelModel.Image;
+                        string? epImage = GetImageUrlFromAssets(episode.ImageAssets) ?? channelModel.Image;
 
                         // Select the highest quality mp3 file available from audioAssets
                         string epAudio = "";
                         int epAudioLength = 0;
-                        int epAudioDurationMs = ep.DurationMilliseconds ?? 0;
+                        int epAudioDurationMs = episode.DurationMilliseconds ?? 0;
                         string itunesDuration = "";
-                        var audioAssets = ep.AudioAssets;
+                        var audioAssets = episode.AudioAssets;
                         if (audioAssets != null && audioAssets.Count > 0)
                         {
                             var mp3Assets = audioAssets
@@ -189,6 +254,21 @@ class Program
                                 epCountry
                             )
                         );
+                        
+                        // Add iTunes episode metadata
+                        item.Add(new XElement(itunes + "episodeType", "full"));
+                        
+                        // Add episode number if available
+                        if (episode.EpisodeNumber.HasValue && episode.EpisodeNumber.Value > 0)
+                        {
+                            item.Add(new XElement(itunes + "episode", episode.EpisodeNumber.Value));
+                        }
+                        
+                        // Add season number if available
+                        if (episode.SeasonNumber.HasValue && episode.SeasonNumber.Value > 0)
+                        {
+                            item.Add(new XElement(itunes + "season", episode.SeasonNumber.Value));
+                        }
                         if (!string.IsNullOrEmpty(epLink))
                             item.Add(new XElement("link", epLink));
                         if (!string.IsNullOrEmpty(epGuid))
@@ -204,7 +284,7 @@ class Program
                             item.Add(enclosure);
                         }
                         // Propagate categories from upstream feed if present
-                        var categories = ep.Categories;
+                        var categories = episode.Categories;
                         if (categories != null && categories.Count > 0)
                         {
                             foreach (var cat in categories)

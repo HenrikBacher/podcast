@@ -50,6 +50,12 @@ namespace DrPodcast
 
         [JsonPropertyName("imageAssets")]
         public List<ImageAsset>? ImageAssets { get; set; }
+
+        [JsonPropertyName("episodeNumber")]
+        public int? EpisodeNumber { get; set; }
+
+        [JsonPropertyName("seasonNumber")]
+        public int? SeasonNumber { get; set; }
     }
 
     public class AudioAsset
@@ -152,6 +158,9 @@ namespace DrPodcast
 
         [JsonPropertyName("numberOfSeries")]
         public int NumberOfSeries { get; set; }
+
+        [JsonPropertyName("numberOfSeasons")]
+        public int NumberOfSeasons { get; set; }
 
         [JsonPropertyName("presentationType")]
         public string? PresentationType { get; set; }
