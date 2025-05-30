@@ -1,189 +1,186 @@
-using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
-namespace DrPodcast
+namespace DrPodcast;
+
+public record PodcastList
 {
-    public class PodcastList
-    {
-        [JsonPropertyName("podcasts")]
-        public List<Podcast> Podcasts { get; set; } = new();
-    }
+    [JsonPropertyName("podcasts")]
+    public List<Podcast> Podcasts { get; init; } = [];
+}
 
-    public class Podcast
-    {
-        [JsonPropertyName("slug")]
-        public string Slug { get; set; } = string.Empty;
+public record Podcast
+{
+    [JsonPropertyName("slug")]
+    public string Slug { get; init; } = string.Empty;
 
-        [JsonPropertyName("urn")]
-        public string Urn { get; set; } = string.Empty;
+    [JsonPropertyName("urn")]
+    public string Urn { get; init; } = string.Empty;
 
-        [JsonPropertyName("imageAssets")]
-        public List<ImageAsset>? ImageAssets { get; set; }
-    }
+    [JsonPropertyName("imageAssets")]
+    public List<ImageAsset>? ImageAssets { get; init; }
+}
 
-    public class Episode
-    {
-        [JsonPropertyName("title")]
-        public string? Title { get; set; }
+public record Episode
+{
+    [JsonPropertyName("title")]
+    public string? Title { get; init; }
 
-        [JsonPropertyName("description")]
-        public string? Description { get; set; }
+    [JsonPropertyName("description")]
+    public string? Description { get; init; }
 
-        [JsonPropertyName("publishTime")]
-        public string? PublishTime { get; set; }
+    [JsonPropertyName("publishTime")]
+    public string? PublishTime { get; init; }
 
-        [JsonPropertyName("id")]
-        public string? Id { get; set; }
+    [JsonPropertyName("id")]
+    public string? Id { get; init; }
 
-        [JsonPropertyName("presentationUrl")]
-        public string? PresentationUrl { get; set; }
+    [JsonPropertyName("presentationUrl")]
+    public string? PresentationUrl { get; init; }
 
-        [JsonPropertyName("durationMilliseconds")]
-        public int? DurationMilliseconds { get; set; }
+    [JsonPropertyName("durationMilliseconds")]
+    public int? DurationMilliseconds { get; init; }
 
-        [JsonPropertyName("audioAssets")]
-        public List<AudioAsset>? AudioAssets { get; set; }
+    [JsonPropertyName("audioAssets")]
+    public List<AudioAsset>? AudioAssets { get; init; }
 
-        [JsonPropertyName("categories")]
-        public List<string>? Categories { get; set; }
+    [JsonPropertyName("categories")]
+    public List<string>? Categories { get; init; }
 
-        [JsonPropertyName("imageAssets")]
-        public List<ImageAsset>? ImageAssets { get; set; }
+    [JsonPropertyName("imageAssets")]
+    public List<ImageAsset>? ImageAssets { get; init; }
 
-        [JsonPropertyName("episodeNumber")]
-        public int? EpisodeNumber { get; set; }
+    [JsonPropertyName("episodeNumber")]
+    public int? EpisodeNumber { get; init; }
 
-        [JsonPropertyName("seasonNumber")]
-        public int? SeasonNumber { get; set; }
-    }
+    [JsonPropertyName("seasonNumber")]
+    public int? SeasonNumber { get; init; }
+}
 
-    public class AudioAsset
-    {
-        [JsonPropertyName("format")]
-        public string? Format { get; set; }
+public record AudioAsset
+{
+    [JsonPropertyName("format")]
+    public string? Format { get; init; }
 
-        [JsonPropertyName("bitrate")]
-        public int? Bitrate { get; set; }
+    [JsonPropertyName("bitrate")]
+    public int? Bitrate { get; init; }
 
-        [JsonPropertyName("url")]
-        public string? Url { get; set; }
+    [JsonPropertyName("url")]
+    public string? Url { get; init; }
 
-        [JsonPropertyName("fileSize")]
-        public int? FileSize { get; set; }
-    }
+    [JsonPropertyName("fileSize")]
+    public int? FileSize { get; init; }
+}
 
-    public class ImageAsset
-    {
-        [JsonPropertyName("id")]
-        public string? Id { get; set; }
+public record ImageAsset
+{
+    [JsonPropertyName("id")]
+    public string? Id { get; init; }
 
-        [JsonPropertyName("target")]
-        public string? Target { get; set; }
+    [JsonPropertyName("target")]
+    public string? Target { get; init; }
 
-        [JsonPropertyName("ratio")]
-        public string? Ratio { get; set; }
-    }
+    [JsonPropertyName("ratio")]
+    public string? Ratio { get; init; }
+}
 
-    public class Channel
-    {
-        [JsonPropertyName("title")]
-        public string? Title { get; set; }
+public record Channel
+{
+    [JsonPropertyName("title")]
+    public string? Title { get; init; }
 
-        [JsonPropertyName("link")]
-        public string? Link { get; set; }
+    [JsonPropertyName("link")]
+    public string? Link { get; init; }
 
-        [JsonPropertyName("description")]
-        public string? Description { get; set; }
+    [JsonPropertyName("description")]
+    public string? Description { get; init; }
 
-        [JsonPropertyName("language")]
-        public string? Language { get; set; }
+    [JsonPropertyName("language")]
+    public string? Language { get; init; }
 
-        [JsonPropertyName("copyright")]
-        public string? Copyright { get; set; }
+    [JsonPropertyName("copyright")]
+    public string? Copyright { get; init; }
 
-        [JsonPropertyName("lastBuildDate")]
-        public string? LastBuildDate { get; set; }
+    [JsonPropertyName("lastBuildDate")]
+    public string? LastBuildDate { get; init; }
 
-        [JsonPropertyName("explicit")]
-        public string? Explicit { get; set; }
+    [JsonPropertyName("explicit")]
+    public string? Explicit { get; init; }
 
-        [JsonPropertyName("author")]
-        public string? Author { get; set; }
+    [JsonPropertyName("author")]
+    public string? Author { get; init; }
 
-        [JsonPropertyName("block")]
-        public string? Block { get; set; }
+    [JsonPropertyName("block")]
+    public string? Block { get; init; }
 
-        [JsonPropertyName("owner")]
-        public ChannelOwner? Owner { get; set; }
+    [JsonPropertyName("owner")]
+    public ChannelOwner? Owner { get; init; }
 
-        [JsonPropertyName("new-feed-url")]
-        public string? NewFeedUrl { get; set; }
+    [JsonPropertyName("new-feed-url")]
+    public string? NewFeedUrl { get; init; }
 
-        [JsonPropertyName("image")]
-        public string? Image { get; set; }
-    }
+    [JsonPropertyName("image")]
+    public string? Image { get; init; }
+}
 
-    public class ChannelOwner
-    {
-        [JsonPropertyName("email")]
-        public string? Email { get; set; }
+public record ChannelOwner
+{
+    [JsonPropertyName("email")]
+    public string? Email { get; init; }
 
-        [JsonPropertyName("name")]
-        public string? Name { get; set; }
-    }
+    [JsonPropertyName("name")]
+    public string? Name { get; init; }
+}
 
-    public class Series
-    {
-        [JsonPropertyName("type")]
-        public string? Type { get; set; }
+public record Series
+{
+    [JsonPropertyName("type")]
+    public string? Type { get; init; }
 
-        [JsonPropertyName("categories")]
-        public List<string>? Categories { get; set; }
+    [JsonPropertyName("categories")]
+    public List<string>? Categories { get; init; }
 
-        [JsonPropertyName("numberOfEpisodes")]
-        public int NumberOfEpisodes { get; set; }
+    [JsonPropertyName("numberOfEpisodes")]
+    public int NumberOfEpisodes { get; init; }
 
-        [JsonPropertyName("numberOfSeries")]
-        public int NumberOfSeries { get; set; }
+    [JsonPropertyName("numberOfSeries")]
+    public int NumberOfSeries { get; init; }
 
-        [JsonPropertyName("numberOfSeasons")]
-        public int NumberOfSeasons { get; set; }
+    [JsonPropertyName("numberOfSeasons")]
+    public int NumberOfSeasons { get; init; }
 
-        [JsonPropertyName("presentationType")]
-        public string? PresentationType { get; set; }
+    [JsonPropertyName("presentationType")]
+    public string? PresentationType { get; init; }
 
-        [JsonPropertyName("groupingType")]
-        public string? GroupingType { get; set; }
+    [JsonPropertyName("groupingType")]
+    public string? GroupingType { get; init; }
 
-        [JsonPropertyName("latestEpisodeStartTime")]
-        public string? LatestEpisodeStartTime { get; set; }
+    [JsonPropertyName("latestEpisodeStartTime")]
+    public string? LatestEpisodeStartTime { get; init; }
 
-        [JsonPropertyName("presentationUrl")]
-        public string? PresentationUrl { get; set; }
+    [JsonPropertyName("presentationUrl")]
+    public string? PresentationUrl { get; init; }
 
-        [JsonPropertyName("explicitContent")]
-        public bool ExplicitContent { get; set; }
+    [JsonPropertyName("explicitContent")]
+    public bool ExplicitContent { get; init; }
 
-        [JsonPropertyName("defaultOrder")]
-        public string? DefaultOrder { get; set; }
+    [JsonPropertyName("defaultOrder")]
+    public string? DefaultOrder { get; init; }
 
-        [JsonPropertyName("id")]
-        public string? Id { get; set; }
+    [JsonPropertyName("id")]
+    public string? Id { get; init; }
 
-        [JsonPropertyName("slug")]
-        public string? Slug { get; set; }
+    [JsonPropertyName("slug")]
+    public string? Slug { get; init; }
 
-        [JsonPropertyName("title")]
-        public string? Title { get; set; }
+    [JsonPropertyName("title")]
+    public string? Title { get; init; }
 
-        [JsonPropertyName("punchline")]
-        public string? Punchline { get; set; }
+    [JsonPropertyName("punchline")]
+    public string? Punchline { get; init; }
 
-        [JsonPropertyName("description")]
-        public string? Description { get; set; }
+    [JsonPropertyName("description")]
+    public string? Description { get; init; }
 
-        [JsonPropertyName("imageAssets")]
-        public List<ImageAsset>? ImageAssets { get; set; }
-
-    }
+    [JsonPropertyName("imageAssets")]
+    public List<ImageAsset>? ImageAssets { get; init; }
 }

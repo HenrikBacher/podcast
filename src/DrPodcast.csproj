@@ -5,7 +5,12 @@
     <TargetFramework>net8.0</TargetFramework>
     <RootNamespace>DrPodcast</RootNamespace>
     <Nullable>enable</Nullable>
+    <LangVersion>12</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
     <RuntimeIdentifiers>linux-x64</RuntimeIdentifiers>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <WarningsAsErrors />
+    <WarningsNotAsErrors>CS8618</WarningsNotAsErrors>
   </PropertyGroup>
 
   <ItemGroup>
