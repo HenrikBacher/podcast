@@ -64,7 +64,7 @@ var tasks = podcastList?.Podcasts.Select(async podcast =>
             Author = "DR",
             Block = "yes",
             Owner = new ChannelOwner { Email = "podcast@dr.dk", Name = "DR" },
-            NewFeedUrl = $"{baseUrl}/{slug}.xml",
+            NewFeedUrl = $"{baseUrl}/feeds/{slug}.xml",
             Image = GetImageUrlFromAssets(series?.ImageAssets) ?? GetImageUrlFromAssets(podcast.ImageAssets)
         };
 
@@ -75,7 +75,7 @@ var tasks = podcastList?.Podcasts.Select(async podcast =>
 
         var channel = new XElement("channel",
             new XElement(atom + "link",
-                new XAttribute("href", $"{baseUrl}/{slug}.xml"),
+                new XAttribute("href", $"{baseUrl}/feeds/{slug}.xml"),
                 new XAttribute("rel", "self"),
                 new XAttribute("type", "application/rss+xml")
             ),
