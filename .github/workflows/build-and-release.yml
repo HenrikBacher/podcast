@@ -163,14 +163,11 @@ jobs:
         with:
           path: ./artifacts
 
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create Release and Upload All Assets
+        uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ needs.determine-version.outputs.version-tag }}
-          release_name: ${{ needs.determine-version.outputs.is-prerelease == 'true' && format('Prerelease {0}', needs.determine-version.outputs.version-tag) || format('Release {0}', needs.determine-version.outputs.version-tag) }}
+          name: ${{ needs.determine-version.outputs.is-prerelease == 'true' && format('Prerelease {0}', needs.determine-version.outputs.version-tag) || format('Release {0}', needs.determine-version.outputs.version-tag) }}
           body: |
             ${{ needs.determine-version.outputs.is-prerelease == 'true' && '## 🚧 Prerelease Build' || '## ✅ Stable Release' }}
 
@@ -189,36 +186,11 @@ jobs:
             ${{ needs.determine-version.outputs.is-prerelease == 'true' && '⚠️ **Warning**: This is a prerelease version and may contain bugs.' || '' }}
           draft: false
           prerelease: ${{ needs.determine-version.outputs.is-prerelease == 'true' }}
-
-      - name: Upload Linux Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./artifacts/DrPodcast-linux-x64/DrPodcast-linux-x64.tar.gz
-          asset_name: DrPodcast-linux-x64.tar.gz
-          asset_content_type: application/gzip
-
-      - name: Upload Windows Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./artifacts/DrPodcast-win-x64/DrPodcast-win-x64.zip
-          asset_name: DrPodcast-win-x64.zip
-          asset_content_type: application/zip
-
-      - name: Upload macOS Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./artifacts/DrPodcast-osx-x64/DrPodcast-osx-x64.tar.gz
-          asset_name: DrPodcast-osx-x64.tar.gz
-          asset_content_type: application/gzip
+          files: |
+            ./artifacts/DrPodcast-linux-x64/DrPodcast-linux-x64.tar.gz
+            ./artifacts/DrPodcast-win-x64/DrPodcast-win-x64.zip
+            ./artifacts/DrPodcast-osx-x64/DrPodcast-osx-x64.tar.gz
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Delete Prerelease Versions
         if: needs.determine-version.outputs.is-prerelease == 'false'
