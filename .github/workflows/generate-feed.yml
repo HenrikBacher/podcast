@@ -78,9 +78,9 @@ jobs:
 
           # Download the platform-specific asset
           $assetName = switch ($platform) {
-            "linux-x64" { "drpodcast-linux-x64.tar.gz" }
-            "win-x64" { "drpodcast-win-x64.zip" }
-            "osx-x64" { "drpodcast-osx-x64.tar.gz" }
+            "linux-x64" { "DrPodcast-linux-x64.tar.gz" }
+            "win-x64" { "DrPodcast-win-x64.zip" }
+            "osx-x64" { "DrPodcast-osx-x64.tar.gz" }
           }
           Write-Host "Downloading asset: $assetName"
           gh release download $tagName --repo ${{ github.repository }} --pattern "$assetName"
@@ -88,19 +88,11 @@ jobs:
           # Extract and prepare executable
           if ("${{ runner.os }}" -eq "Windows") {
             # Extract ZIP file and rename executable
-            Expand-Archive -Path $assetName -DestinationPath "." -Force
-            $exeFile = Get-ChildItem -Name "DrPodcast.exe" | Select-Object -First 1
-            if ($exeFile) {
-              Rename-Item $exeFile "drpodcast.exe"
-            }
+            Expand-Archive -Path $assetName -DestinationPath "." -Force      
           } else {
             # Extract tar.gz file and make executable
-            tar -xzf $assetName
-            $executable = Get-ChildItem -Name "DrPodcast" | Select-Object -First 1
-            if ($executable) {
-              chmod +x $executable
-              New-Item -ItemType SymbolicLink -Name "drpodcast" -Target $executable -Force
-            }
+            tar -xzf $assetName          
+            chmod +x DrPodcast
           }
 
           Write-Host "Downloaded and prepared release executable for $platform"
@@ -112,9 +104,9 @@ jobs:
         shell: pwsh
         run: |
           if ("${{ runner.os }}" -eq "Windows") {
-            & ./drpodcast.exe --podcasts podcasts.json
+            & ./DrPodcast.exe --podcasts podcasts.json
           } else {
-            & ./drpodcast --podcasts podcasts.json
+            & ./DrPodcast --podcasts podcasts.json
           }
 
       - name: Copy site files
