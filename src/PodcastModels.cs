@@ -2,6 +2,14 @@ using System.Text.Json.Serialization;
 
 namespace DrPodcast;
 
+[JsonSerializable(typeof(PodcastList))]
+[JsonSerializable(typeof(Series))]
+[JsonSerializable(typeof(List<Episode>))]
+[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+public partial class PodcastJsonContext : JsonSerializerContext
+{
+}
+
 public record PodcastList
 {
     [JsonPropertyName("podcasts")]
