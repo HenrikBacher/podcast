@@ -1,0 +1,265 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [main]
+    paths: ["src/**"]
+  pull_request:
+    branches: [main]
+    paths: ["src/**"]
+
+env:
+  DOTNET_VERSION: "8.0.x"
+
+jobs:
+  determine-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      version-tag: ${{ steps.version.outputs.version-tag }}
+      is-prerelease: ${{ steps.version.outputs.is-prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine Version
+        id: version
+        run: |
+          # Get the latest tag
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "Latest tag: $LATEST_TAG"
+
+          # Parse version numbers
+          VERSION_NUMBER=${LATEST_TAG#v}
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION_NUMBER"
+
+          # Default to patch bump
+          BUMP_TYPE="patch"
+          IS_PRERELEASE="false"
+
+          # Check for version bump indicators in PR or commit messages
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            IS_PRERELEASE="true"
+            PR_BODY="${{ github.event.pull_request.body }}"
+            if echo "$PR_BODY" | grep -i "breaking change\|major version\|\[major\]"; then
+              BUMP_TYPE="major"
+            elif echo "$PR_BODY" | grep -i "feature\|minor version\|\[minor\]"; then
+              BUMP_TYPE="minor"
+            fi
+          else
+            # Direct commit to main - check commit message
+            COMMIT_MSG=$(git log -1 --pretty=%B)
+            if echo "$COMMIT_MSG" | grep -i "breaking change\|major version\|\[major\]"; then
+              BUMP_TYPE="major"
+            elif echo "$COMMIT_MSG" | grep -i "feature\|minor version\|\[minor\]"; then
+              BUMP_TYPE="minor"
+            fi
+          fi
+
+          echo "Bump type: $BUMP_TYPE"
+          echo "Is prerelease: $IS_PRERELEASE"
+
+          # Calculate new version
+          case $BUMP_TYPE in
+            major)
+              NEW_VERSION="$((MAJOR + 1)).0.0"
+              ;;
+            minor)
+              NEW_VERSION="$MAJOR.$((MINOR + 1)).0"
+              ;;
+            patch)
+              NEW_VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
+              ;;
+          esac
+
+          # Add prerelease suffix for PR builds
+          if [[ "$IS_PRERELEASE" == "true" ]]; then
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+            COMMIT_SHA="${{ github.event.pull_request.head.sha }}"
+            SHORT_SHA=${COMMIT_SHA:0:8}
+            NEW_VERSION="${NEW_VERSION}-pr.${PR_NUMBER}.${SHORT_SHA}"
+          fi
+
+          echo "New version: $NEW_VERSION"
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "version-tag=v$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "is-prerelease=$IS_PRERELEASE" >> $GITHUB_OUTPUT
+
+  build:
+    needs: determine-version
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            runtime: linux-x64
+            artifact-name: drpodcast-linux-x64
+          - os: windows-latest
+            runtime: win-x64
+            artifact-name: drpodcast-win-x64
+          - os: macos-latest
+            runtime: osx-x64
+            artifact-name: drpodcast-osx-x64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore dependencies
+        run: dotnet restore src/DrPodcast.csproj
+
+      - name: Build
+        run: dotnet build src/DrPodcast.csproj --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test src/DrPodcast.csproj --no-build --verbosity normal --configuration Release
+
+      - name: Publish
+        shell: pwsh
+        run: |
+          dotnet publish src/DrPodcast.csproj `
+            --configuration Release `
+            --runtime ${{ matrix.runtime }} `
+            --self-contained true `
+            --output ./publish/${{ matrix.runtime }} `
+            -p:PublishSingleFile=true `
+            -p:PublishTrimmed=true `
+            -p:Version=${{ needs.determine-version.outputs.version }}
+
+      - name: Create Archive
+        shell: pwsh
+        run: |
+          Set-Location "publish/${{ matrix.runtime }}"
+          if ("${{ matrix.runtime }}" -eq "win-x64") {
+            7z a "../../${{ matrix.artifact-name }}.zip" *
+          } else {
+            tar -czf "../../${{ matrix.artifact-name }}.tar.gz" *
+          }
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          path: |
+            ${{ matrix.artifact-name }}.zip
+            ${{ matrix.artifact-name }}.tar.gz
+          retention-days: 30
+
+  release:
+    needs: [determine-version, build]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ needs.determine-version.outputs.version-tag }}
+          release_name: ${{ needs.determine-version.outputs.is-prerelease == 'true' && format('Prerelease {0}', needs.determine-version.outputs.version-tag) || format('Release {0}', needs.determine-version.outputs.version-tag) }}
+          body: |
+            ${{ needs.determine-version.outputs.is-prerelease == 'true' && '## 🚧 Prerelease Build' || '## ✅ Stable Release' }}
+
+            ${{ needs.determine-version.outputs.is-prerelease == 'true' && format('This is a prerelease build from PR #{0}. Use for testing purposes only.', github.event.pull_request.number) || 'This release was automatically generated and is ready for production use.' }}
+
+            ### Download
+            - **Linux (x64)**: drpodcast-linux-x64.tar.gz
+            - **Windows (x64)**: drpodcast-win-x64.zip
+            - **macOS (x64)**: drpodcast-osx-x64.tar.gz
+
+            ### Installation
+            1. Download the appropriate file for your platform
+            2. Extract the archive
+            3. Run the executable directly (no installation required)
+
+            ${{ needs.determine-version.outputs.is-prerelease == 'true' && '⚠️ **Warning**: This is a prerelease version and may contain bugs.' || '' }}
+          draft: false
+          prerelease: ${{ needs.determine-version.outputs.is-prerelease == 'true' }}
+
+      - name: Upload Linux Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./artifacts/drpodcast-linux-x64/drpodcast-linux-x64.tar.gz
+          asset_name: drpodcast-linux-x64.tar.gz
+          asset_content_type: application/gzip
+
+      - name: Upload Windows Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./artifacts/drpodcast-win-x64/drpodcast-win-x64.zip
+          asset_name: drpodcast-win-x64.zip
+          asset_content_type: application/zip
+
+      - name: Upload macOS Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./artifacts/drpodcast-osx-x64/drpodcast-osx-x64.tar.gz
+          asset_name: drpodcast-osx-x64.tar.gz
+          asset_content_type: application/gzip
+
+      - name: Delete Prerelease Versions
+        if: needs.determine-version.outputs.is-prerelease == 'false'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "🧹 Deleting prerelease versions after stable release..."
+
+          # Wait a moment to ensure the stable release is fully created
+          sleep 5
+
+          # Get all releases
+          RELEASES=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            "https://api.github.com/repos/${{ github.repository }}/releases")
+
+          # Extract prerelease IDs (only those marked as prerelease AND containing version patterns)
+          PRERELEASE_IDS=$(echo "$RELEASES" | jq -r '.[] | select(.prerelease == true and (.tag_name | test("-pr\\."))) | .id')
+
+          if [ -z "$PRERELEASE_IDS" ]; then
+            echo "No prerelease versions found to delete."
+          else
+            echo "Found prerelease versions to delete:"
+            for ID in $PRERELEASE_IDS; do
+              # Get release info for logging
+              RELEASE_INFO=$(echo "$RELEASES" | jq -r ".[] | select(.id == $ID)")
+              RELEASE_NAME=$(echo "$RELEASE_INFO" | jq -r '.name')
+              RELEASE_TAG=$(echo "$RELEASE_INFO" | jq -r '.tag_name')
+              
+              echo "  - Deleting: $RELEASE_NAME (Tag: $RELEASE_TAG, ID: $ID)"
+              
+              # Delete the prerelease
+              DELETE_RESPONSE=$(curl -s -w "%{http_code}" -X DELETE \
+                -H "Authorization: token $GITHUB_TOKEN" \
+                "https://api.github.com/repos/${{ github.repository }}/releases/$ID")
+              
+              HTTP_CODE=${DELETE_RESPONSE: -3}
+              if [ "$HTTP_CODE" = "204" ]; then
+                echo "    ✅ Successfully deleted prerelease $RELEASE_TAG"
+              else
+                echo "    ❌ Failed to delete prerelease $RELEASE_TAG (HTTP: $HTTP_CODE)"
+              fi
+            done
+            echo "🎉 Prerelease cleanup completed!"
+          fi
