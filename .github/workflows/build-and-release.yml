@@ -115,7 +115,7 @@ jobs:
         run: dotnet restore src/DrPodcast.csproj
 
       - name: Build
-        run: dotnet build src/DrPodcast.csproj --no-restore --configuration Release
+        run: dotnet build src/DrPodcast.csproj --no-restore --configuration Release -p:Version=${{ needs.determine-version.outputs.version }}
 
       - name: Test
         run: dotnet test src/DrPodcast.csproj --no-build --verbosity normal --configuration Release
