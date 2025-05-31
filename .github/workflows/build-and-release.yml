@@ -121,25 +121,26 @@ jobs:
         run: dotnet test src/DrPodcast.csproj --no-build --verbosity normal --configuration Release
 
       - name: Publish
+        shell: pwsh
         run: |
-          dotnet publish src/DrPodcast.csproj \
-            --configuration Release \
-            --runtime ${{ matrix.runtime }} \
-            --self-contained true \
-            --output ./publish/${{ matrix.runtime }} \
-            -p:PublishSingleFile=true \
-            -p:PublishTrimmed=true \
+          dotnet publish src/DrPodcast.csproj `
+            --configuration Release `
+            --runtime ${{ matrix.runtime }} `
+            --self-contained true `
+            --output ./publish/${{ matrix.runtime }} `
+            -p:PublishSingleFile=true `
+            -p:PublishTrimmed=true `
             -p:Version=${{ needs.determine-version.outputs.version }}
 
       - name: Create Archive
-        shell: bash
+        shell: pwsh
         run: |
-          cd publish/${{ matrix.runtime }}
-          if [[ "${{ matrix.runtime }}" == "win-x64" ]]; then
-            7z a ../../${{ matrix.artifact-name }}.zip *
-          else
-            tar -czf ../../${{ matrix.artifact-name }}.tar.gz *
-          fi
+          Set-Location "publish/${{ matrix.runtime }}"
+          if ("${{ matrix.runtime }}" -eq "win-x64") {
+            7z a "../../${{ matrix.artifact-name }}.zip" *
+          } else {
+            tar -czf "../../${{ matrix.artifact-name }}.tar.gz" *
+          }
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
