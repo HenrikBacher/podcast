@@ -219,3 +219,47 @@ jobs:
           asset_path: ./artifacts/drpodcast-osx-x64/drpodcast-osx-x64.tar.gz
           asset_name: drpodcast-osx-x64.tar.gz
           asset_content_type: application/gzip
+
+      - name: Delete Prerelease Versions
+        if: needs.determine-version.outputs.is-prerelease == 'false'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "🧹 Deleting prerelease versions after stable release..."
+
+          # Wait a moment to ensure the stable release is fully created
+          sleep 5
+
+          # Get all releases
+          RELEASES=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            "https://api.github.com/repos/${{ github.repository }}/releases")
+
+          # Extract prerelease IDs (only those marked as prerelease AND containing version patterns)
+          PRERELEASE_IDS=$(echo "$RELEASES" | jq -r '.[] | select(.prerelease == true and (.tag_name | test("-pr\\."))) | .id')
+
+          if [ -z "$PRERELEASE_IDS" ]; then
+            echo "No prerelease versions found to delete."
+          else
+            echo "Found prerelease versions to delete:"
+            for ID in $PRERELEASE_IDS; do
+              # Get release info for logging
+              RELEASE_INFO=$(echo "$RELEASES" | jq -r ".[] | select(.id == $ID)")
+              RELEASE_NAME=$(echo "$RELEASE_INFO" | jq -r '.name')
+              RELEASE_TAG=$(echo "$RELEASE_INFO" | jq -r '.tag_name')
+              
+              echo "  - Deleting: $RELEASE_NAME (Tag: $RELEASE_TAG, ID: $ID)"
+              
+              # Delete the prerelease
+              DELETE_RESPONSE=$(curl -s -w "%{http_code}" -X DELETE \
+                -H "Authorization: token $GITHUB_TOKEN" \
+                "https://api.github.com/repos/${{ github.repository }}/releases/$ID")
+              
+              HTTP_CODE=${DELETE_RESPONSE: -3}
+              if [ "$HTTP_CODE" = "204" ]; then
+                echo "    ✅ Successfully deleted prerelease $RELEASE_TAG"
+              else
+                echo "    ❌ Failed to delete prerelease $RELEASE_TAG (HTTP: $HTTP_CODE)"
+              fi
+            done
+            echo "🎉 Prerelease cleanup completed!"
+          fi

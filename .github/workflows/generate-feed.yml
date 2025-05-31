@@ -67,7 +67,13 @@ jobs:
           } else {
             gh release list --repo ${{ github.repository }} --limit 1 --json tagName,assets
           }
-          $tagName = ($releaseInfo | ConvertFrom-Json)[0].tagName
+
+          $releases = $releaseInfo | ConvertFrom-Json
+          if (-not $releases -or $releases.Count -eq 0) {
+            Write-Error "No releases found. Please create a release first."
+            exit 1
+          }
+          $tagName = $releases[0].tagName
 
           Write-Host "Found release: $tagName"
 
