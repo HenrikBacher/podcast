@@ -177,9 +177,9 @@ jobs:
             ${{ needs.determine-version.outputs.is-prerelease == 'true' && format('This is a prerelease build from PR #{0}. Use for testing purposes only.', github.event.pull_request.number) || 'This release was automatically generated and is ready for production use.' }}
 
             ### Download
-            - **Linux (x64)**: drpodcast-linux-x64.tar.gz
-            - **Windows (x64)**: drpodcast-win-x64.zip
-            - **macOS (x64)**: drpodcast-osx-x64.tar.gz
+            - **Linux (x64)**: DrPodcast-linux-x64.tar.gz
+            - **Windows (x64)**: DrPodcast-win-x64.zip
+            - **macOS (x64)**: DrPodcast-osx-x64.tar.gz
 
             ### Installation
             1. Download the appropriate file for your platform
@@ -196,8 +196,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./artifacts/drpodcast-linux-x64/drpodcast-linux-x64.tar.gz
-          asset_name: drpodcast-linux-x64.tar.gz
+          asset_path: ./artifacts/DrPodcast-linux-x64/DrPodcast-linux-x64.tar.gz
+          asset_name: DrPodcast-linux-x64.tar.gz
           asset_content_type: application/gzip
 
       - name: Upload Windows Release Asset
@@ -206,8 +206,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./artifacts/drpodcast-win-x64/drpodcast-win-x64.zip
-          asset_name: drpodcast-win-x64.zip
+          asset_path: ./artifacts/DrPodcast-win-x64/DrPodcast-win-x64.zip
+          asset_name: DrPodcast-win-x64.zip
           asset_content_type: application/zip
 
       - name: Upload macOS Release Asset
@@ -216,8 +216,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./artifacts/drpodcast-osx-x64/drpodcast-osx-x64.tar.gz
-          asset_name: drpodcast-osx-x64.tar.gz
+          asset_path: ./artifacts/DrPodcast-osx-x64/DrPodcast-osx-x64.tar.gz
+          asset_name: DrPodcast-osx-x64.tar.gz
           asset_content_type: application/gzip
 
       - name: Delete Prerelease Versions
