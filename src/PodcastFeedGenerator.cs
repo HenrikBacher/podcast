@@ -25,9 +25,9 @@ services.AddHttpClient("DrApi", client =>
 await using var serviceProvider = services.BuildServiceProvider();
 var httpClientFactory = serviceProvider.GetRequiredService<IHttpClientFactory>();
 
-// Deserialize podcasts.json using modern JSON options
-var podcastList = JsonSerializer.Deserialize<PodcastList>(
-    await File.ReadAllTextAsync("podcasts.json"));
+// Deserialize podcasts.json using JsonSerializerContext for trimming compatibility
+var podcastList = JsonSerializer.Deserialize(
+    await File.ReadAllTextAsync("podcasts.json"), PodcastJsonContext.Default.PodcastList);
 
 Directory.CreateDirectory("output");
 
@@ -44,7 +44,7 @@ var tasks = podcastList?.Podcasts.Select(async podcast =>
         var seriesResponse = await httpClient.GetAsync(seriesUrl);
         seriesResponse.EnsureSuccessStatusCode();
         string seriesContent = await seriesResponse.Content.ReadAsStringAsync();
-        var series = JsonSerializer.Deserialize<Series>(seriesContent);
+        var series = JsonSerializer.Deserialize(seriesContent, PodcastJsonContext.Default.Series);
 
         // Fetch all episodes, handling pagination
         var episodes = await FetchAllEpisodesAsync(apiUrl + urn + "/episodes?limit=256", httpClient);
@@ -286,7 +286,7 @@ static async Task<List<Episode>?> FetchAllEpisodesAsync(string initialUrl, HttpC
 
         if (root.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array)
         {
-            var episodes = JsonSerializer.Deserialize<List<Episode>>(items.GetRawText());
+            var episodes = JsonSerializer.Deserialize(items.GetRawText(), PodcastJsonContext.Default.ListEpisode);
             if (episodes != null)
                 allEpisodes.AddRange(episodes);
         }
