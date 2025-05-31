@@ -9,7 +9,7 @@ on:
     paths: ["src/**"]
 
 env:
-  DOTNET_VERSION: "8.0.x"
+  DOTNET_VERSION: "9.0.x"
 
 jobs:
   determine-version:
