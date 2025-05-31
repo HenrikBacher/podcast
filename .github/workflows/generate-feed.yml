@@ -55,17 +55,16 @@ jobs:
           Write-Host "Determining release type..."
           $releaseFlag = if ($env:USE_PRERELEASE -eq "true") {
             Write-Host "Using prerelease"
-            "--include-prereleases"
           } else {
             Write-Host "Using latest stable release"
-            ""
+            "--exclude-pre-releases"
           }
 
           Write-Host "Getting latest release for $platform..."
           $releaseInfo = if ($releaseFlag) {
-            gh release list --repo ${{ github.repository }} $releaseFlag --limit 1 --json tagName,assets
+            gh release list --repo ${{ github.repository }} $releaseFlag --limit 1 --json tagName
           } else {
-            gh release list --repo ${{ github.repository }} --limit 1 --json tagName,assets
+            gh release list --repo ${{ github.repository }} --limit 1 --json tagName
           }
 
           $releases = $releaseInfo | ConvertFrom-Json
@@ -78,17 +77,30 @@ jobs:
           Write-Host "Found release: $tagName"
 
           # Download the platform-specific asset
-          $assetName = "DrPodcast-$platform"
-          gh release download $tagName --repo ${{ github.repository }} --pattern "$assetName*"
+          $assetName = switch ($platform) {
+            "linux-x64" { "drpodcast-linux-x64.tar.gz" }
+            "win-x64" { "drpodcast-win-x64.zip" }
+            "osx-x64" { "drpodcast-osx-x64.tar.gz" }
+          }
+          Write-Host "Downloading asset: $assetName"
+          gh release download $tagName --repo ${{ github.repository }} --pattern "$assetName"
 
-          # Make it executable and create reference
-          if ("${{ runner.os }}" -ne "Windows") {
-            chmod +x DrPodcast-*
-            $executable = Get-ChildItem -Name "DrPodcast-*" | Select-Object -First 1
-            New-Item -ItemType SymbolicLink -Name "drpodcast" -Target $executable
+          # Extract and prepare executable
+          if ("${{ runner.os }}" -eq "Windows") {
+            # Extract ZIP file and rename executable
+            Expand-Archive -Path $assetName -DestinationPath "." -Force
+            $exeFile = Get-ChildItem -Name "DrPodcast.exe" | Select-Object -First 1
+            if ($exeFile) {
+              Rename-Item $exeFile "drpodcast.exe"
+            }
           } else {
-            $exeFile = Get-ChildItem -Name "DrPodcast-*.exe" | Select-Object -First 1
-            Rename-Item $exeFile "drpodcast.exe"
+            # Extract tar.gz file and make executable
+            tar -xzf $assetName
+            $executable = Get-ChildItem -Name "DrPodcast" | Select-Object -First 1
+            if ($executable) {
+              chmod +x $executable
+              New-Item -ItemType SymbolicLink -Name "drpodcast" -Target $executable -Force
+            }
           }
 
           Write-Host "Downloaded and prepared release executable for $platform"
