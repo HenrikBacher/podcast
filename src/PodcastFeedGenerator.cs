@@ -175,7 +175,7 @@ var tasks = podcastList?.Podcasts.Select(async podcast =>
                     new XElement("pubDate", DateTime.TryParse(epPubDate, out var dt)
                         ? dt.ToString("ddd, dd MMM yyyy HH:mm:ss zzz", CultureInfo.InvariantCulture)
                         : epPubDate),
-                    new XElement("explicit", "no"),
+                    new XElement("explicit", episode.ExplicitContent ? "yes" : "no"),
                     new XElement(itunes + "author", "DR"),
                     new XElement(itunes + "image", new XAttribute("href", epImage ?? "")),
                     new XElement(itunes + "duration", itunesDuration),

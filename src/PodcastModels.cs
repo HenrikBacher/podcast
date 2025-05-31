@@ -62,6 +62,9 @@ public record Episode
 
     [JsonPropertyName("seasonNumber")]
     public int? SeasonNumber { get; init; }
+    
+    [JsonPropertyName("explicitContent")]
+    public bool ExplicitContent { get; init; }
 }
 
 public record AudioAsset
