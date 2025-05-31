@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       use_prerelease:
-        description: "Use prerelease instead of latest stable release"
+        description: "Use prerelease"
         required: false
         type: boolean
         default: false
