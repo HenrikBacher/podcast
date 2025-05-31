@@ -1,0 +1,205 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [main]
+    paths: ["src/**"]
+  pull_request:
+    branches: [main]
+    paths: ["src/**"]
+
+env:
+  DOTNET_VERSION: "8.0.x"
+
+jobs:
+  determine-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      version-tag: ${{ steps.version.outputs.version-tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine Version
+        id: version
+        run: |
+          # Get the latest tag
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "Latest tag: $LATEST_TAG"
+
+          # Parse version numbers
+          VERSION_NUMBER=${LATEST_TAG#v}
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION_NUMBER"
+
+          # Default to patch bump
+          BUMP_TYPE="patch"
+
+          # Check for version bump indicators in PR or commit messages
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            PR_BODY="${{ github.event.pull_request.body }}"
+            if echo "$PR_BODY" | grep -i "breaking change\|major version\|\[major\]"; then
+              BUMP_TYPE="major"
+            elif echo "$PR_BODY" | grep -i "feature\|minor version\|\[minor\]"; then
+              BUMP_TYPE="minor"
+            fi
+          else
+            # Direct commit to main - check commit message
+            COMMIT_MSG=$(git log -1 --pretty=%B)
+            if echo "$COMMIT_MSG" | grep -i "breaking change\|major version\|\[major\]"; then
+              BUMP_TYPE="major"
+            elif echo "$COMMIT_MSG" | grep -i "feature\|minor version\|\[minor\]"; then
+              BUMP_TYPE="minor"
+            fi
+          fi
+
+          echo "Bump type: $BUMP_TYPE"
+
+          # Calculate new version
+          case $BUMP_TYPE in
+            major)
+              NEW_VERSION="$((MAJOR + 1)).0.0"
+              ;;
+            minor)
+              NEW_VERSION="$MAJOR.$((MINOR + 1)).0"
+              ;;
+            patch)
+              NEW_VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
+              ;;
+          esac
+
+          echo "New version: $NEW_VERSION"
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "version-tag=v$NEW_VERSION" >> $GITHUB_OUTPUT
+
+  build:
+    needs: determine-version
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            runtime: linux-x64
+            artifact-name: drpodcast-linux-x64
+          - os: windows-latest
+            runtime: win-x64
+            artifact-name: drpodcast-win-x64
+          - os: macos-latest
+            runtime: osx-x64
+            artifact-name: drpodcast-osx-x64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore dependencies
+        run: dotnet restore src/DrPodcast.csproj
+
+      - name: Build
+        run: dotnet build src/DrPodcast.csproj --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test src/DrPodcast.csproj --no-build --verbosity normal --configuration Release
+
+      - name: Publish
+        run: |
+          dotnet publish src/DrPodcast.csproj \
+            --configuration Release \
+            --runtime ${{ matrix.runtime }} \
+            --self-contained true \
+            --output ./publish/${{ matrix.runtime }} \
+            -p:PublishSingleFile=true \
+            -p:PublishTrimmed=true \
+            -p:Version=${{ needs.determine-version.outputs.version }}
+
+      - name: Create Archive
+        shell: bash
+        run: |
+          cd publish/${{ matrix.runtime }}
+          if [[ "${{ matrix.runtime }}" == "win-x64" ]]; then
+            7z a ../../${{ matrix.artifact-name }}.zip *
+          else
+            tar -czf ../../${{ matrix.artifact-name }}.tar.gz *
+          fi
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          path: |
+            ${{ matrix.artifact-name }}.zip
+            ${{ matrix.artifact-name }}.tar.gz
+          retention-days: 30
+
+  release:
+    needs: [determine-version, build]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ needs.determine-version.outputs.version-tag }}
+          release_name: Release ${{ needs.determine-version.outputs.version-tag }}
+          body: |
+            ## Changes in this Release
+
+            This release was automatically generated.
+
+            ### Download
+            - **Linux (x64)**: drpodcast-linux-x64.tar.gz
+            - **Windows (x64)**: drpodcast-win-x64.zip  
+            - **macOS (x64)**: drpodcast-osx-x64.tar.gz
+
+            ### Installation
+            1. Download the appropriate file for your platform
+            2. Extract the archive
+            3. Run the executable directly (no installation required)
+          draft: false
+          prerelease: false
+
+      - name: Upload Linux Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./artifacts/drpodcast-linux-x64/drpodcast-linux-x64.tar.gz
+          asset_name: drpodcast-linux-x64.tar.gz
+          asset_content_type: application/gzip
+
+      - name: Upload Windows Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./artifacts/drpodcast-win-x64/drpodcast-win-x64.zip
+          asset_name: drpodcast-win-x64.zip
+          asset_content_type: application/zip
+
+      - name: Upload macOS Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./artifacts/drpodcast-osx-x64/drpodcast-osx-x64.tar.gz
+          asset_name: drpodcast-osx-x64.tar.gz
+          asset_content_type: application/gzip
