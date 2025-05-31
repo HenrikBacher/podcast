@@ -17,6 +17,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       version-tag: ${{ steps.version.outputs.version-tag }}
+      is-prerelease: ${{ steps.version.outputs.is-prerelease }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -35,9 +36,11 @@ jobs:
 
           # Default to patch bump
           BUMP_TYPE="patch"
+          IS_PRERELEASE="false"
 
           # Check for version bump indicators in PR or commit messages
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            IS_PRERELEASE="true"
             PR_BODY="${{ github.event.pull_request.body }}"
             if echo "$PR_BODY" | grep -i "breaking change\|major version\|\[major\]"; then
               BUMP_TYPE="major"
@@ -55,6 +58,7 @@ jobs:
           fi
 
           echo "Bump type: $BUMP_TYPE"
+          echo "Is prerelease: $IS_PRERELEASE"
 
           # Calculate new version
           case $BUMP_TYPE in
@@ -69,9 +73,18 @@ jobs:
               ;;
           esac
 
+          # Add prerelease suffix for PR builds
+          if [[ "$IS_PRERELEASE" == "true" ]]; then
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+            COMMIT_SHA="${{ github.event.pull_request.head.sha }}"
+            SHORT_SHA=${COMMIT_SHA:0:8}
+            NEW_VERSION="${NEW_VERSION}-pr.${PR_NUMBER}.${SHORT_SHA}"
+          fi
+
           echo "New version: $NEW_VERSION"
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "version-tag=v$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "is-prerelease=$IS_PRERELEASE" >> $GITHUB_OUTPUT
 
   build:
     needs: determine-version
@@ -140,7 +153,7 @@ jobs:
   release:
     needs: [determine-version, build]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
 
@@ -156,23 +169,25 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ needs.determine-version.outputs.version-tag }}
-          release_name: Release ${{ needs.determine-version.outputs.version-tag }}
+          release_name: ${{ needs.determine-version.outputs.is-prerelease == 'true' && format('Prerelease {0}', needs.determine-version.outputs.version-tag) || format('Release {0}', needs.determine-version.outputs.version-tag) }}
           body: |
-            ## Changes in this Release
+            ${{ needs.determine-version.outputs.is-prerelease == 'true' && '## 🚧 Prerelease Build' || '## ✅ Stable Release' }}
 
-            This release was automatically generated.
+            ${{ needs.determine-version.outputs.is-prerelease == 'true' && format('This is a prerelease build from PR #{0}. Use for testing purposes only.', github.event.pull_request.number) || 'This release was automatically generated and is ready for production use.' }}
 
             ### Download
             - **Linux (x64)**: drpodcast-linux-x64.tar.gz
-            - **Windows (x64)**: drpodcast-win-x64.zip  
+            - **Windows (x64)**: drpodcast-win-x64.zip
             - **macOS (x64)**: drpodcast-osx-x64.tar.gz
 
             ### Installation
             1. Download the appropriate file for your platform
             2. Extract the archive
             3. Run the executable directly (no installation required)
+
+            ${{ needs.determine-version.outputs.is-prerelease == 'true' && '⚠️ **Warning**: This is a prerelease version and may contain bugs.' || '' }}
           draft: false
-          prerelease: false
+          prerelease: ${{ needs.determine-version.outputs.is-prerelease == 'true' }}
 
       - name: Upload Linux Release Asset
         uses: actions/upload-release-asset@v1
