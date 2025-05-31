@@ -111,8 +111,8 @@ jobs:
             runtime: win-x64
             artifact-name: DrPodcast-win-x64
           - os: macos-latest
-            runtime: osx-x64
-            artifact-name: DrPodcast-osx-x64
+            runtime: osx-arm64
+            artifact-name: DrPodcast-osx-arm64
 
     steps:
       - uses: actions/checkout@v4
