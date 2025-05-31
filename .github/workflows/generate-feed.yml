@@ -6,13 +6,17 @@ concurrency:
 
 on:
   workflow_dispatch:
+    inputs:
+      use_prerelease:
+        description: "Use prerelease"
+        required: false
+        type: boolean
+        default: false
   push:
     paths:
       - "**/generate-feed.yml"
       - "**/podcasts.json"
       - "site/**"
-      - "**/*.cs"
-      - "**/*.csproj"
   schedule:
     - cron: "0 * * * *"
 
@@ -30,115 +34,180 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Cache source code hash
-        id: src-hash
+      - name: Download latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          USE_PRERELEASE: ${{ github.event.inputs.use_prerelease || 'false' }}
+        shell: pwsh
         run: |
-          SRC_HASH=$(find src -name "*.cs" -o -name "*.csproj" -o -name "*.sln" | sort | xargs sha256sum | sha256sum | cut -d ' ' -f1)
-          echo "hash=$SRC_HASH" >> $GITHUB_OUTPUT
-          echo "Source code hash: $SRC_HASH"
+          Write-Host "Determining platform..."
+          $platform = switch ("${{ runner.os }}") {
+            "Linux" { "linux-x64" }
+            "Windows" { "win-x64" }
+            "macOS" { "osx-x64" }
+            default {
+              Write-Error "Unsupported platform: ${{ runner.os }}"
+              exit 1
+            }
+          }
+          Write-Host "Detected platform: $platform"
 
-      - name: Cache build artifacts
-        uses: actions/cache@v4
-        id: build-cache
-        with:
-          path: |
-            src/bin
-            src/obj
-          key: dotnet-build-${{ steps.src-hash.outputs.hash }}
-          restore-keys: |
-            dotnet-build-
+          Write-Host "Determining release type..."
+          $releaseFlag = if ($env:USE_PRERELEASE -eq "true") {
+            Write-Host "Using prerelease"
+          } else {
+            Write-Host "Using latest stable release"
+            "--exclude-pre-releases"
+          }
 
-      - name: Restore dependencies
-        if: steps.build-cache.outputs.cache-hit != 'true'
-        run: dotnet restore src/DrPodcast.csproj
+          Write-Host "Getting latest release for $platform..."
+          $releaseInfo = if ($releaseFlag) {
+            gh release list --repo ${{ github.repository }} $releaseFlag --limit 1 --json tagName
+          } else {
+            gh release list --repo ${{ github.repository }} --limit 1 --json tagName
+          }
 
-      - name: Build application
-        if: steps.build-cache.outputs.cache-hit != 'true'
-        run: dotnet build src/DrPodcast.csproj -c Release --no-restore
+          $releases = $releaseInfo | ConvertFrom-Json
+          if (-not $releases -or $releases.Count -eq 0) {
+            Write-Error "No releases found. Please create a release first."
+            exit 1
+          }
+          $tagName = $releases[0].tagName
+
+          Write-Host "Found release: $tagName"
+
+          # Download the platform-specific asset
+          $assetName = switch ($platform) {
+            "linux-x64" { "DrPodcast-linux-x64.tar.gz" }
+            "win-x64" { "DrPodcast-win-x64.zip" }
+            "osx-x64" { "DrPodcast-osx-x64.tar.gz" }
+          }
+          Write-Host "Downloading asset: $assetName"
+          gh release download $tagName --repo ${{ github.repository }} --pattern "$assetName"
+
+          # Extract and prepare executable
+          if ("${{ runner.os }}" -eq "Windows") {
+            # Extract ZIP file and rename executable
+            Expand-Archive -Path $assetName -DestinationPath "." -Force      
+          } else {
+            # Extract tar.gz file and make executable
+            tar -xzf $assetName          
+            chmod +x DrPodcast
+          }
+
+          Write-Host "Downloaded and prepared release executable for $platform"
 
       - name: Run feed generator
         env:
           API_KEY: ${{ secrets.API_KEY }}
           BASE_URL: ${{ secrets.BASE_URL }}
+        shell: pwsh
         run: |
-          dotnet run --project src/DrPodcast.csproj -c Release --no-build -- --podcasts podcasts.json
+          if ("${{ runner.os }}" -eq "Windows") {
+            & ./DrPodcast.exe --podcasts podcasts.json
+          } else {
+            & ./DrPodcast --podcasts podcasts.json
+          }
 
       - name: Copy site files
+        shell: pwsh
         run: |
-          mkdir -p output/_site
-          mkdir -p output/_site/feeds
-          cp -r site/* output/_site/
-          cp -r output/*.xml output/_site/feeds/
+          New-Item -ItemType Directory -Path "output/_site" -Force
+          New-Item -ItemType Directory -Path "output/_site/feeds" -Force
+          Copy-Item -Path "site/*" -Destination "output/_site/" -Recurse -Force
+          Copy-Item -Path "output/*.xml" -Destination "output/_site/feeds/" -Force
 
       - name: Check for deployment changes
         id: deployment_check
         env:
           GH_TOKEN: ${{ github.token }}
+        shell: pwsh
         run: |
-          SITE_URL=$(gh api "repos/${GITHUB_REPOSITORY}/pages" --jq '.html_url')
-          NEEDS_DEPLOY=false
+          $siteUrl = gh api "repos/$env:GITHUB_REPOSITORY/pages" --jq '.html_url'
+          $needsDeploy = $false
 
           # Check each feed for changes
-          for feed in output/_site/feeds/*.xml; do
-            filename=$(basename "$feed")
+          $feeds = Get-ChildItem -Path "output/_site/feeds/*.xml"
+          foreach ($feed in $feeds) {
+            $filename = $feed.Name
             
             # Get current hash
-            CURRENT_HASH=$(sha256sum "$feed" | cut -d ' ' -f1)
+            $currentHash = (Get-FileHash -Path $feed.FullName -Algorithm SHA256).Hash.ToLower()
             
             # Try to get deployed file hash
-            DEPLOYED_HASH=$(curl -sL --max-time 10 "${SITE_URL}feeds/$filename" | sha256sum | cut -d ' ' -f1 || echo "none")
+            try {
+              $deployedContent = Invoke-WebRequest -Uri "${siteUrl}feeds/$filename" -TimeoutSec 10 -ErrorAction Stop
+              $deployedHash = (Get-FileHash -InputStream ([System.IO.MemoryStream]::new([System.Text.Encoding]::UTF8.GetBytes($deployedContent.Content))) -Algorithm SHA256).Hash.ToLower()
+            } catch {
+              $deployedHash = "none"
+            }
             
-            echo "Checking $filename"
-            echo "Current hash: $CURRENT_HASH"
-            echo "Deployed hash: $DEPLOYED_HASH"
+            Write-Host "Checking $filename"
+            Write-Host "Current hash: $currentHash"
+            Write-Host "Deployed hash: $deployedHash"
             
-            if [ "$CURRENT_HASH" != "$DEPLOYED_HASH" ]; then
-              echo "Changes detected in $filename"
-              NEEDS_DEPLOY=true
+            if ($currentHash -ne $deployedHash) {
+              Write-Host "Changes detected in $filename"
+              $needsDeploy = $true
               break
-            fi
-          done
+            }
+          }
 
-          if [ "$NEEDS_DEPLOY" = "false" ]; then
+          if (-not $needsDeploy) {
             # Check if number of files changed
-            LIVE_COUNT=$(curl -sL --max-time 10 $SITE_URL | grep -o "class='feed-link'" | wc -l || echo "0")
-            CURRENT_COUNT=$(find "output/_site/feeds" -name "*.xml" 2>/dev/null | wc -l)
+            try {
+              $liveContent = Invoke-WebRequest -Uri $siteUrl -TimeoutSec 10 -ErrorAction Stop
+              $liveCount = ([regex]::Matches($liveContent.Content, "class='feed-link'")).Count
+            } catch {
+              $liveCount = 0
+            }
+            $currentCount = (Get-ChildItem -Path "output/_site/feeds" -Filter "*.xml" -ErrorAction SilentlyContinue).Count
             
-            if [ "$CURRENT_COUNT" != "$LIVE_COUNT" ]; then
-              echo "Number of XML files changed (current: $CURRENT_COUNT, live: $LIVE_COUNT)"
-              NEEDS_DEPLOY=true
-            fi
-          fi
+            if ($currentCount -ne $liveCount) {
+              Write-Host "Number of XML files changed (current: $currentCount, live: $liveCount)"
+              $needsDeploy = $true
+            }
+          }
 
-          echo "needs_deploy=$NEEDS_DEPLOY" >> $GITHUB_OUTPUT
+          "needs_deploy=$needsDeploy" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Generate index.html
         if: steps.deployment_check.outputs.needs_deploy == 'true'
+        shell: pwsh
         run: |
           # Get current timestamp in ISO 8601 format
-          current_time=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          $currentTime = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 
           # Generate feeds HTML
-          feeds_html=""
-          for feed in output/_site/feeds/*.xml; do
-            filename=$(basename "$feed" .xml)
-            formatted_title=$(echo "$filename" | sed 's/-/ /g')
+          $feedsHtml = ""
+          $feeds = Get-ChildItem -Path "output/_site/feeds/*.xml"
+          foreach ($feed in $feeds) {
+            $filename = [System.IO.Path]::GetFileNameWithoutExtension($feed.Name)
+            $formattedTitle = $filename -replace '-', ' '
             
             # Extract image URL from the RSS feed's itunes:image element
-            image_url=$(grep -o '<itunes:image[^>]*href="[^"]*"' "$feed" | sed 's/.*href="//;s/".*//' | head -1 || echo "")
+            $content = Get-Content -Path $feed.FullName -Raw
+            $imageMatch = [regex]::Match($content, '<itunes:image[^>]*href="([^"]*)"')
+            $imageUrl = if ($imageMatch.Success) { $imageMatch.Groups[1].Value } else { "" }
             
-            if [ -n "$image_url" ]; then
-              feeds_html+="<li><a class='feed-link' href='feeds/$filename.xml'><img class='feed-icon' src='$image_url' loading='lazy' alt='$formatted_title'><span class='feed-title'>$formatted_title</span></a></li>"
-            else
-              feeds_html+="<li><a class='feed-link' href='feeds/$filename.xml'><div class='feed-icon'></div><span class='feed-title'>$formatted_title</span></a></li>"
-            fi
-          done
+            if ($imageUrl) {
+              $feedsHtml += "<li><a class='feed-link' href='feeds/$filename.xml'><img class='feed-icon' src='$imageUrl' loading='lazy' alt='$formattedTitle'><span class='feed-title'>$formattedTitle</span></a></li>"
+            } else {
+              $feedsHtml += "<li><a class='feed-link' href='feeds/$filename.xml'><div class='feed-icon'></div><span class='feed-title'>$formattedTitle</span></a></li>"
+            }
+          }
+
+          # Read the index.html file
+          $indexContent = Get-Content -Path "output/_site/index.html" -Raw
 
           # Insert deployment timestamp meta tag after opening head tag
-          sed -i '/<head>/a \    <meta name="deployment-time" content="'"$current_time"'">' output/_site/index.html
+          $indexContent = $indexContent -replace '(<head>)', "`$1`n    <meta name=`"deployment-time`" content=`"$currentTime`">"
 
           # Replace entire section between markers with generated feeds
-          sed -i "/<!-- BEGIN_FEEDS -->/,/<!-- END_FEEDS -->/c\        <!-- BEGIN_FEEDS -->\n        $feeds_html\n        <!-- END_FEEDS -->" output/_site/index.html
+          $indexContent = $indexContent -replace '(?s)<!-- BEGIN_FEEDS -->.*?<!-- END_FEEDS -->', "<!-- BEGIN_FEEDS -->`n        $feedsHtml`n        <!-- END_FEEDS -->"
+
+          # Write back to file
+          $indexContent | Set-Content -Path "output/_site/index.html" -NoNewline
 
       - name: Setup Pages
         if: steps.deployment_check.outputs.needs_deploy == 'true'
