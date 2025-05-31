@@ -287,4 +287,9 @@ __pycache__/
 *.btm.cs
 *.odx.cs
 *.xsd.cs
+# CI/CD build artifacts
+**/publish/
+test-publish/
+*.tar.gz
+*.zip
 **/output
