@@ -2,11 +2,17 @@ name: Build and Release
 
 on:
   push:
-    branches: [main]
-    paths: ["src/**"]
+    branches:
+      - main
+    paths:
+      - "src/**"
+      - ".github/workflows/build-and-release.yml"
   pull_request:
-    branches: [main]
-    paths: ["src/**"]
+    branches:
+      - main
+    paths:
+      - "src/**"
+      - ".github/workflows/build-and-release.yml"
 
 env:
   DOTNET_VERSION: "9.0.x"
