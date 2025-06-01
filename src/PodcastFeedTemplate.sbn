@@ -1,0 +1,66 @@
+{{~ # RSS Feed Template for Scriban ~}}
+<rss version="2.0"
+     xmlns:atom="http://www.w3.org/2005/Atom"
+     xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"
+     xmlns:media="http://search.yahoo.com/mrss/">
+  <channel>
+    <atom:link href="{{ channel.NewFeedUrl }}" rel="self" type="application/rss+xml" />
+    <title>{{ channel.Title }}</title>
+    <link>{{ channel.Link }}</link>
+    <description>{{ channel.Description }}</description>
+    <language>{{ channel.Language }}</language>
+    <copyright>{{ channel.Copyright }}</copyright>
+    <lastBuildDate>{{ channel.LastBuildDate }}</lastBuildDate>
+    <itunes:explicit>{{ channel.Explicit }}</itunes:explicit>
+    <itunes:author>{{ channel.Author }}</itunes:author>
+    <itunes:block>{{ channel.Block }}</itunes:block>
+    <itunes:owner>
+      <itunes:email>{{ channel.Owner.Email }}</itunes:email>
+      <itunes:name>{{ channel.Owner.Name }}</itunes:name>
+    </itunes:owner>
+    <itunes:new-feed-url>{{ channel.NewFeedUrl }}</itunes:new-feed-url>
+    <itunes:image href="{{ channel.Image }}" />
+    {{~ for cat in channel.Categories ~}}
+    <itunes:category text="{{ cat }}" />
+    {{~ end ~}}
+    {{~ if channel.Subtitle ~}}
+    <itunes:subtitle>{{ channel.Subtitle }}</itunes:subtitle>
+    {{~ end ~}}
+    {{~ if channel.Summary ~}}
+    <itunes:summary>{{ channel.Summary }}</itunes:summary>
+    {{~ end ~}}
+    <itunes:type>{{ channel.Type }}</itunes:type>
+    {{~ if channel.Season ~}}
+    <itunes:season>{{ channel.Season }}</itunes:season>
+    {{~ end ~}}
+    {{~ for episode in episodes ~}}
+    <item>
+      <title>{{ episode.Title }}</title>
+      <description>{{ episode.Description }}</description>
+      <pubDate>{{ episode.PublishTime }}</pubDate>
+      <explicit>{{ episode.ExplicitContent ? "yes" : "no" }}</explicit>
+      <itunes:author>DR</itunes:author>
+      <itunes:image href="{{ episode.Image }}" />
+      <itunes:duration>{{ episode.Duration }}</itunes:duration>
+      <media:restriction relationship="allow" type="country">dk</media:restriction>
+      <itunes:episodeType>full</itunes:episodeType>
+      {{~ if episode.EpisodeNumber ~}}
+      <itunes:episode>{{ episode.EpisodeNumber }}</itunes:episode>
+      {{~ end ~}}
+      {{~ if episode.SeasonNumber ~}}
+      <itunes:season>{{ episode.SeasonNumber }}</itunes:season>
+      {{~ end ~}}
+      {{~ if episode.PresentationUrl ~}}
+      <link>{{ episode.PresentationUrl }}</link>
+      {{~ end ~}}
+      <guid isPermalink="false">{{ episode.Id }}</guid>
+      {{~ if episode.AudioUrl ~}}
+      <enclosure url="{{ episode.AudioUrl }}" type="audio/mpeg" length="{{ episode.AudioLength }}" />
+      {{~ end ~}}
+      {{~ for cat in episode.Categories ~}}
+      <itunes:category text="{{ cat }}" />
+      {{~ end ~}}
+    </item>
+    {{~ end ~}}
+  </channel>
+</rss>
