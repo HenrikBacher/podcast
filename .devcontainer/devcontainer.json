@@ -8,7 +8,8 @@
       "extensions": [
         "ms-dotnettools.csharp",
         "ms-vscode.powershell",
-        "ms-dotnettools.csdevkit"
+        "ms-dotnettools.csdevkit",
+        "rooveterinaryinc.roo-cline"
       ],
       "settings": {
         "terminal.integrated.shell.linux": "/bin/bash"
