@@ -6,7 +6,6 @@
     <RootNamespace>DrPodcast</RootNamespace>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <TrimMode>partial</TrimMode>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <WarningsAsErrors />
     <WarningsNotAsErrors>CS8618</WarningsNotAsErrors>

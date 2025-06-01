@@ -140,7 +140,6 @@ jobs:
             --self-contained true `
             --output ./publish/${{ matrix.runtime }} `
             -p:PublishSingleFile=true `
-            -p:PublishTrimmed=true `
             -p:Version=${{ needs.determine-version.outputs.version }}
 
       - name: Create Archive
