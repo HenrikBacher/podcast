@@ -157,7 +157,7 @@ var tasks = podcastList?.Podcasts.Select(async podcast =>
         }).ToList();
 
         // Load and render Scriban template
-        var templateText = await File.ReadAllTextAsync("src/PodcastFeedTemplate.sbn");
+        var templateText = await File.ReadAllTextAsync("PodcastFeedTemplate.sbn");
         var template = Template.Parse(templateText);
         var scribanContext = new { channel = channelContext, episodes = episodeContexts };
         var result = template.Render(scribanContext, member => member.Name);
