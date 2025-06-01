@@ -187,7 +187,7 @@ jobs:
             ### Download
             - **Linux (x64)**: DrPodcast-linux-x64.tar.gz
             - **Windows (x64)**: DrPodcast-win-x64.zip
-            - **macOS (x64)**: DrPodcast-osx-x64.tar.gz
+            - **macOS (arm64)**: DrPodcast-osx-arm64.tar.gz
 
             ### Installation
             1. Download the appropriate file for your platform
