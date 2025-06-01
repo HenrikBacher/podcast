@@ -175,7 +175,7 @@ jobs:
           path: ./artifacts
 
       - name: Create Release and Upload All Assets
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.determine-version.outputs.version-tag }}
           name: ${{ needs.determine-version.outputs.is-prerelease == 'true' && format('Prerelease {0}', needs.determine-version.outputs.version-tag) || format('Release {0}', needs.determine-version.outputs.version-tag) }}
