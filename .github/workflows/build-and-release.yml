@@ -198,9 +198,8 @@ jobs:
           draft: false
           prerelease: ${{ needs.determine-version.outputs.is-prerelease == 'true' }}
           files: |
-            ./artifacts/DrPodcast-linux-x64/DrPodcast-linux-x64.tar.gz
-            ./artifacts/DrPodcast-win-x64/DrPodcast-win-x64.zip
-            ./artifacts/DrPodcast-osx-arm64/DrPodcast-osx-arm64.tar.gz
+            ./artifacts/**/*.zip
+            ./artifacts/**/*.tar.gz
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Delete Prerelease Versions
