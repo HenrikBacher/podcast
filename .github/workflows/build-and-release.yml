@@ -200,7 +200,7 @@ jobs:
           files: |
             ./artifacts/DrPodcast-linux-x64/DrPodcast-linux-x64.tar.gz
             ./artifacts/DrPodcast-win-x64/DrPodcast-win-x64.zip
-            ./artifacts/DrPodcast-osx-x64/DrPodcast-osx-x64.tar.gz
+            ./artifacts/DrPodcast-osx-arm64/DrPodcast-osx-arm64.tar.gz
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Delete Prerelease Versions
