@@ -23,7 +23,7 @@
     <None Update="podcasts.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="src/PodcastFeedTemplate.sbn">
+    <None Update="PodcastFeedTemplate.sbn">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
