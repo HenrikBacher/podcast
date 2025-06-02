@@ -113,7 +113,7 @@ jobs:
           - os: windows-latest
             runtime: win-x64
             artifact-name: DrPodcast-win-x64
-          - os: windows-11-arm64
+          - os: windows-11-arm
             runtime: win-arm64
             artifact-name: DrPodcast-win-arm64
           - os: macos-latest
