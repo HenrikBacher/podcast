@@ -44,7 +44,7 @@ jobs:
           $platform = switch ("${{ runner.os }}") {
             "Linux" { "linux-x64" }
             "Windows" { "win-x64" }
-            "macOS" { "osx-x64" }
+            "macOS" { "osx-arm64" }
             default {
               Write-Error "Unsupported platform: ${{ runner.os }}"
               exit 1
@@ -80,7 +80,7 @@ jobs:
           $assetName = switch ($platform) {
             "linux-x64" { "DrPodcast-linux-x64.tar.gz" }
             "win-x64" { "DrPodcast-win-x64.zip" }
-            "osx-x64" { "DrPodcast-osx-x64.tar.gz" }
+            "osx-arm64" { "DrPodcast-osx-arm64.tar.gz" }
           }
           Write-Host "Downloading asset: $assetName"
           gh release download $tagName --repo ${{ github.repository }} --pattern "$assetName"
