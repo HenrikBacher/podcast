@@ -107,9 +107,15 @@ jobs:
           - os: ubuntu-latest
             runtime: linux-x64
             artifact-name: DrPodcast-linux-x64
+          - os: ubuntu-24.04-arm
+            runtime: linux-arm64
+            artifact-name: DrPodcast-linux-arm64
           - os: windows-latest
             runtime: win-x64
             artifact-name: DrPodcast-win-x64
+          - os: windows-arm64
+            runtime: win-arm64
+            artifact-name: DrPodcast-win-arm64
           - os: macos-latest
             runtime: osx-arm64
             artifact-name: DrPodcast-osx-arm64
