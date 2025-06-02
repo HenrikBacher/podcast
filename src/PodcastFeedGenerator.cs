@@ -101,7 +101,9 @@ var tasks = podcastList?.Podcasts.Select(async podcast =>
         {
             foreach (var category in categories.Where(c => !string.IsNullOrEmpty(c)))
             {
-                channel.Add(new XElement(itunes + "category", new XAttribute("text", category)));
+                var mapped = MapToPodcastCategory(category);
+                if (!string.IsNullOrEmpty(mapped))
+                    channel.Add(new XElement(itunes + "category", new XAttribute("text", mapped)));
             }
         }
 
@@ -217,7 +219,11 @@ var tasks = podcastList?.Podcasts.Select(async podcast =>
                 if (episode.Categories is { Count: > 0 } episodeCategories)
                 {
                     foreach (var cat in episodeCategories)
-                        item.Add(new XElement(itunes + "category", new XAttribute("text", cat)));
+                    {
+                        var mapped = MapToPodcastCategory(cat);
+                        if (!string.IsNullOrEmpty(mapped))
+                            item.Add(new XElement(itunes + "category", new XAttribute("text", mapped)));
+                    }
                 }
 
                 channel.Add(item);
@@ -245,6 +251,27 @@ var tasks = podcastList?.Podcasts.Select(async podcast =>
 
 await Task.WhenAll(tasks!);
 Console.WriteLine("All podcast feeds fetched.");
+
+static string MapToPodcastCategory(string category)
+{
+    return category switch
+    {
+        "Dokumentar" => "Documentary",
+        "Historie" => "History",
+        "Sundhed" => "Health & Fitness",
+        "Samfund" => "Society & Culture",
+        "Videnskab og tech" => "Science",
+        "Tro og eksistens" => "Religion & Spirituality",
+        "Kriminal" => "True Crime",
+        "Kultur" => "Society & Culture",
+        "Nyheder" => "News",
+        "Underholdning" => "Entertainment",
+        "Sport" => "Sports",
+        "Musik" => "Music",
+        // Add more mappings as needed
+        _ => category // fallback to original if not mapped
+    };
+}
 
 static string? GetImageUrlFromAssets(List<ImageAsset>? imageAssets)
 {
