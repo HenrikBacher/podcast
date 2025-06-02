@@ -23,7 +23,7 @@ on:
 jobs:
   update-and-deploy-feeds:
     name: "Update and deploy feeds"
-    runs-on: ubuntu-latest
+    runs-on: linux-arm64
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
