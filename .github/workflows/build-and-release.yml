@@ -34,9 +34,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Get the latest stable release using GitHub CLI
-          LATEST_TAG=$(gh release list --limit 1 --exclude-pre-releases --json tagName --jq '.[0].tagName' 2>/dev/null || echo "")
-          if [ -z "$LATEST_TAG" ]; then
+          # Get the latest stable release using GitHub API, fallback to v0.0.0 if fails
+          LATEST_TAG=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases" \
+            | jq -r '[.[] | select(.prerelease == false and .draft == false)][0].tag_name' 2>/dev/null)
+          if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then
             LATEST_TAG="v0.0.0"
           fi
           echo "Latest stable release: $LATEST_TAG"
@@ -84,10 +86,13 @@ jobs:
               ;;
           esac
 
-          # Add prerelease suffix for PR builds
+          # Add prerelease suffix for PR builds, handle missing PR context
           if [[ "$IS_PRERELEASE" == "true" ]]; then
             PR_NUMBER="${{ github.event.pull_request.number }}"
             COMMIT_SHA="${{ github.event.pull_request.head.sha }}"
+            # Fallbacks if variables are empty
+            if [ -z "$PR_NUMBER" ]; then PR_NUMBER="0"; fi
+            if [ -z "$COMMIT_SHA" ]; then COMMIT_SHA="$GITHUB_SHA"; fi
             SHORT_SHA=${COMMIT_SHA:0:8}
             NEW_VERSION="${NEW_VERSION}-pr.${PR_NUMBER}.${SHORT_SHA}"
           fi
