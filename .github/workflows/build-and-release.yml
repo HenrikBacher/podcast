@@ -34,13 +34,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Get the latest stable release using GitHub API, fallback to v0.0.0 if fails
-          LATEST_TAG=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases" \
-            | jq -r '[.[] | select(.prerelease == false and .draft == false)][0].tag_name' 2>/dev/null)
-          if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then
-            LATEST_TAG="v0.0.0"
-          fi
+          # Get the latest stable release using GitHub CLI
+          LATEST_TAG=$(gh release list --limit 1 --exclude-pre-releases --json tagName --jq '.[0].tagName' 2>/dev/null || echo "")
           echo "Latest stable release: $LATEST_TAG"
 
           # Parse version numbers
@@ -55,17 +50,17 @@ jobs:
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             IS_PRERELEASE="true"
             PR_BODY="${{ github.event.pull_request.body }}"
-            if echo "$PR_BODY" | grep -i "breaking change\|major version\|\[major\]"; then
+            if printf "%s" "$PR_BODY" | grep -i "breaking change\|major version\|\[major\]"; then
               BUMP_TYPE="major"
-            elif echo "$PR_BODY" | grep -i "feature\|minor version\|\[minor\]"; then
+            elif printf "%s" "$PR_BODY" | grep -i "feature\|minor version\|\[minor\]"; then
               BUMP_TYPE="minor"
             fi
           else
             # Direct commit to main - check commit message
             COMMIT_MSG=$(git log -1 --pretty=%B)
-            if echo "$COMMIT_MSG" | grep -i "breaking change\|major version\|\[major\]"; then
+            if printf "%s" "$COMMIT_MSG" | grep -i "breaking change\|major version\|\[major\]"; then
               BUMP_TYPE="major"
-            elif echo "$COMMIT_MSG" | grep -i "feature\|minor version\|\[minor\]"; then
+            elif printf "%s" "$COMMIT_MSG" | grep -i "feature\|minor version\|\[minor\]"; then
               BUMP_TYPE="minor"
             fi
           fi
