@@ -64,6 +64,8 @@ jobs:
               $bumpType = "major"
             } elseif ($prBody -match "feature|minor version|\[minor\]") {
               $bumpType = "minor"
+            } else {
+              $bumpType = "patch"
             }
           } else {
             # Direct commit to main - check commit message
@@ -72,6 +74,8 @@ jobs:
               $bumpType = "major"
             } elseif ($commitMsg -match "feature|minor version|\[minor\]") {
               $bumpType = "minor"
+            } else {
+              $bumpType = "patch"
             }
           }
 
