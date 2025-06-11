@@ -33,69 +33,72 @@ jobs:
         id: version
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
         run: |
-          # Get the latest stable release using GitHub CLI
-          LATEST_TAG=$(gh release list --limit 1 --exclude-pre-releases --json tagName --jq '.[0].tagName' 2>/dev/null || echo "")
-          echo "Latest stable release: $LATEST_TAG"
+          # Get the latest stable release using GitHub CLI, fallback to v0.0.0 if fails
+          $latestTag = "v0.0.0"
+          try {
+            $tag = & gh release list --limit 1 --exclude-pre-releases --json tagName --jq '.[0].tagName' 2>$null
+            if ($tag) { $latestTag = $tag }
+          } catch {
+            Write-Host "Failed to get release tag from gh, using v0.0.0"
+          }
+          Write-Host "Latest stable release: $latestTag"
 
           # Parse version numbers
-          VERSION_NUMBER=${LATEST_TAG#v}
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION_NUMBER"
+          $versionNumber = $latestTag.TrimStart("v")
+          $parts = $versionNumber -split '\.'
+          $major = [int]$parts[0]
+          $minor = [int]$parts[1]
+          $patch = [int]$parts[2]
 
           # Default to patch bump
-          BUMP_TYPE="patch"
-          IS_PRERELEASE="false"
+          $bumpType = "patch"
+          $isPrerelease = "false"
 
           # Check for version bump indicators in PR or commit messages
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            IS_PRERELEASE="true"
-            PR_BODY="${{ github.event.pull_request.body }}"
-            if printf "%s" "$PR_BODY" | grep -i "breaking change\|major version\|\[major\]"; then
-              BUMP_TYPE="major"
-            elif printf "%s" "$PR_BODY" | grep -i "feature\|minor version\|\[minor\]"; then
-              BUMP_TYPE="minor"
-            fi
-          else
+          if ("${{ github.event_name }}" -eq "pull_request") {
+            $isPrerelease = "true"
+            $prBody = "${{ github.event.pull_request.body }}"
+            if ($prBody -match "breaking change|major version|\[major\]") {
+              $bumpType = "major"
+            } elseif ($prBody -match "feature|minor version|\[minor\]") {
+              $bumpType = "minor"
+            }
+          } else {
             # Direct commit to main - check commit message
-            COMMIT_MSG=$(git log -1 --pretty=%B)
-            if printf "%s" "$COMMIT_MSG" | grep -i "breaking change\|major version\|\[major\]"; then
-              BUMP_TYPE="major"
-            elif printf "%s" "$COMMIT_MSG" | grep -i "feature\|minor version\|\[minor\]"; then
-              BUMP_TYPE="minor"
-            fi
-          fi
+            $commitMsg = git log -1 --pretty=%B
+            if ($commitMsg -match "breaking change|major version|\[major\]") {
+              $bumpType = "major"
+            } elseif ($commitMsg -match "feature|minor version|\[minor\]") {
+              $bumpType = "minor"
+            }
+          }
 
-          echo "Bump type: $BUMP_TYPE"
-          echo "Is prerelease: $IS_PRERELEASE"
+          Write-Host "Bump type: $bumpType"
+          Write-Host "Is prerelease: $isPrerelease"
 
           # Calculate new version
-          case $BUMP_TYPE in
-            major)
-              NEW_VERSION="$((MAJOR + 1)).0.0"
-              ;;
-            minor)
-              NEW_VERSION="$MAJOR.$((MINOR + 1)).0"
-              ;;
-            patch)
-              NEW_VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
-              ;;
-          esac
+          switch ($bumpType) {
+            "major" { $newVersion = "$($major + 1).0.0" }
+            "minor" { $newVersion = "$major.$($minor + 1).0" }
+            "patch" { $newVersion = "$major.$minor.$($patch + 1)" }
+          }
 
           # Add prerelease suffix for PR builds, handle missing PR context
-          if [[ "$IS_PRERELEASE" == "true" ]]; then
-            PR_NUMBER="${{ github.event.pull_request.number }}"
-            COMMIT_SHA="${{ github.event.pull_request.head.sha }}"
-            # Fallbacks if variables are empty
-            if [ -z "$PR_NUMBER" ]; then PR_NUMBER="0"; fi
-            if [ -z "$COMMIT_SHA" ]; then COMMIT_SHA="$GITHUB_SHA"; fi
-            SHORT_SHA=${COMMIT_SHA:0:8}
-            NEW_VERSION="${NEW_VERSION}-pr.${PR_NUMBER}.${SHORT_SHA}"
-          fi
+          if ($isPrerelease -eq "true") {
+            $prNumber = "${{ github.event.pull_request.number }}"
+            $commitSha = "${{ github.event.pull_request.head.sha }}"
+            if (-not $prNumber) { $prNumber = "0" }
+            if (-not $commitSha) { $commitSha = "$env:GITHUB_SHA" }
+            $shortSha = $commitSha.Substring(0,8)
+            $newVersion = "$newVersion-pr.$prNumber.$shortSha"
+          }
 
-          echo "New version: $NEW_VERSION"
-          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          echo "version-tag=v$NEW_VERSION" >> $GITHUB_OUTPUT
-          echo "is-prerelease=$IS_PRERELEASE" >> $GITHUB_OUTPUT
+          Write-Host "New version: $newVersion"
+          "version=$newVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "version-tag=v$newVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "is-prerelease=$isPrerelease" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
   build:
     needs: determine-version
