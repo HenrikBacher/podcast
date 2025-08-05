@@ -114,9 +114,6 @@ jobs:
           - os: ubuntu-latest
             runtime: linux-x64
             artifact-name: DrPodcast-linux-x64
-          - os: ubuntu-24.04-arm
-            runtime: linux-arm
-            artifact-name: DrPodcast-linux-arm64
           - os: windows-latest
             runtime: win-x64
             artifact-name: DrPodcast-win-x64
@@ -196,7 +193,6 @@ jobs:
 
             ### Download
             - **Linux (x64)**: DrPodcast-linux-x64.tar.gz
-            - **Linux (arm64)**: DrPodcast-linux-arm64.tar.gz
             - **Windows (x64)**: DrPodcast-win-x64.zip
             - **macOS (arm64)**: DrPodcast-osx-arm64.tar.gz
 

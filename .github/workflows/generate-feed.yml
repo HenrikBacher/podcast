@@ -23,10 +23,7 @@ on:
 jobs:
   update-and-deploy-feeds:
     name: "Update and deploy feeds"
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm]
+    runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -45,9 +42,7 @@ jobs:
         run: |
           Write-Host "Determining platform..."
           $platform = switch ("${{ runner.os }}") {
-            "Linux" {
-              if ("${{ matrix.os }}" -eq "ubuntu-24.04-arm") { "linux-arm64" } else { "linux-x64" }
-            }
+            "Linux" { "linux-x64" }
             "Windows" { "win-x64" }
             "macOS" { "osx-arm64" }
             default {
@@ -84,7 +79,6 @@ jobs:
           # Download the platform-specific asset
           $assetName = switch ($platform) {
             "linux-x64" { "DrPodcast-linux-x64.tar.gz" }
-            "linux-arm64" { "DrPodcast-linux-arm64.tar.gz" }
             "win-x64" { "DrPodcast-win-x64.zip" }
             "osx-arm64" { "DrPodcast-osx-arm64.tar.gz" }
           }
