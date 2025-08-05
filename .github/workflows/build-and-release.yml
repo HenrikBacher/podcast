@@ -198,7 +198,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
 
   release:
-    needs: [determine-version, build]
+    needs: [build, docker]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
     steps:
