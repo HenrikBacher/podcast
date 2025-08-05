@@ -173,7 +173,7 @@ jobs:
           retention-days: 30
 
   docker:
-    needs: [determine-version, build]
+    needs: determine-version
     runs-on: ubuntu-24.04-arm
     steps:
       - name: Checkout source code
