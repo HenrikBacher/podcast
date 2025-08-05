@@ -79,6 +79,7 @@ jobs:
           # Download the platform-specific asset
           $assetName = switch ($platform) {
             "linux-x64" { "DrPodcast-linux-x64.tar.gz" }
+            "linux-arm64" { "DrPodcast-linux-arm64.tar.gz" }
             "win-x64" { "DrPodcast-win-x64.zip" }
             "osx-arm64" { "DrPodcast-osx-arm64.tar.gz" }
           }
