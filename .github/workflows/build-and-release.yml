@@ -114,7 +114,7 @@ jobs:
           - os: ubuntu-latest
             runtime: linux-x64
             artifact-name: DrPodcast-linux-x64
-          - os: ubuntu-24.04-arm64
+          - os: ubuntu-24.04-arm
             runtime: linux-arm64
             artifact-name: DrPodcast-linux-arm64
           - os: windows-latest
