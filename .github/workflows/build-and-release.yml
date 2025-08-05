@@ -192,7 +192,6 @@ jobs:
       - name: Build and push multi-arch Docker image
         uses: docker/build-push-action@v5
         with:
-          context: ./src
           push: true
           tags: ${{ needs.determine-version.outputs.version }}
           platforms: linux/amd64,linux/arm64
