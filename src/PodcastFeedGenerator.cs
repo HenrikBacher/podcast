@@ -31,39 +31,15 @@ var podcastList = JsonSerializer.Deserialize(
 
 Directory.CreateDirectory("output");
 
-// Performance: Use a single HttpClient instance for all requests
-var httpClient = httpClientFactory.CreateClient("DrApi");
-
-// Performance: Limit concurrency to avoid overwhelming API/system
-int maxConcurrency = 5;
-using var semaphore = new SemaphoreSlim(maxConcurrency);
-
-// Performance: Cache for category mapping
-var categoryCache = new Dictionary<string, string>();
-
-// Helper for cached category mapping
-string CachedMapToPodcastCategory(string category)
-{
-    if (categoryCache.TryGetValue(category, out var mapped))
-        return mapped;
-    mapped = MapToPodcastCategory(category);
-    categoryCache[category] = mapped;
-    return mapped;
-}
-
-// Performance: Increase episode fetch limit to 512 if API supports
-int episodeFetchLimit = 512;
-
 var tasks = podcastList?.Podcasts.Select(async podcast =>
 {
-    await semaphore.WaitAsync();
+    string urn = podcast.Urn;
+    string slug = podcast.Slug;
+    string seriesUrl = apiUrl + urn;
     try
     {
-        string urn = podcast.Urn;
-        string slug = podcast.Slug;
-        string seriesUrl = apiUrl + urn;
+        using var httpClient = httpClientFactory.CreateClient("DrApi");
 
-        // Use shared HttpClient
         // First, fetch series information
         var seriesResponse = await httpClient.GetAsync(seriesUrl);
         seriesResponse.EnsureSuccessStatusCode();
@@ -71,7 +47,7 @@ var tasks = podcastList?.Podcasts.Select(async podcast =>
         var series = JsonSerializer.Deserialize(seriesContent, PodcastJsonContext.Default.Series);
 
         // Fetch all episodes, handling pagination
-        var episodes = await FetchAllEpisodesAsync($"{apiUrl}{urn}/episodes?limit={episodeFetchLimit}", httpClient);
+        var episodes = await FetchAllEpisodesAsync(apiUrl + urn + "/episodes?limit=256", httpClient);
 
         // Build channel model using object initializer and with expressions
         var channelModel = new Channel
@@ -125,7 +101,7 @@ var tasks = podcastList?.Podcasts.Select(async podcast =>
         {
             foreach (var category in categories.Where(c => !string.IsNullOrEmpty(c)))
             {
-                var mapped = CachedMapToPodcastCategory(category);
+                var mapped = MapToPodcastCategory(category);
                 if (!string.IsNullOrEmpty(mapped))
                     channel.Add(new XElement(itunes + "category", new XAttribute("text", mapped)));
             }
@@ -244,7 +220,7 @@ var tasks = podcastList?.Podcasts.Select(async podcast =>
                 {
                     foreach (var cat in episodeCategories)
                     {
-                        var mapped = CachedMapToPodcastCategory(cat);
+                        var mapped = MapToPodcastCategory(cat);
                         if (!string.IsNullOrEmpty(mapped))
                             item.Add(new XElement(itunes + "category", new XAttribute("text", mapped)));
                     }
@@ -264,22 +240,12 @@ var tasks = podcastList?.Podcasts.Select(async podcast =>
 
         string outputPath = Path.Combine("output", $"{slug}.xml");
         var doc = new XDocument(new XDeclaration("1.0", "utf-8", "yes"), rss);
-
-        // Performance: Use async XML writing if available
-        await using var stream = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true);
-        using var writer = new StreamWriter(stream);
-        doc.Save(writer);
-        await writer.FlushAsync();
-
+        doc.Save(outputPath);
         Console.WriteLine($"Saved RSS feed: {outputPath}");
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Failed to fetch series {podcast.Urn}: {ex.Message}");
-    }
-    finally
-    {
-        semaphore.Release();
+        Console.WriteLine($"Failed to fetch series {urn}: {ex.Message}");
     }
 }).ToArray();
 
@@ -359,3 +325,4 @@ static async Task<List<Episode>?> FetchAllEpisodesAsync(string initialUrl, HttpC
 
     return allEpisodes;
 }
+s
