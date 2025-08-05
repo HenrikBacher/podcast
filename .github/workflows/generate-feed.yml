@@ -42,7 +42,9 @@ jobs:
         run: |
           Write-Host "Determining platform..."
           $platform = switch ("${{ runner.os }}") {
-            "Linux" { "linux-x64" }
+            "Linux" {
+              if ("${{ runner.arch }}" -eq "ARM64") { "linux-arm64" } else { "linux-x64" }
+            }
             "Windows" { "win-x64" }
             "macOS" { "osx-arm64" }
             default {
