@@ -173,7 +173,7 @@ jobs:
           retention-days: 30
 
   docker:
-    needs: [build]
+    needs: [determine-version, build]
     runs-on: ubuntu-24.04-arm
     steps:
       - name: Set up Docker Buildx
