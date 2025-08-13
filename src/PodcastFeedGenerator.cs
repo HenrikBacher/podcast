@@ -2,10 +2,9 @@ using System.Globalization;
 using System.Text.Json;
 using System.Xml.Linq;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Http;
-using Polly;
-using Polly.Extensions.Http;
+using Microsoft.Extensions.Http.Resilience;
 using DrPodcast;
+using System.Net;
 
 var services = new ServiceCollection();
 
@@ -14,24 +13,36 @@ string apiKey = Environment.GetEnvironmentVariable("API_KEY") ?? "";
 string baseUrl = Environment.GetEnvironmentVariable("BASE_URL") ?? "https://example.com";
 const string apiUrl = "https://api.dr.dk/radio/v2/series/";
 
-// Configure HttpClient with Polly retry policy
+int retryCount = 3;
+int timeoutSeconds = 30;
+int maxParallelism = Environment.ProcessorCount;
+
 services.AddHttpClient("DrApi", client =>
 {
     client.DefaultRequestHeaders.Add("X-Apikey", apiKey);
-    client.Timeout = TimeSpan.FromSeconds(30);
+    client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
 })
-.AddPolicyHandler(GetRetryPolicy());
+.AddStandardResilienceHandler(options =>
+{
+    options.Retry.MaxRetryAttempts = retryCount;
+    options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
+});
 
 await using var serviceProvider = services.BuildServiceProvider();
 var httpClientFactory = serviceProvider.GetRequiredService<IHttpClientFactory>();
 
-// Deserialize podcasts.json using JsonSerializerContext for trimming compatibility
 var podcastList = JsonSerializer.Deserialize(
     await File.ReadAllTextAsync("podcasts.json"), PodcastJsonContext.Default.PodcastList);
 
 Directory.CreateDirectory("output");
 
-var tasks = podcastList?.Podcasts.Select(async podcast =>
+var podcasts = podcastList?.Podcasts ?? new List<Podcast>();
+var parallelOptions = new ParallelOptions
+{
+    MaxDegreeOfParallelism = maxParallelism
+};
+
+await Parallel.ForEachAsync(podcasts, parallelOptions, async (podcast, _) =>
 {
     string urn = podcast.Urn;
     string slug = podcast.Slug;
@@ -46,7 +57,7 @@ var tasks = podcastList?.Podcasts.Select(async podcast =>
         string seriesContent = await seriesResponse.Content.ReadAsStringAsync();
         var series = JsonSerializer.Deserialize(seriesContent, PodcastJsonContext.Default.Series);
 
-        // Fetch all episodes, handling pagination
+        // Fetch all episodes, handling pagination (retries via Polly)
         var episodes = await FetchAllEpisodesAsync(apiUrl + urn + "/episodes?limit=256", httpClient);
 
         // Build channel model using object initializer and with expressions
@@ -159,7 +170,7 @@ var tasks = podcastList?.Podcasts.Select(async podcast =>
                 string? epImage = GetImageUrlFromAssets(episode.ImageAssets) ?? channelModel.Image;
 
                 // Select the highest quality mp3 using LINQ and pattern matching
-                var (epAudio, epAudioLength) = episode.AudioAssets?
+                (string epAudio, int epAudioLength) = episode.AudioAssets?
                     .Where(a => a?.Format == "mp3")
                     .OrderByDescending(a => a?.Bitrate ?? 0)
                     .FirstOrDefault() is { } best
@@ -247,9 +258,8 @@ var tasks = podcastList?.Podcasts.Select(async podcast =>
     {
         Console.WriteLine($"Failed to fetch series {urn}: {ex.Message}");
     }
-}).ToArray();
+});
 
-await Task.WhenAll(tasks!);
 Console.WriteLine("All podcast feeds fetched.");
 
 static string MapToPodcastCategory(string category)
@@ -287,15 +297,6 @@ static string? GetImageUrlFromAssets(List<ImageAsset>? imageAssets)
         : null;
 }
 
-static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy() =>
-    HttpPolicyExtensions
-        .HandleTransientHttpError()
-        .OrResult(msg => !msg.IsSuccessStatusCode)
-        .WaitAndRetryAsync(
-            retryCount: 3,
-            sleepDurationProvider: retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
-            onRetry: (outcome, timespan, retryCount, context) =>
-                Console.WriteLine($"Retry {retryCount} after {timespan} seconds delay"));
 
 static async Task<List<Episode>?> FetchAllEpisodesAsync(string initialUrl, HttpClient httpClient)
 {
