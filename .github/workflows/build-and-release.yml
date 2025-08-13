@@ -57,14 +57,22 @@ jobs:
           $isPrerelease = "false"
 
           # Check for version bump indicators in PR or commit messages
+          $event = $null
           if ("${{ github.event_name }}" -eq "pull_request") {
             $isPrerelease = "true"
-            $prBody = "${{ github.event.pull_request.body }}"
-            if ($prBody -match "breaking change|major version|\[major\]") {
+            try {
+              $event = Get-Content -Raw -Path $env:GITHUB_EVENT_PATH | ConvertFrom-Json
+              $prBody = $event.pull_request.body
+            } catch {
+              $prBody = ""
+            }
+            if ($null -eq $prBody) { $prBody = "" }
+            if ($prBody -imatch "breaking change|major version|\[major\]") {
               $bumpType = "major"
-            } elseif ($prBody -match "feature|minor version|\[minor\]") {
+            } elseif ($prBody -imatch "feature|minor version|\[minor\]") {
               $bumpType = "minor"
             } else {
+              # Default to patch if PR description doesn't match expected format
               $bumpType = "patch"
             }
           } else {
@@ -91,8 +99,11 @@ jobs:
 
           # Add prerelease suffix for PR builds, handle missing PR context
           if ($isPrerelease -eq "true") {
-            $prNumber = "${{ github.event.pull_request.number }}"
-            $commitSha = "${{ github.event.pull_request.head.sha }}"
+            try {
+              if (-not $event) { $event = Get-Content -Raw -Path $env:GITHUB_EVENT_PATH | ConvertFrom-Json }
+              $prNumber = $event.pull_request.number
+              $commitSha = $event.pull_request.head.sha
+            } catch { }
             if (-not $prNumber) { $prNumber = "0" }
             if (-not $commitSha) { $commitSha = "$env:GITHUB_SHA" }
             $shortSha = $commitSha.Substring(0,8)
