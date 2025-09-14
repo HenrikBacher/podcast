@@ -32,6 +32,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.DotNet.ILCompiler" Version="9.0.9" />
     <None Update="podcasts.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
