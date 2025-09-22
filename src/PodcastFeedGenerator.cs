@@ -96,7 +96,7 @@ var tasks = podcastList?.Podcasts.Select(async podcast =>
             new XElement(itunes + "image", new XAttribute("href", channelModel.Image ?? ""))
         );
 
-        // Add iTunes categories from series data using modern collection expressions
+        // Add iTunes categories from series
         if (series?.Categories is { Count: > 0 } categories)
         {
             foreach (var category in categories.Where(c => !string.IsNullOrEmpty(c)))
@@ -144,7 +144,6 @@ var tasks = podcastList?.Podcasts.Select(async podcast =>
 
         if (episodes is { Count: > 0 })
         {
-            // Sort episodes based on the determined podcast type using modern LINQ
             var sortedEpisodes = itunesType == "serial"
                 ? episodes.OrderBy(ep => DateTime.TryParse(ep.PublishTime, out var dt) ? dt : DateTime.MinValue)
                 : episodes.OrderByDescending(ep => DateTime.TryParse(ep.PublishTime, out var dt) ? dt : DateTime.MinValue);
@@ -166,7 +165,6 @@ var tasks = podcastList?.Podcasts.Select(async podcast =>
                     ? (best.Url ?? "", best.FileSize ?? 0)
                     : ("", 0);
 
-                // Format iTunes duration using modern TimeSpan formatting
                 string itunesDuration = episode.DurationMilliseconds > 0
                     ? TimeSpan.FromMilliseconds(episode.DurationMilliseconds.Value).ToString(@"hh\:mm\:ss")
                     : "";
