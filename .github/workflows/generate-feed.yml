@@ -186,17 +186,30 @@ jobs:
           $feeds = Get-ChildItem -Path "output/_site/feeds/*.xml"
           foreach ($feed in $feeds) {
             $filename = [System.IO.Path]::GetFileNameWithoutExtension($feed.Name)
-            $formattedTitle = $filename -replace '-', ' '
+            
+            # Extract RSS feed content
+            $content = Get-Content -Path $feed.FullName -Raw
+            
+            # Extract title from RSS feed and remove "(Reproduceret feed)" suffix
+            $titleMatch = [regex]::Match($content, '<title>([^<]+)</title>')
+            $title = if ($titleMatch.Success) {
+              $extractedTitle = $titleMatch.Groups[1].Value
+              # Remove "(Reproduceret feed)" or similar patterns in parentheses at the end
+              $cleanTitle = $extractedTitle -replace '\s*\([^)]*feed[^)]*\)\s*$', ''
+              $cleanTitle.Trim()
+            } else {
+              # Fallback to filename formatting if title extraction fails
+              $filename -replace '-', ' '
+            }
             
             # Extract image URL from the RSS feed's itunes:image element
-            $content = Get-Content -Path $feed.FullName -Raw
             $imageMatch = [regex]::Match($content, '<itunes:image[^>]*href="([^"]*)"')
             $imageUrl = if ($imageMatch.Success) { $imageMatch.Groups[1].Value } else { "" }
             
             if ($imageUrl) {
-              $feedsHtml += "<li><a class='feed-link' href='feeds/$filename.xml'><img class='feed-icon' src='$imageUrl' loading='lazy' alt='$formattedTitle'><span class='feed-title'>$formattedTitle</span></a></li>"
+              $feedsHtml += "<li><a class='feed-link' href='feeds/$filename.xml'><img class='feed-icon' src='$imageUrl' loading='lazy' alt='$title'><span class='feed-title'>$title</span></a></li>"
             } else {
-              $feedsHtml += "<li><a class='feed-link' href='feeds/$filename.xml'><div class='feed-icon'></div><span class='feed-title'>$formattedTitle</span></a></li>"
+              $feedsHtml += "<li><a class='feed-link' href='feeds/$filename.xml'><div class='feed-icon'></div><span class='feed-title'>$title</span></a></li>"
             }
           }
 
