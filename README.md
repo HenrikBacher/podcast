@@ -1,57 +1,67 @@
 # DrPodcast
 
-DrPodcast is an automated podcast RSS feed generator that fetches podcast data from DR (Danmarks Radio) and generates iTunes-compatible RSS feeds. The project includes automated CI/CD workflows for building cross-platform binaries and deploying to GitHub Pages.
+DrPodcast is an automated podcast RSS feed generator that fetches podcast data from DR (Danmarks Radio) and generates iTunes-compatible RSS feeds. The project features cross-platform NativeAOT compiled binaries and automated CI/CD workflows for building releases and deploying to GitHub Pages.
+
+This tool currently processes **34 Danish podcasts** from DR's catalog, generating high-quality RSS feeds with full iTunes metadata support.
 
 ## Features
 
-- Fetches podcast series and episode data from DR's public API
-- Generates iTunes-compatible RSS feeds with full metadata
-- Supports episode ordering (episodic vs. serial)
-- Handles pagination for podcasts with many episodes
-- Includes podcast categories, images, and episode metadata
-- Cross-platform native AOT compiled binaries (Linux, Windows, macOS)
-- Automated feed generation and deployment via GitHub Actions
-- Static website for browsing available feeds
+- **DR API Integration**: Fetches podcast series and episode data from DR's public API with retry policies
+- **iTunes-Compatible RSS**: Generates RSS feeds with full iTunes metadata, categories, and images
+- **Episode Management**: Supports both episodic and serial ordering with automatic pagination
+- **High Performance**: NativeAOT compiled binaries for fast startup and minimal resource usage
+- **Cross-Platform**: Supports Linux (x64, ARM64), Windows (x64), and macOS (Apple Silicon)
+- **Automated Deployment**: GitHub Actions workflows for continuous integration and feed generation
+- **Web Interface**: Static website for browsing and accessing available podcast feeds
+- **Resilient Operation**: Built-in retry logic and error handling for reliable feed generation
 
 ## Project Structure
 
 - **[src/](src/)**: C# source code (.NET 9.0)
-  - [DrPodcast.csproj](src/DrPodcast.csproj): Project file with NativeAOT settings
-  - [PodcastFeedGenerator.cs](src/PodcastFeedGenerator.cs): Main feed generation logic
-  - [PodcastModels.cs](src/PodcastModels.cs): Data models with JSON source generation
+  - [DrPodcast.csproj](src/DrPodcast.csproj): Project file with NativeAOT and optimization settings
+  - [PodcastFeedGenerator.cs](src/PodcastFeedGenerator.cs): Main application entry point and RSS generation logic
+  - [PodcastModels.cs](src/PodcastModels.cs): Data models with source-generated JSON serialization
+  - **Configuration/**: Configuration-related components
+  - **Services/**: Service layer components
 
-- **[site/](site/)**: Static website frontend
-  - [index.html](site/index.html): Main page listing available feeds
-  - [script.js](site/script.js): Frontend JavaScript
-  - [styles.css](site/styles.css): Styles
+- **[site/](site/)**: Static website for feed browsing
+  - [index.html](site/index.html): Main page listing all available podcast feeds
+  - [script.js](site/script.js): Frontend JavaScript for dynamic content
+  - [styles.css](site/styles.css): Responsive CSS styles
 
 - **[.github/workflows/](.github/workflows/)**: CI/CD automation
-  - [build-and-release.yml](.github/workflows/build-and-release.yml): Builds and releases cross-platform binaries
-  - [generate-feed.yml](.github/workflows/generate-feed.yml): Generates feeds and deploys to GitHub Pages
+  - [build-and-release.yml](.github/workflows/build-and-release.yml): Cross-platform binary builds and releases
+  - [generate-feed.yml](.github/workflows/generate-feed.yml): Automated feed generation and GitHub Pages deployment
 
-- **[podcasts.json](podcasts.json)**: Configuration file with podcast slugs and URNs
+- **[podcasts.json](podcasts.json)**: Configuration file containing 34 Danish podcast definitions
 
 ## Usage
 
 ### Running Locally
 
 #### Prerequisites
-- [.NET 9.0 SDK](https://dotnet.microsoft.com/download)
-- API key from DR (set as environment variable)
+- [.NET 9.0 SDK](https://dotnet.microsoft.com/download) or later
+- DR API key (contact DR for access)
 
-#### Build and Run
+#### Quick Start
 ```bash
+# Clone and navigate to the repository
+git clone <repository-url>
+cd drpodcast
+
 # Restore dependencies
 dotnet restore src/DrPodcast.csproj
 
 # Build the project
 dotnet build src/DrPodcast.csproj --configuration Release
 
-# Run the feed generator
-API_KEY=<your-api-key> BASE_URL=<base-url> dotnet run --project src/DrPodcast.csproj
+# Set environment variables and run
+export API_KEY="your-dr-api-key"
+export BASE_URL="https://your-domain.com"  # Optional, defaults to https://example.com
+dotnet run --project src/DrPodcast.csproj
 ```
 
-Generated RSS feeds will be saved in the `output/` directory.
+Generated RSS feeds will be saved in the `output/` directory with filenames matching the podcast slugs.
 
 ### Using Pre-built Binaries
 
@@ -80,42 +90,56 @@ DrPodcast-win-x64.exe
 - `BASE_URL`: Base URL for the deployed feeds (default: `https://example.com`)
 
 ### Adding Podcasts
-Edit [podcasts.json](podcasts.json) to add or remove podcasts:
+Edit [podcasts.json](podcasts.json) to add or remove podcasts. Each podcast requires:
+- **slug**: URL-friendly identifier used for the RSS filename
+- **urn**: DR's unique identifier for the podcast series
+
 ```json
 {
   "podcasts": [
     {
-      "slug": "podcast-slug",
-      "urn": "urn:dr:radio:series:xxxxx"
+      "slug": "example-podcast",
+      "urn": "urn:dr:radio:series:5fa25ef8330eac2f135b62d6"
     }
   ]
 }
 ```
 
+To find a podcast's URN, inspect DR's website network requests or contact DR for the appropriate series identifier.
+
 ## Technical Details
 
-- **Language**: C# (.NET 9.0)
-- **Compilation**: NativeAOT for fast startup and small binary size
-- **HTTP Client**: Configured with Polly retry policies
-- **JSON Serialization**: Source-generated for trim compatibility
-- **RSS Generation**: XDocument-based with Atom, iTunes, and Media RSS namespaces
-- **Deployment**: Automated via GitHub Actions to GitHub Pages
+- **Runtime**: .NET 9.0 with NativeAOT compilation for optimal performance
+- **Binary Size**: Small, self-contained executables (~15-30MB per platform)
+- **HTTP Resilience**: Polly retry policies with exponential backoff for API reliability
+- **JSON Processing**: Source-generated serialization for trim-safe, high-performance parsing
+- **RSS Standards**: Compliant with RSS 2.0, iTunes, Atom, and Media RSS specifications
+- **Memory Efficiency**: Streaming processing for large podcast catalogs
+- **Cross-Platform**: Native binaries for Linux (x64/ARM64), Windows (x64), and macOS (ARM64)
 
 ## CI/CD Workflows
 
-### Build and Release
-Triggered on pushes to `main` or pull requests affecting `src/`:
-- Determines semantic version from PR/commit messages
-- Builds cross-platform NativeAOT binaries
-- Creates GitHub releases (prereleases for PRs, stable for main)
-- Cleans up prereleases after stable releases
+### Build and Release (`build-and-release.yml`)
+Automatically triggered on:
+- Pushes to `main` branch
+- Pull requests affecting `src/` directory
 
-### Feed Generation
-Runs hourly and on changes to [podcasts.json](podcasts.json):
-- Downloads latest binary from releases
-- Generates RSS feeds for all configured podcasts
-- Compares feeds with deployed versions (hash-based)
-- Deploys to GitHub Pages only if changes detected
+**Process:**
+- Semantic versioning from commit messages and PR labels
+- Cross-platform NativeAOT compilation (Linux x64/ARM64, Windows x64, macOS ARM64)
+- Automated GitHub releases (prereleases for PRs, stable for main)
+- Artifact cleanup and prerelease management
+
+### Feed Generation (`generate-feed.yml`)
+Runs on schedule and configuration changes:
+- **Schedule**: Hourly automated execution
+- **Triggers**: Changes to `podcasts.json`
+
+**Process:**
+- Downloads latest release binary
+- Generates RSS feeds for all 34 configured podcasts
+- Hash-based change detection to minimize unnecessary deployments
+- GitHub Pages deployment with caching and optimization
 
 ## License
 
