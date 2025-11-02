@@ -1,133 +1,103 @@
 # Azure Function Setup Guide
 
-This guide walks you through setting up the GitHub environment and Azure Function App for automated deployment.
+This guide walks you through setting up the GitHub environment and Azure credentials for automated deployment.
 
 ## Prerequisites
 
 - Azure subscription (free tier works)
 - GitHub repository admin access
-- Azure CLI or Azure Portal access
+- Azure CLI installed (recommended) or Azure Portal access
 
 ---
 
-## Step 1: Create Azure Function App
+## Important: Auto-Provisioning
 
-### Option A: Azure Portal (Recommended for beginners)
+**The deployment workflow automatically creates Azure resources if they don't exist**, including:
+- Resource group (`drpodcast-rg`)
+- Storage account (`drpodcaststorage`)
+- Function App (your chosen name)
+- Application settings (API_KEY, BASE_URL)
 
-1. Go to [Azure Portal](https://portal.azure.com)
-2. Click **Create a resource** → Search for **Function App**
-3. Click **Create**
+You only need to:
+1. Create an Azure service principal for authentication
+2. Configure GitHub environment with credentials
 
-**Configuration:**
-```
-Basics:
-  Subscription: [Your subscription]
-  Resource Group: [Create new] "drpodcast-rg"
-  Function App name: "drpodcast-feed-generator"
-  Publish: Code
-  Runtime stack: .NET
-  Version: 9 (STS) Isolated
-  Region: West Europe (or closest to Denmark)
-  Operating System: Linux
+---
 
-Hosting:
-  Storage account: [Create new or use existing]
-  Plan type: Consumption (Serverless)
+## Step 1: Create Azure Service Principal
 
-Networking:
-  Enable public access: Yes
+The service principal allows GitHub Actions to authenticate with Azure and manage resources.
 
-Monitoring:
-  Application Insights: Yes
-  Application Insights name: [Auto-generated]
-```
-
-4. Click **Review + create**
-5. Click **Create** and wait for deployment (~2-3 minutes)
-
-### Option B: Azure CLI
+### Using Azure CLI (Recommended)
 
 ```bash
 # Login to Azure
 az login
 
-# Create resource group
-az group create --name drpodcast-rg --location westeurope
+# Get your subscription ID
+az account show --query id --output tsv
 
-# Create storage account
-az storage account create \
-  --name drpodcaststorage \
-  --resource-group drpodcast-rg \
-  --location westeurope \
-  --sku Standard_LRS
+# Create service principal with Contributor role
+# Replace YOUR_SUBSCRIPTION_ID with the ID from above
+az ad sp create-for-rbac \
+  --name "github-drpodcast-deployer" \
+  --role Contributor \
+  --scopes /subscriptions/YOUR_SUBSCRIPTION_ID \
+  --sdk-auth
 
-# Create Function App
-az functionapp create \
-  --resource-group drpodcast-rg \
-  --consumption-plan-location westeurope \
-  --runtime dotnet-isolated \
-  --runtime-version 9 \
-  --functions-version 4 \
-  --name drpodcast-feed-generator \
-  --storage-account drpodcaststorage \
-  --os-type Linux
+# This outputs JSON like:
+# {
+#   "clientId": "...",
+#   "clientSecret": "...",
+#   "subscriptionId": "...",
+#   "tenantId": "...",
+#   ...
+# }
+# Copy this ENTIRE JSON output - you'll need it for GitHub secrets
+```
+
+**Important**:
+- Save the JSON output securely - it contains sensitive credentials
+- The `clientSecret` is only shown once and cannot be retrieved later
+- If you lose it, you'll need to create a new service principal
+
+### Using Azure Portal (Alternative)
+
+1. Go to [Azure Portal](https://portal.azure.com)
+2. Navigate to **Azure Active Directory** → **App registrations**
+3. Click **New registration**
+   - Name: `github-drpodcast-deployer`
+   - Supported account types: Single tenant
+   - Click **Register**
+4. Note the **Application (client) ID** and **Directory (tenant) ID**
+5. Navigate to **Certificates & secrets**
+   - Click **New client secret**
+   - Description: `GitHub Actions`
+   - Expiration: Choose appropriate duration
+   - Click **Add**
+   - **Copy the secret value immediately** (shown only once)
+6. Navigate to **Subscriptions** (search in top bar)
+   - Select your subscription
+   - Note the **Subscription ID**
+   - Navigate to **Access control (IAM)**
+   - Click **Add** → **Add role assignment**
+   - Role: **Contributor**
+   - Assign access to: **User, group, or service principal**
+   - Select members: Search for `github-drpodcast-deployer`
+   - Click **Review + assign**
+7. Create JSON manually:
+```json
+{
+  "clientId": "<Application (client) ID>",
+  "clientSecret": "<Client secret value>",
+  "subscriptionId": "<Subscription ID>",
+  "tenantId": "<Directory (tenant) ID>"
+}
 ```
 
 ---
 
-## Step 2: Configure Azure Function App Settings
-
-### Application Settings (Environment Variables)
-
-In Azure Portal:
-1. Go to your Function App
-2. Navigate to **Settings** → **Configuration**
-3. Click **New application setting** for each:
-
-| Name | Value | Description |
-|------|-------|-------------|
-| `API_KEY` | `your_dr_api_key_here` | DR API key for accessing podcast data |
-| `BASE_URL` | `https://henrikbacher.github.io/podcast` | Base URL for generated feeds |
-
-4. Click **Save** then **Continue** to restart the app
-
-### Alternative: Azure CLI
-
-```bash
-az functionapp config appsettings set \
-  --name drpodcast-feed-generator \
-  --resource-group drpodcast-rg \
-  --settings \
-    API_KEY="your_dr_api_key_here" \
-    BASE_URL="https://henrikbacher.github.io/podcast"
-```
-
----
-
-## Step 3: Get Publish Profile
-
-### Azure Portal:
-
-1. Go to your Function App
-2. Click **Overview** tab
-3. Click **Get publish profile** (download)
-4. Open the downloaded file in a text editor
-5. **Copy the entire XML content**
-
-### Azure CLI:
-
-```bash
-az functionapp deployment list-publishing-profiles \
-  --name drpodcast-feed-generator \
-  --resource-group drpodcast-rg \
-  --xml
-```
-
-Copy the output XML.
-
----
-
-## Step 4: Create GitHub Environment
+## Step 2: Create GitHub Environment
 
 ### Manual Steps:
 
@@ -148,7 +118,7 @@ Click **Save protection rules**
 
 ---
 
-## Step 5: Add Environment Variables
+## Step 3: Add Environment Variables
 
 In the `azure-production` environment:
 
@@ -158,53 +128,63 @@ Click **Add variable** for each:
 
 | Name | Value | Example |
 |------|-------|---------|
-| `AZURE_FUNCTIONAPP_NAME` | Your function app name | `drpodcast-feed-generator` |
-| `AZURE_FUNCTION_URL` | Your function app URL | `https://drpodcast-feed-generator.azurewebsites.net` |
+| `AZURE_FUNCTIONAPP_NAME` | Your chosen function app name | `drpodcast-feed-generator` |
+| `BASE_URL` | Base URL for generated feeds | `https://henrikbacher.github.io/podcast` |
 
-**To find your Function App URL:**
-- Azure Portal → Function App → **Overview** → **URL** field
-- Or: `https://[your-app-name].azurewebsites.net`
+**Notes:**
+- `AZURE_FUNCTIONAPP_NAME`: Choose a globally unique name (will be created automatically if it doesn't exist)
+- `BASE_URL`: The base URL where your podcast feeds will be hosted
 
 ---
 
-## Step 6: Add Environment Secrets
+## Step 4: Add Environment Secrets
 
 In the `azure-production` environment:
 
 ### Secrets (Private)
 
-Click **Add secret**:
+Click **Add secret** for each:
 
 | Name | Value |
 |------|-------|
-| `AZURE_FUNCTIONAPP_PUBLISH_PROFILE` | Paste the entire XML content from Step 3 |
+| `AZURE_CREDENTIALS` | Paste the entire JSON from Step 1 |
+| `DR_API_KEY` | Your DR API key for accessing podcast data |
 
-**Important:** The publish profile is sensitive - treat it like a password!
+**Important:** These secrets are sensitive - treat them like passwords!
 
 ---
 
-## Step 7: Verify Setup
+## Step 5: Verify Setup
 
 ### Checklist:
 
-- [ ] Azure Function App created
-- [ ] Application settings configured (`API_KEY`, `BASE_URL`)
+- [ ] Azure service principal created
 - [ ] GitHub environment `azure-production` created
 - [ ] Environment variable `AZURE_FUNCTIONAPP_NAME` set
-- [ ] Environment variable `AZURE_FUNCTION_URL` set
-- [ ] Environment secret `AZURE_FUNCTIONAPP_PUBLISH_PROFILE` set
+- [ ] Environment variable `BASE_URL` set
+- [ ] Environment secret `AZURE_CREDENTIALS` set (service principal JSON)
+- [ ] Environment secret `DR_API_KEY` set
 
 ### Test Deployment:
 
-1. Push to `main` branch or manually trigger workflow
+1. Push to `main` branch or manually trigger workflow in **Actions** tab
 2. Go to **Actions** tab in GitHub
 3. Watch **Deploy Azure Function** workflow
-4. Should complete in ~2-3 minutes
+4. The workflow will:
+   - Authenticate with Azure using service principal
+   - Create resource group (if needed)
+   - Create storage account (if needed)
+   - Create function app (if needed)
+   - Configure application settings
+   - Deploy the function code
+5. First deployment takes ~3-5 minutes (subsequent deployments ~2 minutes)
 
 ### Verify Function is Running:
 
+After deployment completes, test the health endpoint:
+
 ```bash
-# Health check (no auth required)
+# Replace [your-app-name] with your AZURE_FUNCTIONAPP_NAME
 curl https://[your-app-name].azurewebsites.net/api/HealthCheck
 
 # Expected response:
@@ -213,7 +193,7 @@ curl https://[your-app-name].azurewebsites.net/api/HealthCheck
 
 ---
 
-## Step 8: Test Feed Generation
+## Step 6: Test Feed Generation
 
 ### Get Function Key:
 
@@ -250,14 +230,14 @@ traces
 ### Common Issues:
 
 **Deployment fails:**
-- Check publish profile is valid
-- Verify .NET 9 runtime is selected
-- Check workflow logs in GitHub Actions
+- Check `AZURE_CREDENTIALS` secret is valid JSON from service principal creation
+- Verify service principal has Contributor role on subscription
+- Check workflow logs in GitHub Actions for specific Azure CLI errors
 
 **Function not running:**
-- Check Application Settings are set
-- Verify `API_KEY` is valid
-- Check Application Insights for errors
+- Verify `DR_API_KEY` is valid
+- Check Azure Portal → Function App → Application Insights for errors
+- Ensure auto-provisioned resources were created successfully
 
 **Timer not triggering:**
 - Wait up to 5 minutes after deployment
@@ -282,13 +262,21 @@ traces
 
 ## Security Best Practices
 
-1. **Rotate publish profile every 90 days:**
-   - Download new profile
-   - Update GitHub secret
+1. **Rotate service principal credentials regularly:**
+   - Create new client secret every 90 days
+   - Update GitHub `AZURE_CREDENTIALS` secret
+   - Delete old client secret from Azure AD
 
-2. **Use managed identities (advanced):**
-   - Instead of publish profiles
-   - More secure for production
+2. **Use least-privilege access:**
+   - Service principal only needs Contributor role on specific resource group
+   - Consider scoping to resource group instead of full subscription:
+     ```bash
+     az ad sp create-for-rbac \
+       --name "github-drpodcast-deployer" \
+       --role Contributor \
+       --scopes /subscriptions/YOUR_SUB_ID/resourceGroups/drpodcast-rg \
+       --sdk-auth
+     ```
 
 3. **Enable authentication:**
    - Function App → **Authentication** → **Add identity provider**
@@ -297,6 +285,7 @@ traces
 4. **Monitor access:**
    - Check Application Insights regularly
    - Set up alerts for failures
+   - Review service principal sign-in logs in Azure AD
 
 ---
 
@@ -309,12 +298,13 @@ traces
 
 ### GitHub Environment:
 - **Name**: `azure-production`
-- **Variables**: `AZURE_FUNCTIONAPP_NAME`, `AZURE_FUNCTION_URL`
-- **Secrets**: `AZURE_FUNCTIONAPP_PUBLISH_PROFILE`
+- **Variables**: `AZURE_FUNCTIONAPP_NAME`, `BASE_URL`
+- **Secrets**: `AZURE_CREDENTIALS`, `DR_API_KEY`
 
-### Azure Resources:
-- **Resource Group**: `drpodcast-rg`
-- **Function App**: `drpodcast-feed-generator`
+### Azure Resources (Auto-Provisioned):
+- **Resource Group**: `drpodcast-rg` (West Europe)
+- **Storage Account**: `drpodcaststorage`
+- **Function App**: Your chosen name from `AZURE_FUNCTIONAPP_NAME`
 - **Plan**: Consumption (Serverless)
 - **Runtime**: .NET 9 Isolated
 

@@ -1,6 +1,35 @@
 # GitHub Environment Setup - Quick Start
 
-This is a quick reference for setting up the `azure-production` GitHub environment.
+This is a quick reference for setting up the `azure-production` GitHub environment with auto-provisioning.
+
+## Important: Auto-Provisioning
+
+**The deployment workflow automatically creates Azure resources if they don't exist**. You only need to:
+1. Create an Azure service principal
+2. Configure GitHub environment with credentials
+
+## Prerequisites
+
+1. **Create Azure Service Principal:**
+
+```bash
+# Login to Azure
+az login
+
+# Get your subscription ID
+SUBSCRIPTION_ID=$(az account show --query id --output tsv)
+
+# Create service principal with Contributor role
+az ad sp create-for-rbac \
+  --name "github-drpodcast-deployer" \
+  --role Contributor \
+  --scopes /subscriptions/$SUBSCRIPTION_ID \
+  --sdk-auth
+
+# Copy the ENTIRE JSON output - you'll need it for GitHub secrets
+```
+
+---
 
 ## Create Environment
 
@@ -17,53 +46,45 @@ Click **Add variable** for each:
 
 ### Required Variables
 
-| Variable Name | Example Value | Where to Get It |
-|---------------|---------------|-----------------|
-| `AZURE_FUNCTIONAPP_NAME` | `drpodcast-feed-generator` | Azure Portal → Function App name |
-| `AZURE_FUNCTION_URL` | `https://drpodcast-feed-generator.azurewebsites.net` | Azure Portal → Function App → Overview → URL |
+| Variable Name | Example Value | Description |
+|---------------|---------------|-------------|
+| `AZURE_FUNCTIONAPP_NAME` | `drpodcast-feed-generator` | Your chosen function app name (will be created automatically) |
+| `BASE_URL` | `https://henrikbacher.github.io/podcast` | Base URL where feeds will be hosted |
 
-**How to find values:**
-
-```bash
-# Get Function App URL using Azure CLI
-az functionapp show \
-  --name drpodcast-feed-generator \
-  --resource-group drpodcast-rg \
-  --query defaultHostName \
-  --output tsv
-# Output: drpodcast-feed-generator.azurewebsites.net
-# Add https:// prefix
-```
+**Notes:**
+- Function app name must be globally unique in Azure
+- The deployment workflow will create the function app if it doesn't exist
 
 ---
 
 ## Add Environment Secrets
 
-Click **Add secret**:
+Click **Add secret** for each:
 
 ### Required Secrets
 
 | Secret Name | Where to Get It |
 |-------------|-----------------|
-| `AZURE_FUNCTIONAPP_PUBLISH_PROFILE` | Azure Portal → Function App → Get publish profile (download) |
+| `AZURE_CREDENTIALS` | Service principal JSON from Prerequisites step above |
+| `DR_API_KEY` | Your DR API key for accessing podcast data |
 
-**Steps to get publish profile:**
+**Steps to add AZURE_CREDENTIALS:**
 
-1. Azure Portal → Your Function App
-2. Overview tab
-3. Click **Get publish profile** button (downloads XML file)
-4. Open the file in text editor
-5. Copy **entire contents** (all XML)
-6. Paste into GitHub secret value
+1. Copy the entire JSON output from the `az ad sp create-for-rbac` command
+2. Go to GitHub → Settings → Environments → azure-production
+3. Click **Add secret**
+4. Name: `AZURE_CREDENTIALS`
+5. Value: Paste the entire JSON
+6. Click **Add secret**
 
-**Or via Azure CLI:**
-```bash
-az functionapp deployment list-publishing-profiles \
-  --name drpodcast-feed-generator \
-  --resource-group drpodcast-rg \
-  --xml > publish-profile.xml
-
-# Then copy contents of publish-profile.xml
+**Example format** (do not use these values):
+```json
+{
+  "clientId": "12345678-1234-1234-1234-123456789012",
+  "clientSecret": "your-secret-value",
+  "subscriptionId": "12345678-1234-1234-1234-123456789012",
+  "tenantId": "12345678-1234-1234-1234-123456789012"
+}
 ```
 
 ---
@@ -76,10 +97,11 @@ Once configured, your environment should look like this:
 
 **Variables (2):**
 - ✅ `AZURE_FUNCTIONAPP_NAME`
-- ✅ `AZURE_FUNCTION_URL`
+- ✅ `BASE_URL`
 
-**Secrets (1):**
-- ✅ `AZURE_FUNCTIONAPP_PUBLISH_PROFILE`
+**Secrets (2):**
+- ✅ `AZURE_CREDENTIALS`
+- ✅ `DR_API_KEY`
 
 **Protection Rules (Optional):**
 - Deployment branches: Only `main` branch
@@ -94,8 +116,15 @@ Once configured, your environment should look like this:
 1. Go to **Actions** tab
 2. Select **Deploy Azure Function** workflow
 3. Click **Run workflow** → Select `main` branch → **Run workflow**
-4. Wait ~2-3 minutes
-5. Check deployment succeeds
+4. Wait ~3-5 minutes (first deployment creates Azure resources)
+5. Workflow will:
+   - Authenticate with Azure
+   - Create resource group (if needed)
+   - Create storage account (if needed)
+   - Create function app (if needed)
+   - Configure app settings
+   - Deploy function code
+6. Check deployment succeeds
 
 ### Test the function:
 
@@ -117,14 +146,15 @@ curl https://drpodcast-feed-generator.azurewebsites.net/api/HealthCheck
 - Make sure variables are in the `azure-production` environment, not repository secrets
 - Variable names must match exactly (case-sensitive)
 
-### "Invalid publish profile":
-- Verify you copied the **entire XML** content
-- No extra spaces or newlines
-- Download fresh profile from Azure Portal
+### "AZURE_CREDENTIALS invalid" error:
+- Verify you copied the **entire JSON** output from `az ad sp create-for-rbac`
+- Ensure JSON is valid (no extra spaces, complete braces)
+- Check service principal has Contributor role on subscription
 
-### "Function App not found":
-- Verify `AZURE_FUNCTIONAPP_NAME` matches your Azure Function App name exactly
-- Check Azure Function App exists and is running
+### "Authorization failed" error:
+- Verify service principal has correct permissions
+- Check the subscription ID in AZURE_CREDENTIALS matches your Azure subscription
+- Ensure service principal hasn't expired (check Azure AD → App registrations)
 
 ---
 

@@ -12,16 +12,107 @@ on:
 env:
   AZURE_FUNCTIONAPP_PACKAGE_PATH: 'src'
   DOTNET_VERSION: '9.0.x'
+  AZURE_RESOURCE_GROUP: 'drpodcast-rg'
+  AZURE_LOCATION: 'westeurope'
+  AZURE_STORAGE_ACCOUNT: 'drpodcaststorage'
 
 jobs:
-  build-and-deploy:
+  provision-and-deploy:
     runs-on: ubuntu-latest
     environment:
       name: azure-production
-      url: ${{ vars.AZURE_FUNCTION_URL }}
+      url: https://${{ vars.AZURE_FUNCTIONAPP_NAME }}.azurewebsites.net
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Check and create resource group
+        shell: pwsh
+        run: |
+          Write-Host "Checking if resource group '${{ env.AZURE_RESOURCE_GROUP }}' exists..."
+
+          $rgExists = az group exists --name ${{ env.AZURE_RESOURCE_GROUP }}
+
+          if ($rgExists -eq "false") {
+            Write-Host "Creating resource group '${{ env.AZURE_RESOURCE_GROUP }}' in '${{ env.AZURE_LOCATION }}'..."
+            az group create `
+              --name ${{ env.AZURE_RESOURCE_GROUP }} `
+              --location ${{ env.AZURE_LOCATION }}
+            Write-Host "✓ Resource group created"
+          } else {
+            Write-Host "✓ Resource group already exists"
+          }
+
+      - name: Check and create storage account
+        shell: pwsh
+        run: |
+          Write-Host "Checking if storage account '${{ env.AZURE_STORAGE_ACCOUNT }}' exists..."
+
+          $storageExists = az storage account check-name `
+            --name ${{ env.AZURE_STORAGE_ACCOUNT }} `
+            --query "nameAvailable" `
+            --output tsv
+
+          if ($storageExists -eq "true") {
+            Write-Host "Creating storage account '${{ env.AZURE_STORAGE_ACCOUNT }}'..."
+            az storage account create `
+              --name ${{ env.AZURE_STORAGE_ACCOUNT }} `
+              --resource-group ${{ env.AZURE_RESOURCE_GROUP }} `
+              --location ${{ env.AZURE_LOCATION }} `
+              --sku Standard_LRS `
+              --kind StorageV2 `
+              --allow-blob-public-access false
+            Write-Host "✓ Storage account created"
+          } else {
+            Write-Host "✓ Storage account already exists"
+          }
+
+      - name: Check and create function app
+        shell: pwsh
+        run: |
+          Write-Host "Checking if function app '${{ vars.AZURE_FUNCTIONAPP_NAME }}' exists..."
+
+          $appExists = az functionapp show `
+            --name ${{ vars.AZURE_FUNCTIONAPP_NAME }} `
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} `
+            --query "name" `
+            --output tsv 2>$null
+
+          if (-not $appExists) {
+            Write-Host "Creating function app '${{ vars.AZURE_FUNCTIONAPP_NAME }}'..."
+            az functionapp create `
+              --name ${{ vars.AZURE_FUNCTIONAPP_NAME }} `
+              --resource-group ${{ env.AZURE_RESOURCE_GROUP }} `
+              --storage-account ${{ env.AZURE_STORAGE_ACCOUNT }} `
+              --consumption-plan-location ${{ env.AZURE_LOCATION }} `
+              --runtime dotnet-isolated `
+              --runtime-version 9 `
+              --functions-version 4 `
+              --os-type Linux `
+              --disable-app-insights false
+            Write-Host "✓ Function app created"
+          } else {
+            Write-Host "✓ Function app already exists"
+          }
+
+      - name: Configure function app settings
+        shell: pwsh
+        run: |
+          Write-Host "Configuring application settings..."
+
+          az functionapp config appsettings set `
+            --name ${{ vars.AZURE_FUNCTIONAPP_NAME }} `
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} `
+            --settings `
+              API_KEY="${{ secrets.DR_API_KEY }}" `
+              BASE_URL="${{ vars.BASE_URL }}"
+
+          Write-Host "✓ Application settings configured"
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
@@ -54,7 +145,6 @@ jobs:
         with:
           app-name: ${{ vars.AZURE_FUNCTIONAPP_NAME }}
           package: '${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}/output'
-          publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
 
       - name: Verify deployment
         shell: pwsh
@@ -62,7 +152,7 @@ jobs:
           Write-Host "Waiting for deployment to complete..."
           Start-Sleep -Seconds 30
 
-          $healthUrl = "${{ vars.AZURE_FUNCTION_URL }}/api/HealthCheck"
+          $healthUrl = "https://${{ vars.AZURE_FUNCTIONAPP_NAME }}.azurewebsites.net/api/HealthCheck"
           Write-Host "Testing health endpoint: $healthUrl"
 
           try {
@@ -73,3 +163,7 @@ jobs:
             Write-Warning "Health check failed, but deployment may still be successful"
             Write-Host "Error: $_"
           }
+
+      - name: Azure Logout
+        if: always()
+        run: az logout
