@@ -17,7 +17,7 @@ on:
       - ".github/workflows/build-and-release.yml"
 
 env:
-  DOTNET_VERSION: "9.0.x"
+  DOTNET_VERSION: "8.0.x"
 
 jobs:
   determine-version:
@@ -164,7 +164,16 @@ jobs:
             **/TestResults/**/coverage.cobertura.xml
           retention-days: 7
 
+      - name: Check if Azure Function
+        id: check-function
+        shell: pwsh
+        run: |
+          $isAzureFunction = Select-String -Path "src/DrPodcast.csproj" -Pattern "<AzureFunctionsVersion>" -Quiet
+          "is-azure-function=$isAzureFunction" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Is Azure Function: $isAzureFunction"
+
       - name: Publish
+        if: steps.check-function.outputs.is-azure-function != 'True'
         shell: pwsh
         run: |
           dotnet publish src/DrPodcast.csproj `
@@ -177,6 +186,7 @@ jobs:
             -p:Version=${{ needs.determine-version.outputs.version }}
 
       - name: Prepare Executable
+        if: steps.check-function.outputs.is-azure-function != 'True'
         shell: pwsh
         run: |
           if ("${{ matrix.runtime }}" -eq "win-x64") {
@@ -186,6 +196,7 @@ jobs:
           }
 
       - name: Generate Checksums
+        if: steps.check-function.outputs.is-azure-function != 'True'
         shell: pwsh
         run: |
           if ("${{ matrix.runtime }}" -eq "win-x64") {
@@ -198,6 +209,7 @@ jobs:
           Write-Host "Generated checksum: $hash"
 
       - name: Upload Artifacts
+        if: steps.check-function.outputs.is-azure-function != 'True'
         uses: actions/upload-artifact@v5
         with:
           name: ${{ matrix.artifact-name }}
@@ -214,12 +226,22 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Check if Azure Function
+        id: check-function
+        shell: pwsh
+        run: |
+          $isAzureFunction = Select-String -Path "src/DrPodcast.csproj" -Pattern "<AzureFunctionsVersion>" -Quiet
+          "is-azure-function=$isAzureFunction" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Is Azure Function: $isAzureFunction"
+
       - name: Download all artifacts
+        if: steps.check-function.outputs.is-azure-function != 'True'
         uses: actions/download-artifact@v6
         with:
           path: ./artifacts
 
       - name: Create Release and Upload All Assets
+        if: steps.check-function.outputs.is-azure-function != 'True'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.determine-version.outputs.version-tag }}
