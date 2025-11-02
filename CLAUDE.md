@@ -39,6 +39,8 @@ The test suite includes:
 - **PodcastHelpersTests.cs**: Tests for helper functions (category mapping, image URL extraction)
 - **FeedGenerationTests.cs**: Tests for RSS feed XML generation and structure validation
 
+**CI/CD Integration**: Tests are automatically executed as part of the build pipeline on all pull requests and pushes to main. Test results and code coverage are uploaded as artifacts for review.
+
 ## Architecture Overview
 
 ### Core Components

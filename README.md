@@ -116,6 +116,13 @@ The test suite includes 52 tests covering:
 - **Date/Duration Formatting**: RFC 822 date format and duration string generation
 - **Edge Cases**: Null handling, empty collections, and fallback behavior
 
+### CI/CD Integration
+Tests are automatically executed as part of the build pipeline:
+- ✅ Run on all pull requests before merge
+- ✅ Run on pushes to main branch
+- ✅ Test results uploaded as artifacts for review
+- ✅ Code coverage reports generated for each platform
+
 ## Configuration
 
 ### Environment Variables
@@ -155,10 +162,13 @@ To find a podcast's URN, inspect DR's website network requests or contact DR for
 ### Build and Release (`build-and-release.yml`)
 Automatically triggered on:
 - Pushes to `main` branch
-- Pull requests affecting `src/` directory
+- Pull requests affecting `src/` or `tests/` directories
 
 **Process:**
 - Semantic versioning from commit messages and PR labels
+- Dependency restoration and project build
+- **Automated test execution** with code coverage collection
+- Test results uploaded as artifacts (retained for 7 days)
 - Cross-platform NativeAOT compilation (Linux x64/ARM64, Windows x64, macOS ARM64)
 - Automated GitHub releases (prereleases for PRs, stable for main)
 - Artifact cleanup and prerelease management
