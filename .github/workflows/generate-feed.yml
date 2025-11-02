@@ -34,10 +34,50 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      - name: Download latest release
+      - name: Get latest release version
+        id: get-version
         env:
           GH_TOKEN: ${{ github.token }}
           USE_PRERELEASE: ${{ github.event.inputs.use_prerelease || 'false' }}
+        shell: pwsh
+        run: |
+          Write-Host "Determining release type..."
+          $releaseFlag = if ($env:USE_PRERELEASE -eq "true") {
+            Write-Host "Using prerelease"
+            ""
+          } else {
+            Write-Host "Using latest stable release"
+            "--exclude-pre-releases"
+          }
+
+          Write-Host "Getting latest release..."
+          $releaseInfo = if ($releaseFlag) {
+            gh release list --repo ${{ github.repository }} $releaseFlag --limit 1 --json tagName
+          } else {
+            gh release list --repo ${{ github.repository }} --limit 1 --json tagName
+          }
+
+          $releases = $releaseInfo | ConvertFrom-Json
+          if (-not $releases -or $releases.Count -eq 0) {
+            Write-Error "No releases found. Please create a release first."
+            exit 1
+          }
+          $tagName = $releases[0].tagName
+          Write-Host "Found release: $tagName"
+          "tag=$tagName" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Cache DrPodcast binary
+        uses: actions/cache@v4
+        id: cache-binary
+        with:
+          path: |
+            DrPodcast*
+          key: drpodcast-binary-${{ steps.get-version.outputs.tag }}-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Download latest release
+        if: steps.cache-binary.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
           Write-Host "Determining platform..."
@@ -54,29 +94,8 @@ jobs:
           }
           Write-Host "Detected platform: $platform"
 
-          Write-Host "Determining release type..."
-          $releaseFlag = if ($env:USE_PRERELEASE -eq "true") {
-            Write-Host "Using prerelease"
-          } else {
-            Write-Host "Using latest stable release"
-            "--exclude-pre-releases"
-          }
-
-          Write-Host "Getting latest release for $platform..."
-          $releaseInfo = if ($releaseFlag) {
-            gh release list --repo ${{ github.repository }} $releaseFlag --limit 1 --json tagName
-          } else {
-            gh release list --repo ${{ github.repository }} --limit 1 --json tagName
-          }
-
-          $releases = $releaseInfo | ConvertFrom-Json
-          if (-not $releases -or $releases.Count -eq 0) {
-            Write-Error "No releases found. Please create a release first."
-            exit 1
-          }
-          $tagName = $releases[0].tagName
-
-          Write-Host "Found release: $tagName"
+          $tagName = "${{ steps.get-version.outputs.tag }}"
+          Write-Host "Downloading release: $tagName"
 
           # Download the platform-specific asset
           $assetName = switch ($platform) {
@@ -85,20 +104,79 @@ jobs:
             "win-x64" { "DrPodcast-win-x64.exe" }
             "osx-arm64" { "DrPodcast-osx-arm64" }
           }
-          Write-Host "Downloading asset: $assetName"
+          Write-Host "Downloading assets: $assetName and checksum"
           gh release download $tagName --repo ${{ github.repository }} --pattern "$assetName"
+          gh release download $tagName --repo ${{ github.repository }} --pattern "$assetName.sha256"
+
+          Write-Host "Downloaded release assets for $platform"
+
+      - name: Verify binary checksum
+        if: steps.cache-binary.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          Write-Host "Verifying binary checksum..."
+          $platform = switch ("${{ runner.os }}") {
+            "Linux" {
+              if ("${{ runner.arch }}" -eq "ARM64") { "linux-arm64" } else { "linux-x64" }
+            }
+            "Windows" { "win-x64" }
+            "macOS" { "osx-arm64" }
+          }
+
+          $assetName = switch ($platform) {
+            "linux-x64" { "DrPodcast-linux-x64" }
+            "linux-arm64" { "DrPodcast-linux-arm64" }
+            "win-x64" { "DrPodcast-win-x64.exe" }
+            "osx-arm64" { "DrPodcast-osx-arm64" }
+          }
+
+          # Read expected checksum
+          $expectedHash = (Get-Content "$assetName.sha256" -Raw).Split()[0].Trim().ToLower()
+          Write-Host "Expected hash: $expectedHash"
+
+          # Calculate actual checksum
+          $actualHash = (Get-FileHash -Path $assetName -Algorithm SHA256).Hash.ToLower()
+          Write-Host "Actual hash: $actualHash"
+
+          # Compare
+          if ($expectedHash -eq $actualHash) {
+            Write-Host "✓ Checksum verified successfully"
+          } else {
+            Write-Error "✗ Checksum mismatch! Binary may be corrupted or tampered with."
+            exit 1
+          }
+
+      - name: Prepare executable
+        shell: pwsh
+        run: |
+          $platform = switch ("${{ runner.os }}") {
+            "Linux" {
+              if ("${{ runner.arch }}" -eq "ARM64") { "linux-arm64" } else { "linux-x64" }
+            }
+            "Windows" { "win-x64" }
+            "macOS" { "osx-arm64" }
+          }
+
+          $assetName = switch ($platform) {
+            "linux-x64" { "DrPodcast-linux-x64" }
+            "linux-arm64" { "DrPodcast-linux-arm64" }
+            "win-x64" { "DrPodcast-win-x64.exe" }
+            "osx-arm64" { "DrPodcast-osx-arm64" }
+          }
 
           # Prepare executable
           if ("${{ runner.os }}" -eq "Windows") {
-            # Rename Windows executable to standard name
-            Rename-Item -Path $assetName -NewName "DrPodcast.exe"      
+            if (Test-Path $assetName) {
+              Rename-Item -Path $assetName -NewName "DrPodcast.exe"
+            }
           } else {
-            # Rename and make executable for Unix systems
-            Rename-Item -Path $assetName -NewName "DrPodcast"
+            if (Test-Path $assetName) {
+              Rename-Item -Path $assetName -NewName "DrPodcast"
+            }
             chmod +x DrPodcast
           }
 
-          Write-Host "Downloaded and prepared release executable for $platform"
+          Write-Host "Prepared release executable for $platform"
 
       - name: Run feed generator
         env:
@@ -119,6 +197,32 @@ jobs:
           New-Item -ItemType Directory -Path "output/_site/feeds" -Force
           Copy-Item -Path "site/*" -Destination "output/_site/" -Recurse -Force
           Copy-Item -Path "output/*.xml" -Destination "output/_site/feeds/" -Force
+
+      - name: Install libxml2 for validation
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxml2-utils
+
+      - name: Validate RSS feeds
+        shell: bash
+        run: |
+          echo "Validating generated RSS feeds..."
+          failed=0
+          for feed in output/_site/feeds/*.xml; do
+            echo "Validating $feed..."
+            if xmllint --noout "$feed" 2>&1; then
+              echo "✓ $feed is valid XML"
+            else
+              echo "✗ $feed is invalid XML"
+              failed=1
+            fi
+          done
+
+          if [ $failed -eq 1 ]; then
+            echo "ERROR: One or more feeds failed validation"
+            exit 1
+          fi
+          echo "All feeds validated successfully"
 
       - name: Check for deployment changes
         id: deployment_check
@@ -239,3 +343,27 @@ jobs:
         if: steps.deployment_check.outputs.needs_deploy == 'true'
         id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Notify on failure
+        if: failure() && github.event_name == 'schedule'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Feed generation failed - ${new Date().toISOString().split('T')[0]}`,
+              body: `## Feed Generation Failure
+
+            The scheduled feed update failed during the hourly run.
+
+            **Workflow Run:** ${runUrl}
+            **Time:** ${new Date().toISOString()}
+            **Trigger:** Scheduled (cron)
+
+            Please check the workflow logs for details.
+
+            This issue was automatically created by the feed generation workflow.`,
+              labels: ['automated', 'feed-generation', 'bug']
+            });
