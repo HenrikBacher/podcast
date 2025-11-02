@@ -21,106 +21,129 @@ on:
     - cron: "0 * * * *"
 
 jobs:
-  update-and-deploy-feeds:
-    name: "Update and deploy feeds"
+  generate-feeds:
+    name: "Generate feeds"
     runs-on: ubuntu-24.04-arm
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    permissions:
-      pages: write
-      id-token: write
+    outputs:
+      needs_deploy: ${{ steps.deployment_check.outputs.needs_deploy }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
 
       - name: Download latest release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          USE_PRERELEASE: ${{ github.event.inputs.use_prerelease || 'false' }}
-        shell: pwsh
-        run: |
-          Write-Host "Determining platform..."
-          $platform = switch ("${{ runner.os }}") {
-            "Linux" {
-              if ("${{ runner.arch }}" -eq "ARM64") { "linux-arm64" } else { "linux-x64" }
+        uses: nick-invision/retry@v3
+        with:
+          timeout_minutes: 5
+          max_attempts: 3
+          retry_on: error
+          shell: pwsh
+          command: |
+            $platform = "linux-arm64"
+
+            Write-Host "Determining release type..."
+            $usePrerelease = "${{ github.event.inputs.use_prerelease || 'false' }}"
+            if ($usePrerelease -eq "true") {
+              Write-Host "Using prerelease"
+              $releaseInfo = gh release list --repo ${{ github.repository }} --limit 1 --json tagName
+            } else {
+              Write-Host "Using latest stable release"
+              $releaseInfo = gh release list --repo ${{ github.repository }} --exclude-pre-releases --limit 1 --json tagName
             }
-            "Windows" { "win-x64" }
-            "macOS" { "osx-arm64" }
-            default {
-              Write-Error "Unsupported platform: ${{ runner.os }}"
+
+            $releases = $releaseInfo | ConvertFrom-Json
+            if (-not $releases -or $releases.Count -eq 0) {
+              Write-Error "No releases found. Please create a release first."
               exit 1
             }
-          }
-          Write-Host "Detected platform: $platform"
 
-          Write-Host "Determining release type..."
-          $releaseFlag = if ($env:USE_PRERELEASE -eq "true") {
-            Write-Host "Using prerelease"
+            $tagName = $releases[0].tagName
+            Write-Host "Found release: $tagName"
+            $assetName = "DrPodcast-linux-arm64"
+
+            Write-Host "Downloading assets: $assetName and checksum"
+            gh release download $tagName --repo ${{ github.repository }} --pattern "$assetName"
+            gh release download $tagName --repo ${{ github.repository }} --pattern "$assetName.sha256"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Verify binary checksum
+        shell: pwsh
+        run: |
+          Write-Host "Verifying binary checksum..."
+          $assetName = "DrPodcast-linux-arm64"
+
+          # Read expected checksum
+          $expectedHash = (Get-Content "$assetName.sha256" -Raw).Split()[0].Trim().ToLower()
+          Write-Host "Expected hash: $expectedHash"
+
+          # Calculate actual checksum
+          $actualHash = (Get-FileHash -Path $assetName -Algorithm SHA256).Hash.ToLower()
+          Write-Host "Actual hash: $actualHash"
+
+          # Compare
+          if ($expectedHash -eq $actualHash) {
+            Write-Host "✓ Checksum verified successfully"
           } else {
-            Write-Host "Using latest stable release"
-            "--exclude-pre-releases"
-          }
-
-          Write-Host "Getting latest release for $platform..."
-          $releaseInfo = if ($releaseFlag) {
-            gh release list --repo ${{ github.repository }} $releaseFlag --limit 1 --json tagName
-          } else {
-            gh release list --repo ${{ github.repository }} --limit 1 --json tagName
-          }
-
-          $releases = $releaseInfo | ConvertFrom-Json
-          if (-not $releases -or $releases.Count -eq 0) {
-            Write-Error "No releases found. Please create a release first."
+            Write-Error "✗ Checksum mismatch! Binary may be corrupted or tampered with."
             exit 1
           }
-          $tagName = $releases[0].tagName
 
-          Write-Host "Found release: $tagName"
-
-          # Download the platform-specific asset
-          $assetName = switch ($platform) {
-            "linux-x64" { "DrPodcast-linux-x64" }
-            "linux-arm64" { "DrPodcast-linux-arm64" }
-            "win-x64" { "DrPodcast-win-x64.exe" }
-            "osx-arm64" { "DrPodcast-osx-arm64" }
-          }
-          Write-Host "Downloading asset: $assetName"
-          gh release download $tagName --repo ${{ github.repository }} --pattern "$assetName"
-
-          # Prepare executable
-          if ("${{ runner.os }}" -eq "Windows") {
-            # Rename Windows executable to standard name
-            Rename-Item -Path $assetName -NewName "DrPodcast.exe"      
-          } else {
-            # Rename and make executable for Unix systems
-            Rename-Item -Path $assetName -NewName "DrPodcast"
-            chmod +x DrPodcast
-          }
-
-          Write-Host "Downloaded and prepared release executable for $platform"
+      - name: Prepare executable
+        shell: pwsh
+        run: |
+          Move-Item -Path "DrPodcast-linux-arm64" -Destination "DrPodcast"
+          chmod +x DrPodcast
+          Write-Host "Prepared release executable"
 
       - name: Run feed generator
+        uses: nick-invision/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_on: error
+          shell: pwsh
+          command: |
+            & ./DrPodcast --podcasts podcasts.json
         env:
           API_KEY: ${{ secrets.API_KEY }}
           BASE_URL: ${{ secrets.BASE_URL }}
-        shell: pwsh
-        run: |
-          if ("${{ runner.os }}" -eq "Windows") {
-            & ./DrPodcast.exe --podcasts podcasts.json
-          } else {
-            & ./DrPodcast --podcasts podcasts.json
-          }
 
       - name: Copy site files
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Path "output/_site" -Force
           New-Item -ItemType Directory -Path "output/_site/feeds" -Force
           Copy-Item -Path "site/*" -Destination "output/_site/" -Recurse -Force
           Copy-Item -Path "output/*.xml" -Destination "output/_site/feeds/" -Force
 
-      - name: Check for deployment changes
+      - name: Generate feed statistics
+        shell: pwsh
+        run: |
+          "## Feed Generation Report" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          "" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          "| Feed | Episodes | Size | Status |" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          "|------|----------|------|--------|" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+
+          Get-ChildItem -Path "output/_site/feeds/*.xml" | ForEach-Object {
+            $filename = $_.Name
+            $episodes = (Select-String -Path $_.FullName -Pattern "<item>" -AllMatches).Matches.Count
+            $size = "{0:N1}KB" -f ($_.Length / 1KB)
+            "| $filename | $episodes | $size | ✓ |" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          }
+
+          "" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          $totalFeeds = (Get-ChildItem -Path "output/_site/feeds" -Filter "*.xml" -ErrorAction SilentlyContinue).Count
+          "**Total feeds generated:** $totalFeeds" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          "**Generation time:** $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') UTC" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+
+      - name: Upload generated feeds as artifacts
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: generated-feeds-${{ github.run_id }}
+          path: output/_site/feeds/*.xml
+          retention-days: 7
+
+      - name: Check for deployment changes (optimized with HEAD requests)
         id: deployment_check
         env:
           GH_TOKEN: ${{ github.token }}
@@ -129,28 +152,47 @@ jobs:
           $siteUrl = gh api "repos/$env:GITHUB_REPOSITORY/pages" --jq '.html_url'
           $needsDeploy = $false
 
-          # Check each feed for changes
+          Write-Host "Checking feeds for changes using optimized HEAD requests..."
+
+          # Check each feed for changes using ETag
           $feeds = Get-ChildItem -Path "output/_site/feeds/*.xml"
           foreach ($feed in $feeds) {
             $filename = $feed.Name
-            
-            # Get current hash
             $currentHash = (Get-FileHash -Path $feed.FullName -Algorithm SHA256).Hash.ToLower()
-            
-            # Try to get deployed file hash
-            try {
-              $deployedContent = Invoke-WebRequest -Uri "${siteUrl}feeds/$filename" -TimeoutSec 10 -ErrorAction Stop
-              $deployedHash = (Get-FileHash -InputStream ([System.IO.MemoryStream]::new([System.Text.Encoding]::UTF8.GetBytes($deployedContent.Content))) -Algorithm SHA256).Hash.ToLower()
-            } catch {
-              $deployedHash = "none"
-            }
-            
-            Write-Host "Checking $filename"
+
+            Write-Host "Checking $filename..."
             Write-Host "Current hash: $currentHash"
-            Write-Host "Deployed hash: $deployedHash"
-            
-            if ($currentHash -ne $deployedHash) {
-              Write-Host "Changes detected in $filename"
+
+            # Try to get ETag from deployed feed (HEAD request is faster)
+            try {
+              $response = Invoke-WebRequest -Uri "${siteUrl}feeds/$filename" -Method Head -ErrorAction Stop
+              $deployedETag = $response.Headers.ETag
+              Write-Host "Deployed ETag: $deployedETag"
+
+              # If ETag exists, do a quick comparison
+              # If different or missing, fetch full content and compare hashes
+              if (-not $deployedETag -or $deployedETag -notmatch $currentHash) {
+                # Fetch full content for hash comparison
+                try {
+                  $deployedContent = Invoke-WebRequest -Uri "${siteUrl}feeds/$filename" -ErrorAction Stop
+                  $deployedHash = (Get-FileHash -InputStream ([System.IO.MemoryStream]::new([System.Text.Encoding]::UTF8.GetBytes($deployedContent.Content))) -Algorithm SHA256).Hash.ToLower()
+                  Write-Host "Deployed hash: $deployedHash"
+
+                  if ($currentHash -ne $deployedHash) {
+                    Write-Host "Changes detected in $filename"
+                    $needsDeploy = $true
+                    break
+                  }
+                } catch {
+                  Write-Host "Feed not found on deployed site, needs deployment"
+                  $needsDeploy = $true
+                  break
+                }
+              } else {
+                Write-Host "ETag suggests no changes in $filename"
+              }
+            } catch {
+              Write-Host "Feed not accessible, needs deployment"
               $needsDeploy = $true
               break
             }
@@ -159,13 +201,13 @@ jobs:
           if (-not $needsDeploy) {
             # Check if number of files changed
             try {
-              $liveContent = Invoke-WebRequest -Uri $siteUrl -TimeoutSec 10 -ErrorAction Stop
+              $liveContent = Invoke-WebRequest -Uri $siteUrl -ErrorAction Stop
               $liveCount = ([regex]::Matches($liveContent.Content, "class='feed-link'")).Count
             } catch {
               $liveCount = 0
             }
             $currentCount = (Get-ChildItem -Path "output/_site/feeds" -Filter "*.xml" -ErrorAction SilentlyContinue).Count
-            
+
             if ($currentCount -ne $liveCount) {
               Write-Host "Number of XML files changed (current: $currentCount, live: $liveCount)"
               $needsDeploy = $true
@@ -173,6 +215,12 @@ jobs:
           }
 
           "needs_deploy=$needsDeploy" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+          if ($needsDeploy) {
+            Write-Host "✓ Changes detected - deployment needed"
+          } else {
+            Write-Host "✓ No changes detected - skipping deployment"
+          }
 
       - name: Generate index.html
         if: steps.deployment_check.outputs.needs_deploy == 'true'
@@ -186,10 +234,10 @@ jobs:
           $feeds = Get-ChildItem -Path "output/_site/feeds/*.xml"
           foreach ($feed in $feeds) {
             $filename = [System.IO.Path]::GetFileNameWithoutExtension($feed.Name)
-            
+
             # Extract RSS feed content
             $content = Get-Content -Path $feed.FullName -Raw
-            
+
             # Extract title from RSS feed and remove "(Reproduceret feed)" suffix
             $titleMatch = [regex]::Match($content, '<title>([^<]+)</title>')
             $title = if ($titleMatch.Success) {
@@ -201,11 +249,11 @@ jobs:
               # Fallback to filename formatting if title extraction fails
               $filename -replace '-', ' '
             }
-            
+
             # Extract image URL from the RSS feed's itunes:image element
             $imageMatch = [regex]::Match($content, '<itunes:image[^>]*href="([^"]*)"')
             $imageUrl = if ($imageMatch.Success) { $imageMatch.Groups[1].Value } else { "" }
-            
+
             if ($imageUrl) {
               $feedsHtml += "<li><a class='feed-link' href='feeds/$filename.xml'><img class='feed-icon' src='$imageUrl' loading='lazy' alt='$title'><span class='feed-title'>$title</span></a></li>"
             } else {
@@ -225,17 +273,141 @@ jobs:
           # Write back to file
           $indexContent | Set-Content -Path "output/_site/index.html" -NoNewline
 
-      - name: Setup Pages
+      - name: Upload site artifact for deployment
         if: steps.deployment_check.outputs.needs_deploy == 'true'
+        uses: actions/upload-artifact@v5
+        with:
+          name: site-artifact-${{ github.run_id }}
+          path: output/_site
+          retention-days: 1
+
+      - name: Notify on generation failure
+        if: failure() && github.event_name == 'schedule'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Feed generation failed - ${new Date().toISOString().split('T')[0]}`,
+              body: `## Feed Generation Failure
+
+            The scheduled feed generation failed during the hourly run.
+
+            **Workflow Run:** ${runUrl}
+            **Time:** ${new Date().toISOString()}
+            **Trigger:** Scheduled (cron)
+            **Job:** generate-feeds
+
+            Please check the workflow logs for details.
+
+            This issue was automatically created by the feed generation workflow.`,
+              labels: ['automated', 'feed-generation', 'bug']
+            });
+
+  deploy-feeds:
+    name: "Deploy feeds to GitHub Pages"
+    needs: generate-feeds
+    if: needs.generate-feeds.outputs.needs_deploy == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - name: Download site artifact
+        uses: actions/download-artifact@v6
+        with:
+          name: site-artifact-${{ github.run_id }}
+          path: _site
+
+      - name: Setup Pages
         uses: actions/configure-pages@v5
 
       - name: Upload Pages artifact
-        if: steps.deployment_check.outputs.needs_deploy == 'true'
         uses: actions/upload-pages-artifact@v4
         with:
-          path: output/_site
+          path: _site
 
       - name: Deploy to GitHub Pages
-        if: steps.deployment_check.outputs.needs_deploy == 'true'
         id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Smoke test deployment
+        uses: nick-invision/retry@v3
+        with:
+          timeout_minutes: 3
+          max_attempts: 3
+          retry_on: error
+          shell: pwsh
+          command: |
+            Write-Host "Waiting for deployment to propagate..."
+            Start-Sleep -Seconds 30
+
+            Write-Host "Running smoke tests on deployed site..."
+            $siteUrl = "${{ steps.deployment.outputs.page_url }}"
+
+            # Test 1: Check if the main page is accessible
+            Write-Host "Testing main page..."
+            try {
+              $response = Invoke-WebRequest -Uri $siteUrl -ErrorAction Stop
+              if ($response.StatusCode -eq 200) {
+                Write-Host "✓ Main page is accessible (HTTP $($response.StatusCode))"
+              } else {
+                Write-Error "✗ Main page failed (HTTP $($response.StatusCode))"
+                exit 1
+              }
+            } catch {
+              Write-Error "✗ Main page failed: $_"
+              exit 1
+            }
+
+            # Test 2: Check if feeds directory is accessible
+            Write-Host "Testing feeds directory..."
+            try {
+              $response = Invoke-WebRequest -Uri "${siteUrl}feeds/" -ErrorAction SilentlyContinue
+              if ($response.StatusCode -in @(200, 404)) {
+                Write-Host "✓ Feeds directory check passed (HTTP $($response.StatusCode))"
+              } else {
+                Write-Error "✗ Feeds directory failed (HTTP $($response.StatusCode))"
+                exit 1
+              }
+            } catch {
+              # 404 is acceptable for directory listing
+              if ($_.Exception.Response.StatusCode.value__ -eq 404) {
+                Write-Host "✓ Feeds directory check passed (HTTP 404)"
+              } else {
+                Write-Error "✗ Feeds directory failed: $_"
+                exit 1
+              }
+            }
+
+            Write-Host "All smoke tests passed!"
+
+      - name: Notify on deployment failure
+        if: failure() && github.event_name == 'schedule'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Feed deployment failed - ${new Date().toISOString().split('T')[0]}`,
+              body: `## Feed Deployment Failure
+
+            The feed deployment to GitHub Pages failed.
+
+            **Workflow Run:** ${runUrl}
+            **Time:** ${new Date().toISOString()}
+            **Trigger:** Scheduled (cron)
+            **Job:** deploy-feeds
+
+            Please check the workflow logs for details.
+
+            This issue was automatically created by the feed generation workflow.`,
+              labels: ['automated', 'feed-deployment', 'bug']
+            });
