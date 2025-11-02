@@ -306,7 +306,7 @@ traces
 - **Storage Account**: `drpodcaststorage`
 - **Function App**: Your chosen name from `AZURE_FUNCTIONAPP_NAME`
 - **Plan**: Consumption (Serverless)
-- **Runtime**: .NET 9 Isolated
+- **Runtime**: .NET 8 Isolated
 
 ---
 
@@ -326,6 +326,6 @@ traces
 
 - **Azure Documentation**: https://docs.microsoft.com/azure/azure-functions/
 - **GitHub Actions**: https://docs.github.com/actions
-- **.NET 9 Functions**: https://aka.ms/dotnet-isolated-process
+- **.NET Isolated Functions**: https://aka.ms/dotnet-isolated-process
 
 For issues with this setup, open a GitHub issue in the repository.

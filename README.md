@@ -17,7 +17,7 @@ This tool currently processes **34 Danish podcasts** from DR's catalog, generati
 
 ## Project Structure
 
-- **[src/](src/)**: C# source code (.NET 9.0)
+- **[src/](src/)**: C# source code (.NET 8.0)
   - [DrPodcast.csproj](src/DrPodcast.csproj): Project file with NativeAOT and optimization settings
   - [PodcastFeedGenerator.cs](src/PodcastFeedGenerator.cs): Main application entry point and RSS generation logic
   - [PodcastModels.cs](src/PodcastModels.cs): Data models with source-generated JSON serialization
@@ -46,7 +46,7 @@ This tool currently processes **34 Danish podcasts** from DR's catalog, generati
 ### Running Locally
 
 #### Prerequisites
-- [.NET 9.0 SDK](https://dotnet.microsoft.com/download) or later
+- [.NET 8.0 SDK](https://dotnet.microsoft.com/download) or later
 - DR API key (contact DR for access)
 
 #### Quick Start
@@ -149,7 +149,7 @@ To find a podcast's URN, inspect DR's website network requests or contact DR for
 
 ## Technical Details
 
-- **Runtime**: .NET 9.0 with NativeAOT compilation for optimal performance
+- **Runtime**: .NET 8.0 with Azure Functions isolated worker process
 - **Binary Size**: Small, self-contained executables (~15-30MB per platform)
 - **HTTP Resilience**: Polly retry policies with exponential backoff for API reliability
 - **JSON Processing**: Source-generated serialization for trim-safe, high-performance parsing

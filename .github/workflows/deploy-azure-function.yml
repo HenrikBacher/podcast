@@ -11,7 +11,7 @@ on:
 
 env:
   AZURE_FUNCTIONAPP_PACKAGE_PATH: 'src'
-  DOTNET_VERSION: '9.0.x'
+  DOTNET_VERSION: '8.0.x'
   AZURE_RESOURCE_GROUP: 'drpodcast-rg'
   AZURE_LOCATION: 'westeurope'
   AZURE_STORAGE_ACCOUNT: 'drpodcaststorage'
@@ -91,7 +91,7 @@ jobs:
               --storage-account ${{ env.AZURE_STORAGE_ACCOUNT }} `
               --consumption-plan-location ${{ env.AZURE_LOCATION }} `
               --runtime dotnet-isolated `
-              --runtime-version 9 `
+              --runtime-version 8 `
               --functions-version 4 `
               --os-type Linux `
               --disable-app-insights false

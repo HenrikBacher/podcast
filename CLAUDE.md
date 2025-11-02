@@ -25,7 +25,7 @@ dotnet run --project src/DrPodcast.csproj
 
 **Prerequisites:**
 - Azure Functions Core Tools v4: `npm install -g azure-functions-core-tools@4`
-- .NET 9.0 SDK
+- .NET 8.0 SDK (for Azure Functions compatibility)
 
 **Local Development:**
 1. Copy `src/local.settings.json` and add your `API_KEY`
@@ -98,7 +98,7 @@ The test suite includes:
 - **local.settings.json**: Local development settings (not committed to git)
 
 ### Key Design Patterns
-- **Azure Functions (Isolated Worker)**: Uses .NET 9 isolated worker process model for better performance
+- **Azure Functions (Isolated Worker)**: Uses .NET 8 isolated worker process model (Azure Functions v4 requirement)
 - **Dependency Injection**: Services registered in Program.cs and injected into functions
 - **Timer Triggers**: Hourly scheduled execution using cron expressions (`0 0 * * * *`)
 - **HTTP Triggers**: Manual execution endpoint for testing and on-demand generation
@@ -119,7 +119,7 @@ The test suite includes:
 - `BASE_URL`: Base URL for deployed feeds (default: "https://example.com")
 
 ### Project Configuration
-- **Target Framework**: .NET 9.0
+- **Target Framework**: .NET 8.0 (Azure Functions v4 compatible)
 - **Azure Functions Version**: v4 (isolated worker process)
 - **Warning Policy**: Treats warnings as errors (except CS8618 for nullable reference types)
 - **Dependencies**:
