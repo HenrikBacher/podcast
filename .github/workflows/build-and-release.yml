@@ -13,7 +13,7 @@ env:
   AZURE_FUNCTIONAPP_PACKAGE_PATH: 'src'
   DOTNET_VERSION: '8.0.x'
   AZURE_RESOURCE_GROUP: 'drpodcast-rg'
-  AZURE_LOCATION: 'swendencentral'
+  AZURE_LOCATION: 'swedencentral'
   AZURE_STORAGE_ACCOUNT: 'drpodcaststorage'
 
 jobs:
