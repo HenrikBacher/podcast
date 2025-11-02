@@ -121,26 +121,39 @@ jobs:
           Copy-Item -Path "output/*.xml" -Destination "output/_site/feeds/" -Force
 
       - name: Generate feed statistics
-        shell: bash
+        shell: pwsh
         run: |
-          echo "## Feed Generation Report" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Feed | Episodes | Size | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|------|----------|------|--------|" >> $GITHUB_STEP_SUMMARY
+          "## Feed Generation Report" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          "" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          "| Feed | Episodes | Size | Status |" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          "|------|----------|------|--------|" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
 
-          for feed in output/_site/feeds/*.xml; do
-            if [ -f "$feed" ]; then
-              filename=$(basename "$feed")
-              episodes=$(grep -c "<item>" "$feed" || echo "0")
-              size=$(du -h "$feed" | cut -f1)
-              echo "| $filename | $episodes | $size | ✓ |" >> $GITHUB_STEP_SUMMARY
-            fi
-          done
+          $feeds = Get-ChildItem -Path "output/_site/feeds/*.xml" -ErrorAction SilentlyContinue
+          foreach ($feed in $feeds) {
+            $filename = $feed.Name
 
-          echo "" >> $GITHUB_STEP_SUMMARY
-          total_feeds=$(ls -1 output/_site/feeds/*.xml 2>/dev/null | wc -l)
-          echo "**Total feeds generated:** $total_feeds" >> $GITHUB_STEP_SUMMARY
-          echo "**Generation time:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+            # Count episodes
+            $content = Get-Content -Path $feed.FullName -Raw
+            $episodes = ([regex]::Matches($content, "<item>")).Count
+
+            # Get file size in human-readable format
+            $sizeBytes = $feed.Length
+            $size = if ($sizeBytes -ge 1MB) {
+              "{0:N1}M" -f ($sizeBytes / 1MB)
+            } elseif ($sizeBytes -ge 1KB) {
+              "{0:N1}K" -f ($sizeBytes / 1KB)
+            } else {
+              "$sizeBytes"
+            }
+
+            "| $filename | $episodes | $size | ✓ |" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          }
+
+          "" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          $totalFeeds = (Get-ChildItem -Path "output/_site/feeds/*.xml" -ErrorAction SilentlyContinue).Count
+          "**Total feeds generated:** $totalFeeds" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          $generationTime = (Get-Date).ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss UTC")
+          "**Generation time:** $generationTime" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
 
       - name: Upload generated feeds as artifacts
         if: always()
