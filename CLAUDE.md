@@ -41,6 +41,20 @@ The test suite includes:
 
 **CI/CD Integration**: Tests are automatically executed as part of the build pipeline on all pull requests and pushes to main. Test results and code coverage are uploaded as artifacts for review.
 
+## Coding Conventions
+
+### Scripting Language
+- **Preferred scripting language for GitHub Actions workflows: PowerShell (pwsh)**
+- PowerShell provides better cross-platform compatibility for Windows, Linux, and macOS runners
+- Use `shell: pwsh` in workflow steps
+- Only use Bash when PowerShell is not suitable for the specific task
+- Keep scripting language consistent within a workflow when possible
+
+### Workflow Guidelines
+- Use PowerShell for file manipulation, API calls, and complex logic
+- Prefer native PowerShell cmdlets over external tools when available
+- Write scripts that work cross-platform (avoid Windows-only cmdlets)
+
 ## Architecture Overview
 
 ### Core Components
