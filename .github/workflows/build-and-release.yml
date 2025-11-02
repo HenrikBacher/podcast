@@ -3,11 +3,11 @@ name: Deploy Azure Function
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
-    paths:
-      - "src/**"
-      - ".github/workflows/deploy-azure-function.yml"
+    #branches:
+    #  - main
+    #paths:
+    #  - "src/**"
+    #  - ".github/workflows/deploy-azure-function.yml"
 
 env:
   AZURE_FUNCTIONAPP_PACKAGE_PATH: 'src'
