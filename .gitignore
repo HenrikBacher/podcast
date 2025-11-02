@@ -50,6 +50,9 @@ artifacts/
 # VS Code
 .vscode/
 
+# Claude Code
+.claude/
+
 *_i.c
 *_p.c
 *_i.h

@@ -21,8 +21,14 @@ This tool currently processes **34 Danish podcasts** from DR's catalog, generati
   - [DrPodcast.csproj](src/DrPodcast.csproj): Project file with NativeAOT and optimization settings
   - [PodcastFeedGenerator.cs](src/PodcastFeedGenerator.cs): Main application entry point and RSS generation logic
   - [PodcastModels.cs](src/PodcastModels.cs): Data models with source-generated JSON serialization
+  - [PodcastHelpers.cs](src/PodcastHelpers.cs): Helper functions for category mapping and image URL extraction
   - **Configuration/**: Configuration-related components
   - **Services/**: Service layer components
+
+- **[tests/](tests/)**: Test suite (xUnit)
+  - [PodcastModelsTests.cs](tests/DrPodcast.Tests/PodcastModelsTests.cs): Model serialization tests
+  - [PodcastHelpersTests.cs](tests/DrPodcast.Tests/PodcastHelpersTests.cs): Helper function tests
+  - [FeedGenerationTests.cs](tests/DrPodcast.Tests/FeedGenerationTests.cs): RSS feed generation tests
 
 - **[site/](site/)**: Static website for feed browsing
   - [index.html](site/index.html): Main page listing all available podcast feeds
@@ -82,6 +88,33 @@ set API_KEY=<your-api-key>
 set BASE_URL=<base-url>
 DrPodcast-win-x64.exe
 ```
+
+## Testing
+
+DrPodcast includes a comprehensive test suite built with xUnit and FluentAssertions.
+
+### Running Tests
+```bash
+# Run all tests
+dotnet test tests/DrPodcast.Tests/DrPodcast.Tests.csproj
+
+# Run tests with detailed output
+dotnet test tests/DrPodcast.Tests/DrPodcast.Tests.csproj --verbosity normal
+
+# Run tests with code coverage
+dotnet test tests/DrPodcast.Tests/DrPodcast.Tests.csproj --collect:"XPlat Code Coverage"
+
+# Watch mode (re-run tests on file changes)
+dotnet watch test --project tests/DrPodcast.Tests/DrPodcast.Tests.csproj
+```
+
+### Test Coverage
+The test suite includes 52 tests covering:
+- **Model Serialization**: JSON deserialization of podcast models, episodes, and metadata
+- **Helper Functions**: Category mapping, image URL extraction, and priority selection
+- **RSS Feed Generation**: XML structure validation, namespaces, and iTunes metadata
+- **Date/Duration Formatting**: RFC 822 date format and duration string generation
+- **Edge Cases**: Null handling, empty collections, and fallback behavior
 
 ## Configuration
 

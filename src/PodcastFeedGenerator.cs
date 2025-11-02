@@ -65,7 +65,7 @@ var tasks = podcastList?.Podcasts.Select(async podcast =>
             Block = "yes",
             Owner = new ChannelOwner { Email = "podcast@dr.dk", Name = "DR" },
             NewFeedUrl = $"{baseUrl}/feeds/{slug}.xml",
-            Image = GetImageUrlFromAssets(series?.ImageAssets) ?? GetImageUrlFromAssets(podcast.ImageAssets)
+            Image = PodcastHelpers.GetImageUrlFromAssets(series?.ImageAssets) ?? PodcastHelpers.GetImageUrlFromAssets(podcast.ImageAssets)
         };
 
         // XML namespaces for RSS/iTunes
@@ -101,7 +101,7 @@ var tasks = podcastList?.Podcasts.Select(async podcast =>
         {
             foreach (var category in categories.Where(c => !string.IsNullOrEmpty(c)))
             {
-                var mapped = MapToPodcastCategory(category);
+                var mapped = PodcastHelpers.MapToPodcastCategory(category);
                 if (!string.IsNullOrEmpty(mapped))
                     channel.Add(new XElement(itunes + "category", new XAttribute("text", mapped)));
             }
@@ -155,7 +155,7 @@ var tasks = podcastList?.Podcasts.Select(async podcast =>
                 string epPubDate = episode.PublishTime ?? "";
                 string epGuid = episode.Id ?? Guid.NewGuid().ToString();
                 string epLink = episode.PresentationUrl ?? "";
-                string? epImage = GetImageUrlFromAssets(episode.ImageAssets) ?? channelModel.Image;
+                string? epImage = PodcastHelpers.GetImageUrlFromAssets(episode.ImageAssets) ?? channelModel.Image;
 
                 // Select the highest quality mp3 using LINQ and pattern matching
                 var (epAudio, epAudioLength) = episode.AudioAssets?
@@ -218,7 +218,7 @@ var tasks = podcastList?.Podcasts.Select(async podcast =>
                 {
                     foreach (var cat in episodeCategories)
                     {
-                        var mapped = MapToPodcastCategory(cat);
+                        var mapped = PodcastHelpers.MapToPodcastCategory(cat);
                         if (!string.IsNullOrEmpty(mapped))
                             item.Add(new XElement(itunes + "category", new XAttribute("text", mapped)));
                     }
@@ -249,41 +249,6 @@ var tasks = podcastList?.Podcasts.Select(async podcast =>
 
 await Task.WhenAll(tasks!);
 Console.WriteLine("All podcast feeds fetched.");
-
-static string MapToPodcastCategory(string category)
-{
-    return category switch
-    {
-        "Dokumentar" => "Documentary",
-        "Historie" => "History",
-        "Sundhed" => "Health & Fitness",
-        "Samfund" => "Society & Culture",
-        "Videnskab og tech" => "Science",
-        "Tro og eksistens" => "Religion & Spirituality",
-        "Kriminal" => "True Crime",
-        "Kultur" => "Society & Culture",
-        "Nyheder" => "News",
-        "Underholdning" => "Entertainment",
-        "Sport" => "Sports",
-        "Musik" => "Music",
-        // Add more mappings as needed
-        _ => category // fallback to original if not mapped
-    };
-}
-
-static string? GetImageUrlFromAssets(List<ImageAsset>? imageAssets)
-{
-    if (imageAssets is not { Count: > 0 }) return null;
-
-    var img = imageAssets.FirstOrDefault(a => string.Equals(a?.Target, "podcast", StringComparison.OrdinalIgnoreCase) && a?.Ratio == "1:1") ??
-              imageAssets.FirstOrDefault(a => string.Equals(a?.Target, "default", StringComparison.OrdinalIgnoreCase) && a?.Ratio == "1:1") ??
-              imageAssets.FirstOrDefault(a => string.Equals(a?.Target, "podcast", StringComparison.OrdinalIgnoreCase)) ??
-              imageAssets.FirstOrDefault(a => string.Equals(a?.Target, "default", StringComparison.OrdinalIgnoreCase));
-
-    return img?.Id is { } imgId && !string.IsNullOrEmpty(imgId)
-        ? $"https://asset.dr.dk/drlyd/images/{imgId}"
-        : null;
-}
 
 static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy() =>
     HttpPolicyExtensions
