@@ -164,6 +164,15 @@ jobs:
             **/TestResults/**/coverage.cobertura.xml
           retention-days: 7
 
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: '**/coverage.cobertura.xml'
+          flags: ${{ matrix.runtime }}
+          name: codecov-${{ matrix.runtime }}
+          fail_ci_if_error: false
+          verbose: true
+
       - name: Publish
         shell: pwsh
         run: |
