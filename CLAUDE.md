@@ -4,7 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Development Commands
 
-### Build and Run
+### Azure Functions (Primary)
+
+The project is designed to run as an Azure Function with timer triggers for scheduled feed generation.
+
 ```bash
 # Restore dependencies
 dotnet restore src/DrPodcast.csproj
@@ -12,10 +15,37 @@ dotnet restore src/DrPodcast.csproj
 # Build the project
 dotnet build src/DrPodcast.csproj --configuration Release
 
-# Run the application (requires API_KEY and BASE_URL environment variables)
+# Run Azure Functions locally (requires Azure Functions Core Tools)
+cd src
+func start
+
+# Or use .NET directly
+dotnet run --project src/DrPodcast.csproj
+```
+
+**Prerequisites:**
+- Azure Functions Core Tools v4: `npm install -g azure-functions-core-tools@4`
+- .NET 9.0 SDK
+
+**Local Development:**
+1. Copy `src/local.settings.json` and add your `API_KEY`
+2. Run `func start` in the `src` directory
+3. Functions will be available at `http://localhost:7071`
+
+**Available Endpoints:**
+- `GET|POST /api/GenerateFeedsHttp` - Manual feed generation
+- `GET /api/HealthCheck` - Health check endpoint
+- Timer trigger runs hourly (configured in code: `0 0 * * * *`)
+
+### Legacy CLI Mode
+
+For standalone execution without Azure Functions:
+
+```bash
+# Run as console application (legacy mode)
 dotnet run --project src/DrPodcast.csproj
 
-# Publish as NativeAOT binary
+# Publish as NativeAOT binary (not compatible with Azure Functions)
 dotnet publish src/DrPodcast.csproj -c Release -r win-x64 --self-contained
 ```
 
@@ -58,16 +88,24 @@ The test suite includes:
 ## Architecture Overview
 
 ### Core Components
-- **PodcastFeedGenerator.cs**: Main application entry point and RSS feed generation logic
-- **PodcastModels.cs**: Data models with JSON source generation for NativeAOT compatibility
+- **Program.cs**: Azure Functions host configuration and dependency injection setup
+- **FeedGenerationFunction.cs**: Azure Functions entry points (timer trigger, HTTP trigger, health check)
+- **PodcastFeedService.cs**: Core feed generation logic encapsulated as an injectable service
+- **PodcastModels.cs**: Data models with JSON source generation
 - **PodcastHelpers.cs**: Helper functions for category mapping and image URL extraction
 - **podcasts.json**: Configuration file containing podcast slugs and URNs to process
+- **host.json**: Azure Functions configuration (timeouts, logging, etc.)
+- **local.settings.json**: Local development settings (not committed to git)
 
 ### Key Design Patterns
-- **NativeAOT Optimization**: Uses source-generated JSON serialization, trim-safe patterns, and aggressive optimization settings
+- **Azure Functions (Isolated Worker)**: Uses .NET 9 isolated worker process model for better performance
+- **Dependency Injection**: Services registered in Program.cs and injected into functions
+- **Timer Triggers**: Hourly scheduled execution using cron expressions (`0 0 * * * *`)
+- **HTTP Triggers**: Manual execution endpoint for testing and on-demand generation
 - **Resilient HTTP**: HttpClient configured with Polly retry policies for reliable API calls
 - **RSS Standards Compliance**: Generates feeds with iTunes, Atom, and Media RSS namespaces
 - **Pagination Handling**: Automatically fetches all episodes across multiple API pages
+- **Structured Logging**: Uses ILogger for Application Insights integration
 
 ### Data Flow
 1. Load podcast configuration from `podcasts.json`
@@ -82,6 +120,18 @@ The test suite includes:
 
 ### Project Configuration
 - **Target Framework**: .NET 9.0
-- **Compilation**: NativeAOT with aggressive trimming and optimization
+- **Azure Functions Version**: v4 (isolated worker process)
 - **Warning Policy**: Treats warnings as errors (except CS8618 for nullable reference types)
-- **Globalization**: Invariant mode for smaller binary size
+- **Dependencies**:
+  - Microsoft.Azure.Functions.Worker
+  - Microsoft.Azure.Functions.Worker.Extensions.Timer
+  - Microsoft.Azure.Functions.Worker.Extensions.Http
+  - Microsoft.Extensions.Http.Polly (for resilient HTTP calls)
+  - Microsoft.ApplicationInsights (for telemetry)
+
+### Deployment
+- **Azure**: Deployed via GitHub Actions using Azure Functions Action
+- **Secrets Required**:
+  - `AZURE_FUNCTIONAPP_PUBLISH_PROFILE`: Download from Azure Portal
+  - Azure Function App must be configured with `API_KEY` and `BASE_URL` environment variables
+- **Workflow**: `.github/workflows/deploy-azure-function.yml`

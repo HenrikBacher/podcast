@@ -296,3 +296,9 @@ test-publish/
 *.tar.gz
 *.zip
 **/output
+
+# Azure Functions
+local.settings.json
+__azurite_*.json
+__blobstorage__
+__queuestorage__
