@@ -120,6 +120,36 @@ jobs:
           Copy-Item -Path "site/*" -Destination "output/_site/" -Recurse -Force
           Copy-Item -Path "output/*.xml" -Destination "output/_site/feeds/" -Force
 
+      - name: Generate feed statistics
+        shell: bash
+        run: |
+          echo "## Feed Generation Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Feed | Episodes | Size | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|----------|------|--------|" >> $GITHUB_STEP_SUMMARY
+
+          for feed in output/_site/feeds/*.xml; do
+            if [ -f "$feed" ]; then
+              filename=$(basename "$feed")
+              episodes=$(grep -c "<item>" "$feed" || echo "0")
+              size=$(du -h "$feed" | cut -f1)
+              echo "| $filename | $episodes | $size | ✓ |" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          total_feeds=$(ls -1 output/_site/feeds/*.xml 2>/dev/null | wc -l)
+          echo "**Total feeds generated:** $total_feeds" >> $GITHUB_STEP_SUMMARY
+          echo "**Generation time:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload generated feeds as artifacts
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: generated-feeds-${{ github.run_id }}
+          path: output/_site/feeds/*.xml
+          retention-days: 7
+
       - name: Check for deployment changes
         id: deployment_check
         env:
@@ -239,3 +269,52 @@ jobs:
         if: steps.deployment_check.outputs.needs_deploy == 'true'
         id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Smoke test deployment
+        if: steps.deployment_check.outputs.needs_deploy == 'true'
+        shell: bash
+        run: |
+          echo "Waiting for deployment to propagate..."
+          sleep 30
+
+          echo "Running smoke tests on deployed site..."
+          SITE_URL="${{ steps.deployment.outputs.page_url }}"
+
+          # Test 1: Check if the main page is accessible
+          echo "Testing main page..."
+          if curl -f -s -o /dev/null -w "%{http_code}" "$SITE_URL" | grep -q "200"; then
+            echo "✓ Main page is accessible"
+          else
+            echo "✗ Main page failed"
+            exit 1
+          fi
+
+          # Test 2: Check if feeds directory is accessible
+          echo "Testing feeds directory..."
+          if curl -f -s -o /dev/null -w "%{http_code}" "${SITE_URL}feeds/" | grep -q "200\|404"; then
+            echo "✓ Feeds directory check passed"
+          else
+            echo "✗ Feeds directory failed"
+            exit 1
+          fi
+
+          # Test 3: Verify at least one feed is accessible
+          echo "Testing feed accessibility..."
+          feed_found=false
+          for feed in output/_site/feeds/*.xml; do
+            if [ -f "$feed" ]; then
+              filename=$(basename "$feed")
+              if curl -f -s -o /dev/null "${SITE_URL}feeds/$filename"; then
+                echo "✓ Feed $filename is accessible"
+                feed_found=true
+                break
+              fi
+            fi
+          done
+
+          if [ "$feed_found" = false ]; then
+            echo "✗ No accessible feeds found"
+            exit 1
+          fi
+
+          echo "All smoke tests passed!"
