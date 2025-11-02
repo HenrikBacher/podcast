@@ -185,6 +185,18 @@ jobs:
             Copy-Item "publish/${{ matrix.runtime }}/DrPodcast" "${{ matrix.artifact-name }}"
           }
 
+      - name: Generate Checksums
+        shell: pwsh
+        run: |
+          if ("${{ matrix.runtime }}" -eq "win-x64") {
+            $hash = (Get-FileHash -Path "${{ matrix.artifact-name }}.exe" -Algorithm SHA256).Hash.ToLower()
+            "$hash  ${{ matrix.artifact-name }}.exe" | Out-File -FilePath "${{ matrix.artifact-name }}.sha256" -Encoding ASCII -NoNewline
+          } else {
+            $hash = (Get-FileHash -Path "${{ matrix.artifact-name }}" -Algorithm SHA256).Hash.ToLower()
+            "$hash  ${{ matrix.artifact-name }}" | Out-File -FilePath "${{ matrix.artifact-name }}.sha256" -Encoding ASCII -NoNewline
+          }
+          Write-Host "Generated checksum: $hash"
+
       - name: Upload Artifacts
         uses: actions/upload-artifact@v5
         with:
@@ -192,6 +204,7 @@ jobs:
           path: |
             ${{ matrix.artifact-name }}.exe
             ${{ matrix.artifact-name }}
+            ${{ matrix.artifact-name }}.sha256
           retention-days: 30
 
   release:
@@ -218,7 +231,7 @@ jobs:
 
             ### Download
             - **Linux (x64)**: DrPodcast-linux-x64
-            - **Linux (arm64)**: DrPodcast-linux-arm64  
+            - **Linux (arm64)**: DrPodcast-linux-arm64
             - **Windows (x64)**: DrPodcast-win-x64.exe
             - **macOS (arm64)**: DrPodcast-osx-arm64
 
@@ -227,11 +240,24 @@ jobs:
             2. Run the executable directly (no extraction required)
             3. On Linux/macOS, you may need to make it executable: `chmod +x DrPodcast-*`
 
+            ### Verification
+            SHA256 checksums are provided for each binary (`.sha256` files). Verify your download:
+            ```bash
+            # Linux/macOS
+            sha256sum -c DrPodcast-*.sha256
+
+            # Windows (PowerShell)
+            $expected = (Get-Content DrPodcast-win-x64.sha256).Split()[0]
+            $actual = (Get-FileHash DrPodcast-win-x64.exe -Algorithm SHA256).Hash.ToLower()
+            if ($expected -eq $actual) { "✓ Checksum verified" } else { "✗ Checksum mismatch" }
+            ```
+
             ${{ needs.determine-version.outputs.is-prerelease == 'true' && '⚠️ **Warning**: This is a prerelease version and may contain bugs.' || '' }}
           draft: false
           prerelease: ${{ needs.determine-version.outputs.is-prerelease == 'true' }}
           files: |
             ./artifacts/**/*.exe
+            ./artifacts/**/*.sha256
             ./artifacts/DrPodcast-linux-x64/DrPodcast-linux-x64
             ./artifacts/DrPodcast-linux-arm64/DrPodcast-linux-arm64
             ./artifacts/DrPodcast-osx-arm64/DrPodcast-osx-arm64
