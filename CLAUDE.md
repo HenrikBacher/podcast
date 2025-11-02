@@ -20,13 +20,33 @@ dotnet publish src/DrPodcast.csproj -c Release -r win-x64 --self-contained
 ```
 
 ### Test Commands
-This project currently has a test directory structure but no active test framework configured. When adding tests, they should be placed in the `tests/` directory.
+```bash
+# Run all tests
+dotnet test tests/DrPodcast.Tests/DrPodcast.Tests.csproj
+
+# Run tests with detailed output
+dotnet test tests/DrPodcast.Tests/DrPodcast.Tests.csproj --verbosity normal
+
+# Run tests with code coverage
+dotnet test tests/DrPodcast.Tests/DrPodcast.Tests.csproj --collect:"XPlat Code Coverage"
+
+# Watch mode (re-run tests on file changes)
+dotnet watch test --project tests/DrPodcast.Tests/DrPodcast.Tests.csproj
+```
+
+The test suite includes:
+- **PodcastModelsTests.cs**: Tests for JSON serialization/deserialization of podcast models
+- **PodcastHelpersTests.cs**: Tests for helper functions (category mapping, image URL extraction)
+- **FeedGenerationTests.cs**: Tests for RSS feed XML generation and structure validation
+
+**CI/CD Integration**: Tests are automatically executed as part of the build pipeline on all pull requests and pushes to main. Test results and code coverage are uploaded as artifacts for review.
 
 ## Architecture Overview
 
 ### Core Components
 - **PodcastFeedGenerator.cs**: Main application entry point and RSS feed generation logic
 - **PodcastModels.cs**: Data models with JSON source generation for NativeAOT compatibility
+- **PodcastHelpers.cs**: Helper functions for category mapping and image URL extraction
 - **podcasts.json**: Configuration file containing podcast slugs and URNs to process
 
 ### Key Design Patterns

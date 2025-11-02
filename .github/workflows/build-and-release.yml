@@ -6,12 +6,14 @@ on:
       - main
     paths:
       - "src/**"
+      - "tests/**"
       - ".github/workflows/build-and-release.yml"
   pull_request:
     branches:
       - main
     paths:
       - "src/**"
+      - "tests/**"
       - ".github/workflows/build-and-release.yml"
 
 env:
@@ -149,8 +151,18 @@ jobs:
       - name: Build
         run: dotnet build src/DrPodcast.csproj --no-restore --configuration Release -p:Version=${{ needs.determine-version.outputs.version }}
 
-      - name: Test
-        run: dotnet test src/DrPodcast.csproj --no-build --verbosity normal --configuration Release
+      - name: Run Tests
+        run: dotnet test tests/DrPodcast.Tests/DrPodcast.Tests.csproj --configuration Release --verbosity normal --logger "trx;LogFileName=test-results.trx" --collect:"XPlat Code Coverage"
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: test-results-${{ matrix.runtime }}
+          path: |
+            **/test-results.trx
+            **/TestResults/**/coverage.cobertura.xml
+          retention-days: 7
 
       - name: Publish
         shell: pwsh
