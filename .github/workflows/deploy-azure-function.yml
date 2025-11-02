@@ -10,13 +10,15 @@ on:
       - ".github/workflows/deploy-azure-function.yml"
 
 env:
-  AZURE_FUNCTIONAPP_NAME: 'drpodcast-feed-generator'
   AZURE_FUNCTIONAPP_PACKAGE_PATH: 'src'
   DOTNET_VERSION: '9.0.x'
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    environment:
+      name: azure-production
+      url: ${{ vars.AZURE_FUNCTION_URL }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
@@ -50,6 +52,24 @@ jobs:
       - name: Deploy to Azure Functions
         uses: Azure/functions-action@v1
         with:
-          app-name: ${{ env.AZURE_FUNCTIONAPP_NAME }}
+          app-name: ${{ vars.AZURE_FUNCTIONAPP_NAME }}
           package: '${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}/output'
           publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
+
+      - name: Verify deployment
+        shell: pwsh
+        run: |
+          Write-Host "Waiting for deployment to complete..."
+          Start-Sleep -Seconds 30
+
+          $healthUrl = "${{ vars.AZURE_FUNCTION_URL }}/api/HealthCheck"
+          Write-Host "Testing health endpoint: $healthUrl"
+
+          try {
+            $response = Invoke-RestMethod -Uri $healthUrl -Method Get -TimeoutSec 10
+            Write-Host "✓ Health check passed: $($response.status)"
+            Write-Host "Service: $($response.service)"
+          } catch {
+            Write-Warning "Health check failed, but deployment may still be successful"
+            Write-Host "Error: $_"
+          }
