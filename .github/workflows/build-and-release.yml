@@ -1,144 +1,118 @@
-name: Build and Release
+name: Deploy Azure Function
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
     paths:
       - "src/**"
-      - "tests/**"
-      - ".github/workflows/build-and-release.yml"
-  pull_request:
-    branches:
-      - main
-    paths:
-      - "src/**"
-      - "tests/**"
-      - ".github/workflows/build-and-release.yml"
+      - ".github/workflows/deploy-azure-function.yml"
 
 env:
-  DOTNET_VERSION: "8.0.x"
+  AZURE_FUNCTIONAPP_PACKAGE_PATH: 'src'
+  DOTNET_VERSION: '8.0.x'
+  AZURE_RESOURCE_GROUP: 'drpodcast-rg'
+  AZURE_LOCATION: 'swendencentral'
+  AZURE_STORAGE_ACCOUNT: 'drpodcaststorage'
 
 jobs:
-  determine-version:
+  provision-and-deploy:
     runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.version.outputs.version }}
-      version-tag: ${{ steps.version.outputs.version-tag }}
-      is-prerelease: ${{ steps.version.outputs.is-prerelease }}
+    environment:
+      name: azure-production
+      url: https://${{ vars.AZURE_FUNCTIONAPP_NAME }}.azurewebsites.net
     steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
+      - name: Checkout code
+        uses: actions/checkout@v5
 
-      - name: Determine Version
-        id: version
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Check and create resource group
         shell: pwsh
         run: |
-          # Get the latest stable release using GitHub CLI, fallback to v0.0.0 if fails
-          $latestTag = "v0.0.0"
-          try {
-            $tag = & gh release list --limit 1 --exclude-pre-releases --json tagName --jq '.[0].tagName' 2>$null
-            if ($tag) { $latestTag = $tag }
-          } catch {
-            Write-Host "Failed to get release tag from gh, using v0.0.0"
-          }
-          Write-Host "Latest stable release: $latestTag"
+          Write-Host "Checking if resource group '${{ env.AZURE_RESOURCE_GROUP }}' exists..."
 
-          # Parse version numbers
-          $versionNumber = $latestTag.TrimStart("v")
-          $parts = $versionNumber -split '\.'
-          $major = [int]$parts[0]
-          $minor = [int]$parts[1]
-          $patch = [int]$parts[2]
+          $rgExists = az group exists --name ${{ env.AZURE_RESOURCE_GROUP }}
 
-          # Default to patch bump
-          $bumpType = "patch"
-          $isPrerelease = "false"
-
-          # Check for version bump indicators in PR or commit messages
-          $event = $null
-          if ("${{ github.event_name }}" -eq "pull_request") {
-            $isPrerelease = "true"
-            try {
-              $event = Get-Content -Raw -Path $env:GITHUB_EVENT_PATH | ConvertFrom-Json
-              $prBody = $event.pull_request.body
-            } catch {
-              $prBody = ""
-            }
-            if ($null -eq $prBody) { $prBody = "" }
-            if ($prBody -imatch "breaking change|major version|\[major\]") {
-              $bumpType = "major"
-            } elseif ($prBody -imatch "feature|minor version|\[minor\]") {
-              $bumpType = "minor"
-            } else {
-              # Default to patch if PR description doesn't match expected format
-              $bumpType = "patch"
-            }
+          if ($rgExists -eq "false") {
+            Write-Host "Creating resource group '${{ env.AZURE_RESOURCE_GROUP }}' in '${{ env.AZURE_LOCATION }}'..."
+            az group create `
+              --name ${{ env.AZURE_RESOURCE_GROUP }} `
+              --location ${{ env.AZURE_LOCATION }}
+            Write-Host "✓ Resource group created"
           } else {
-            # Direct commit to main - check commit message
-            $commitMsg = git log -1 --pretty=%B
-            if ($commitMsg -match "breaking change|major version|\[major\]") {
-              $bumpType = "major"
-            } elseif ($commitMsg -match "feature|minor version|\[minor\]") {
-              $bumpType = "minor"
-            } else {
-              $bumpType = "patch"
-            }
+            Write-Host "✓ Resource group already exists"
           }
 
-          Write-Host "Bump type: $bumpType"
-          Write-Host "Is prerelease: $isPrerelease"
+      - name: Check and create storage account
+        shell: pwsh
+        run: |
+          Write-Host "Checking if storage account '${{ env.AZURE_STORAGE_ACCOUNT }}' exists..."
 
-          # Calculate new version
-          switch ($bumpType) {
-            "major" { $newVersion = "$($major + 1).0.0" }
-            "minor" { $newVersion = "$major.$($minor + 1).0" }
-            "patch" { $newVersion = "$major.$minor.$($patch + 1)" }
+          $storageExists = az storage account check-name `
+            --name ${{ env.AZURE_STORAGE_ACCOUNT }} `
+            --query "nameAvailable" `
+            --output tsv
+
+          if ($storageExists -eq "true") {
+            Write-Host "Creating storage account '${{ env.AZURE_STORAGE_ACCOUNT }}'..."
+            az storage account create `
+              --name ${{ env.AZURE_STORAGE_ACCOUNT }} `
+              --resource-group ${{ env.AZURE_RESOURCE_GROUP }} `
+              --location ${{ env.AZURE_LOCATION }} `
+              --sku Standard_LRS `
+              --kind StorageV2 `
+              --allow-blob-public-access false
+            Write-Host "✓ Storage account created"
+          } else {
+            Write-Host "✓ Storage account already exists"
           }
 
-          # Add prerelease suffix for PR builds, handle missing PR context
-          if ($isPrerelease -eq "true") {
-            try {
-              if (-not $event) { $event = Get-Content -Raw -Path $env:GITHUB_EVENT_PATH | ConvertFrom-Json }
-              $prNumber = $event.pull_request.number
-              $commitSha = $event.pull_request.head.sha
-            } catch { }
-            if (-not $prNumber) { $prNumber = "0" }
-            if (-not $commitSha) { $commitSha = "$env:GITHUB_SHA" }
-            $shortSha = $commitSha.Substring(0,8)
-            $newVersion = "$newVersion-pr.$prNumber.$shortSha"
+      - name: Check and create function app
+        shell: pwsh
+        run: |
+          Write-Host "Checking if function app '${{ vars.AZURE_FUNCTIONAPP_NAME }}' exists..."
+
+          $appExists = az functionapp show `
+            --name ${{ vars.AZURE_FUNCTIONAPP_NAME }} `
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} `
+            --query "name" `
+            --output tsv 2>$null
+
+          if (-not $appExists) {
+            Write-Host "Creating function app '${{ vars.AZURE_FUNCTIONAPP_NAME }}'..."
+            az functionapp create `
+              --name ${{ vars.AZURE_FUNCTIONAPP_NAME }} `
+              --resource-group ${{ env.AZURE_RESOURCE_GROUP }} `
+              --storage-account ${{ env.AZURE_STORAGE_ACCOUNT }} `
+              --consumption-plan-location ${{ env.AZURE_LOCATION }} `
+              --runtime dotnet-isolated `
+              --runtime-version 8 `
+              --functions-version 4 `
+              --os-type Linux `
+              --disable-app-insights false
+            Write-Host "✓ Function app created"
+          } else {
+            Write-Host "✓ Function app already exists"
           }
 
-          Write-Host "New version: $newVersion"
-          "version=$newVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          "version-tag=v$newVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          "is-prerelease=$isPrerelease" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+      - name: Configure function app settings
+        shell: pwsh
+        run: |
+          Write-Host "Configuring application settings..."
 
-  build:
-    needs: determine-version
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-latest]
-        include:
-          - os: ubuntu-latest
-            runtime: linux-x64
-            artifact-name: DrPodcast-linux-x64
-          - os: ubuntu-24.04-arm
-            runtime: linux-arm64
-            artifact-name: DrPodcast-linux-arm64
-          - os: windows-latest
-            runtime: win-x64
-            artifact-name: DrPodcast-win-x64
-          - os: macos-latest
-            runtime: osx-arm64
-            artifact-name: DrPodcast-osx-arm64
+          az functionapp config appsettings set `
+            --name ${{ vars.AZURE_FUNCTIONAPP_NAME }} `
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} `
+            --settings `
+              API_KEY="${{ secrets.DR_API_KEY }}" `
+              BASE_URL="${{ vars.BASE_URL }}"
 
-    steps:
-      - uses: actions/checkout@v5
+          Write-Host "✓ Application settings configured"
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
@@ -146,185 +120,50 @@ jobs:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Restore dependencies
-        run: dotnet restore src/DrPodcast.csproj
+        shell: pwsh
+        run: |
+          Push-Location ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
+          dotnet restore
+          Pop-Location
 
-      - name: Build
-        run: dotnet build src/DrPodcast.csproj --no-restore --configuration Release -p:Version=${{ needs.determine-version.outputs.version }}
+      - name: Build project
+        shell: pwsh
+        run: |
+          Push-Location ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
+          dotnet build --configuration Release --no-restore
+          Pop-Location
 
-      - name: Run Tests
-        run: dotnet test tests/DrPodcast.Tests/DrPodcast.Tests.csproj --configuration Release --verbosity normal --logger "trx;LogFileName=test-results.trx" --collect:"XPlat Code Coverage"
+      - name: Publish project
+        shell: pwsh
+        run: |
+          Push-Location ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
+          dotnet publish --configuration Release --output ./output
+          Pop-Location
 
-      - name: Upload Test Results
+      - name: Deploy to Azure Functions
+        uses: Azure/functions-action@v1
+        with:
+          app-name: ${{ vars.AZURE_FUNCTIONAPP_NAME }}
+          package: '${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}/output'
+
+      - name: Verify deployment
+        shell: pwsh
+        run: |
+          Write-Host "Waiting for deployment to complete..."
+          Start-Sleep -Seconds 30
+
+          $healthUrl = "https://${{ vars.AZURE_FUNCTIONAPP_NAME }}.azurewebsites.net/api/HealthCheck"
+          Write-Host "Testing health endpoint: $healthUrl"
+
+          try {
+            $response = Invoke-RestMethod -Uri $healthUrl -Method Get -TimeoutSec 10
+            Write-Host "✓ Health check passed: $($response.status)"
+            Write-Host "Service: $($response.service)"
+          } catch {
+            Write-Warning "Health check failed, but deployment may still be successful"
+            Write-Host "Error: $_"
+          }
+
+      - name: Azure Logout
         if: always()
-        uses: actions/upload-artifact@v5
-        with:
-          name: test-results-${{ matrix.runtime }}
-          path: |
-            **/test-results.trx
-            **/TestResults/**/coverage.cobertura.xml
-          retention-days: 7
-
-      - name: Check if Azure Function
-        id: check-function
-        shell: pwsh
-        run: |
-          $isAzureFunction = Select-String -Path "src/DrPodcast.csproj" -Pattern "<AzureFunctionsVersion>" -Quiet
-          "is-azure-function=$isAzureFunction" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          Write-Host "Is Azure Function: $isAzureFunction"
-
-      - name: Publish
-        if: steps.check-function.outputs.is-azure-function != 'True'
-        shell: pwsh
-        run: |
-          dotnet publish src/DrPodcast.csproj `
-            --configuration Release `
-            --runtime ${{ matrix.runtime }} `
-            --self-contained true `
-            --output ./publish/${{ matrix.runtime }} `
-            -p:PublishSingleFile=true `
-            -p:PublishTrimmed=true `
-            -p:Version=${{ needs.determine-version.outputs.version }}
-
-      - name: Prepare Executable
-        if: steps.check-function.outputs.is-azure-function != 'True'
-        shell: pwsh
-        run: |
-          if ("${{ matrix.runtime }}" -eq "win-x64") {
-            Copy-Item "publish/${{ matrix.runtime }}/DrPodcast.exe" "${{ matrix.artifact-name }}.exe"
-          } else {
-            Copy-Item "publish/${{ matrix.runtime }}/DrPodcast" "${{ matrix.artifact-name }}"
-          }
-
-      - name: Generate Checksums
-        if: steps.check-function.outputs.is-azure-function != 'True'
-        shell: pwsh
-        run: |
-          if ("${{ matrix.runtime }}" -eq "win-x64") {
-            $hash = (Get-FileHash -Path "${{ matrix.artifact-name }}.exe" -Algorithm SHA256).Hash.ToLower()
-            "$hash  ${{ matrix.artifact-name }}.exe" | Out-File -FilePath "${{ matrix.artifact-name }}.sha256" -Encoding ASCII -NoNewline
-          } else {
-            $hash = (Get-FileHash -Path "${{ matrix.artifact-name }}" -Algorithm SHA256).Hash.ToLower()
-            "$hash  ${{ matrix.artifact-name }}" | Out-File -FilePath "${{ matrix.artifact-name }}.sha256" -Encoding ASCII -NoNewline
-          }
-          Write-Host "Generated checksum: $hash"
-
-      - name: Upload Artifacts
-        if: steps.check-function.outputs.is-azure-function != 'True'
-        uses: actions/upload-artifact@v5
-        with:
-          name: ${{ matrix.artifact-name }}
-          path: |
-            ${{ matrix.artifact-name }}.exe
-            ${{ matrix.artifact-name }}
-            ${{ matrix.artifact-name }}.sha256
-          retention-days: 30
-
-  release:
-    needs: [determine-version, build]
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Check if Azure Function
-        id: check-function
-        shell: pwsh
-        run: |
-          $isAzureFunction = Select-String -Path "src/DrPodcast.csproj" -Pattern "<AzureFunctionsVersion>" -Quiet
-          "is-azure-function=$isAzureFunction" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          Write-Host "Is Azure Function: $isAzureFunction"
-
-      - name: Download all artifacts
-        if: steps.check-function.outputs.is-azure-function != 'True'
-        uses: actions/download-artifact@v6
-        with:
-          path: ./artifacts
-
-      - name: Create Release and Upload All Assets
-        if: steps.check-function.outputs.is-azure-function != 'True'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.determine-version.outputs.version-tag }}
-          name: ${{ needs.determine-version.outputs.is-prerelease == 'true' && format('Prerelease {0}', needs.determine-version.outputs.version-tag) || format('Release {0}', needs.determine-version.outputs.version-tag) }}
-          body: |
-            ${{ needs.determine-version.outputs.is-prerelease == 'true' && '## 🚧 Prerelease Build' || '## ✅ Stable Release' }}
-
-            ${{ needs.determine-version.outputs.is-prerelease == 'true' && format('This is a prerelease build from PR #{0}. Use for testing purposes only.', github.event.pull_request.number) || 'This release was automatically generated and is ready for production use.' }}
-
-            ### Download
-            - **Linux (x64)**: DrPodcast-linux-x64
-            - **Linux (arm64)**: DrPodcast-linux-arm64
-            - **Windows (x64)**: DrPodcast-win-x64.exe
-            - **macOS (arm64)**: DrPodcast-osx-arm64
-
-            ### Installation
-            1. Download the appropriate executable for your platform
-            2. Run the executable directly (no extraction required)
-            3. On Linux/macOS, you may need to make it executable: `chmod +x DrPodcast-*`
-
-            ### Verification
-            SHA256 checksums are provided for each binary (`.sha256` files). Verify your download:
-            ```bash
-            # Linux/macOS
-            sha256sum -c DrPodcast-*.sha256
-
-            # Windows (PowerShell)
-            $expected = (Get-Content DrPodcast-win-x64.sha256).Split()[0]
-            $actual = (Get-FileHash DrPodcast-win-x64.exe -Algorithm SHA256).Hash.ToLower()
-            if ($expected -eq $actual) { "✓ Checksum verified" } else { "✗ Checksum mismatch" }
-            ```
-
-            ${{ needs.determine-version.outputs.is-prerelease == 'true' && '⚠️ **Warning**: This is a prerelease version and may contain bugs.' || '' }}
-          draft: false
-          prerelease: ${{ needs.determine-version.outputs.is-prerelease == 'true' }}
-          files: |
-            ./artifacts/**/*.exe
-            ./artifacts/**/*.sha256
-            ./artifacts/DrPodcast-linux-x64/DrPodcast-linux-x64
-            ./artifacts/DrPodcast-linux-arm64/DrPodcast-linux-arm64
-            ./artifacts/DrPodcast-osx-arm64/DrPodcast-osx-arm64
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Delete Prerelease Versions
-        if: needs.determine-version.outputs.is-prerelease == 'false'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "🧹 Deleting prerelease versions after stable release..."
-
-          # Wait a moment to ensure the stable release is fully created
-          sleep 5
-
-          # Get all releases
-          RELEASES=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
-            "https://api.github.com/repos/${{ github.repository }}/releases")
-
-          # Extract prerelease IDs (only those marked as prerelease AND containing version patterns)
-          PRERELEASE_IDS=$(echo "$RELEASES" | jq -r '.[] | select(.prerelease == true and (.tag_name | test("-pr\\."))) | .id')
-
-          if [ -z "$PRERELEASE_IDS" ]; then
-            echo "No prerelease versions found to delete."
-          else
-            echo "Found prerelease versions to delete:"
-            for ID in $PRERELEASE_IDS; do
-              # Get release info for logging
-              RELEASE_INFO=$(echo "$RELEASES" | jq -r ".[] | select(.id == $ID)")
-              RELEASE_NAME=$(echo "$RELEASE_INFO" | jq -r '.name')
-              RELEASE_TAG=$(echo "$RELEASE_INFO" | jq -r '.tag_name')
-              
-              echo "  - Deleting: $RELEASE_NAME (Tag: $RELEASE_TAG, ID: $ID)"
-              
-              # Delete the prerelease
-              DELETE_RESPONSE=$(curl -s -w "%{http_code}" -X DELETE \
-                -H "Authorization: token $GITHUB_TOKEN" \
-                "https://api.github.com/repos/${{ github.repository }}/releases/$ID")
-              
-              HTTP_CODE=${DELETE_RESPONSE: -3}
-              if [ "$HTTP_CODE" = "204" ]; then
-                echo "    ✅ Successfully deleted prerelease $RELEASE_TAG"
-              else
-                echo "    ❌ Failed to delete prerelease $RELEASE_TAG (HTTP: $HTTP_CODE)"
-              fi
-            done
-            echo "🎉 Prerelease cleanup completed!"
-          fi
+        run: az logout
