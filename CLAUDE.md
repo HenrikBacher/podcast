@@ -59,12 +59,11 @@ The test suite includes:
 
 ### Core Components
 - **PodcastFeedGenerator.cs**: Main application entry point and RSS feed generation logic
-- **PodcastModels.cs**: Data models with JSON source generation for NativeAOT compatibility
+- **PodcastModels.cs**: Data models for JSON serialization
 - **PodcastHelpers.cs**: Helper functions for category mapping and image URL extraction
 - **podcasts.json**: Configuration file containing podcast slugs and URNs to process
 
 ### Key Design Patterns
-- **NativeAOT Optimization**: Uses source-generated JSON serialization, trim-safe patterns, and aggressive optimization settings
 - **Resilient HTTP**: HttpClient configured with Polly retry policies for reliable API calls
 - **RSS Standards Compliance**: Generates feeds with iTunes, Atom, and Media RSS namespaces
 - **Pagination Handling**: Automatically fetches all episodes across multiple API pages
@@ -82,6 +81,5 @@ The test suite includes:
 
 ### Project Configuration
 - **Target Framework**: .NET 9.0
-- **Compilation**: NativeAOT with aggressive trimming and optimization
+- **Compilation**: Self-contained single-file executables
 - **Warning Policy**: Treats warnings as errors (except CS8618 for nullable reference types)
-- **Globalization**: Invariant mode for smaller binary size

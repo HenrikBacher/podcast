@@ -1,53 +1,70 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Xml.Linq;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Http;
 using Polly;
-using Polly.Extensions.Http;
+using Polly.Retry;
 using DrPodcast;
 
-var services = new ServiceCollection();
+// Constants
+const string DefaultBaseUrl = "https://example.com";
+const string ApiBaseUrl = "https://api.dr.dk/radio/v2/series/";
+const int EpisodePageLimit = 256;
+const int MaxRetryAttempts = 3;
+const int RetryDelaySeconds = 2;
+const int HttpTimeoutSeconds = 30;
 
 // Get environment variables with defaults
 string apiKey = Environment.GetEnvironmentVariable("API_KEY") ?? "";
-string baseUrl = Environment.GetEnvironmentVariable("BASE_URL") ?? "https://example.com";
-const string apiUrl = "https://api.dr.dk/radio/v2/series/";
+string baseUrl = Environment.GetEnvironmentVariable("BASE_URL") ?? DefaultBaseUrl;
 
-// Configure HttpClient with Polly retry policy
-services.AddHttpClient("DrApi", client =>
-{
-    client.DefaultRequestHeaders.Add("X-Apikey", apiKey);
-    client.Timeout = TimeSpan.FromSeconds(30);
-})
-.AddPolicyHandler(GetRetryPolicy());
+// Configure HttpClient with retry policy
+var httpClient = new HttpClient();
+httpClient.DefaultRequestHeaders.Add("X-Apikey", apiKey);
+httpClient.Timeout = TimeSpan.FromSeconds(HttpTimeoutSeconds);
 
-await using var serviceProvider = services.BuildServiceProvider();
-var httpClientFactory = serviceProvider.GetRequiredService<IHttpClientFactory>();
+var retryPolicy = new ResiliencePipelineBuilder<HttpResponseMessage>()
+    .AddRetry(new RetryStrategyOptions<HttpResponseMessage>
+    {
+        MaxRetryAttempts = MaxRetryAttempts,
+        Delay = TimeSpan.FromSeconds(RetryDelaySeconds),
+        BackoffType = DelayBackoffType.Exponential,
+        ShouldHandle = new PredicateBuilder<HttpResponseMessage>()
+            .Handle<HttpRequestException>()
+            .HandleResult(response => !response.IsSuccessStatusCode),
+        OnRetry = args =>
+        {
+            Console.WriteLine($"Retry {args.AttemptNumber} after {args.RetryDelay}");
+            return ValueTask.CompletedTask;
+        }
+    })
+    .Build();
 
-// Deserialize podcasts.json using JsonSerializerContext for trimming compatibility
-var podcastList = JsonSerializer.Deserialize(
-    await File.ReadAllTextAsync("podcasts.json"), PodcastJsonContext.Default.PodcastList);
+// Load and deserialize podcasts.json
+var podcastList = JsonSerializer.Deserialize<PodcastList>(
+    await File.ReadAllTextAsync("podcasts.json"), new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
 
 Directory.CreateDirectory("output");
+
+// Track results for summary
+int successCount = 0;
+int failureCount = 0;
+var failedPodcasts = new List<string>();
 
 var tasks = podcastList?.Podcasts.Select(async podcast =>
 {
     string urn = podcast.Urn;
     string slug = podcast.Slug;
-    string seriesUrl = apiUrl + urn;
+    string seriesUrl = ApiBaseUrl + urn;
     try
     {
-        using var httpClient = httpClientFactory.CreateClient("DrApi");
-
         // First, fetch series information
-        var seriesResponse = await httpClient.GetAsync(seriesUrl);
+        var seriesResponse = await retryPolicy.ExecuteAsync(async ct => await httpClient.GetAsync(seriesUrl, ct), CancellationToken.None);
         seriesResponse.EnsureSuccessStatusCode();
         string seriesContent = await seriesResponse.Content.ReadAsStringAsync();
-        var series = JsonSerializer.Deserialize(seriesContent, PodcastJsonContext.Default.Series);
+        var series = JsonSerializer.Deserialize<Series>(seriesContent, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
 
         // Fetch all episodes, handling pagination
-        var episodes = await FetchAllEpisodesAsync(apiUrl + urn + "/episodes?limit=256", httpClient);
+        var episodes = await FetchAllEpisodesAsync(ApiBaseUrl + urn + $"/episodes?limit={EpisodePageLimit}", httpClient, retryPolicy);
 
         // Build channel model using object initializer and with expressions
         var channelModel = new Channel
@@ -239,35 +256,49 @@ var tasks = podcastList?.Podcasts.Select(async podcast =>
         string outputPath = Path.Combine("output", $"{slug}.xml");
         var doc = new XDocument(new XDeclaration("1.0", "utf-8", "yes"), rss);
         doc.Save(outputPath);
-        Console.WriteLine($"Saved RSS feed: {outputPath}");
+        Console.WriteLine($"✓ Saved RSS feed: {outputPath}");
+        Interlocked.Increment(ref successCount);
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Failed to fetch series {urn}: {ex.Message}");
+        Console.WriteLine($"✗ Failed to fetch series {slug} ({urn}): {ex.Message}");
+        Interlocked.Increment(ref failureCount);
+        lock (failedPodcasts)
+        {
+            failedPodcasts.Add(slug);
+        }
     }
 }).ToArray();
 
 await Task.WhenAll(tasks!);
-Console.WriteLine("All podcast feeds fetched.");
 
-static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy() =>
-    HttpPolicyExtensions
-        .HandleTransientHttpError()
-        .OrResult(msg => !msg.IsSuccessStatusCode)
-        .WaitAndRetryAsync(
-            retryCount: 3,
-            sleepDurationProvider: retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
-            onRetry: (outcome, timespan, retryCount, context) =>
-                Console.WriteLine($"Retry {retryCount} after {timespan} seconds delay"));
+// Print summary
+Console.WriteLine();
+Console.WriteLine("==================================================");
+Console.WriteLine($"Feed Generation Summary:");
+Console.WriteLine($"  ✓ Successful: {successCount}");
+Console.WriteLine($"  ✗ Failed: {failureCount}");
+Console.WriteLine($"  Total: {podcastList?.Podcasts.Count ?? 0}");
 
-static async Task<List<Episode>?> FetchAllEpisodesAsync(string initialUrl, HttpClient httpClient)
+if (failedPodcasts.Count > 0)
+{
+    Console.WriteLine();
+    Console.WriteLine("Failed podcasts:");
+    foreach (var slug in failedPodcasts)
+    {
+        Console.WriteLine($"  - {slug}");
+    }
+}
+Console.WriteLine("==================================================");
+
+static async Task<List<Episode>?> FetchAllEpisodesAsync(string initialUrl, HttpClient httpClient, ResiliencePipeline<HttpResponseMessage> retryPolicy)
 {
     var allEpisodes = new List<Episode>();
     string? nextUrl = initialUrl;
 
     while (!string.IsNullOrEmpty(nextUrl))
     {
-        var response = await httpClient.GetAsync(nextUrl);
+        var response = await retryPolicy.ExecuteAsync(async ct => await httpClient.GetAsync(nextUrl, ct), CancellationToken.None);
         response.EnsureSuccessStatusCode();
 
         string content = await response.Content.ReadAsStringAsync();
@@ -276,7 +307,7 @@ static async Task<List<Episode>?> FetchAllEpisodesAsync(string initialUrl, HttpC
 
         if (root.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array)
         {
-            var episodes = JsonSerializer.Deserialize(items.GetRawText(), PodcastJsonContext.Default.ListEpisode);
+            var episodes = JsonSerializer.Deserialize<List<Episode>>(items.GetRawText(), new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
             if (episodes != null)
                 allEpisodes.AddRange(episodes);
         }

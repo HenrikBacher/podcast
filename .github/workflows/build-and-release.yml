@@ -20,116 +20,15 @@ env:
   DOTNET_VERSION: "9.0.x"
 
 jobs:
-  determine-version:
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.version.outputs.version }}
-      version-tag: ${{ steps.version.outputs.version-tag }}
-      is-prerelease: ${{ steps.version.outputs.is-prerelease }}
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-
-      - name: Determine Version
-        id: version
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: pwsh
-        run: |
-          # Get the latest stable release using GitHub CLI, fallback to v0.0.0 if fails
-          $latestTag = "v0.0.0"
-          try {
-            $tag = & gh release list --limit 1 --exclude-pre-releases --json tagName --jq '.[0].tagName' 2>$null
-            if ($tag) { $latestTag = $tag }
-          } catch {
-            Write-Host "Failed to get release tag from gh, using v0.0.0"
-          }
-          Write-Host "Latest stable release: $latestTag"
-
-          # Parse version numbers
-          $versionNumber = $latestTag.TrimStart("v")
-          $parts = $versionNumber -split '\.'
-          $major = [int]$parts[0]
-          $minor = [int]$parts[1]
-          $patch = [int]$parts[2]
-
-          # Default to patch bump
-          $bumpType = "patch"
-          $isPrerelease = "false"
-
-          # Check for version bump indicators in PR or commit messages
-          $event = $null
-          if ("${{ github.event_name }}" -eq "pull_request") {
-            $isPrerelease = "true"
-            try {
-              $event = Get-Content -Raw -Path $env:GITHUB_EVENT_PATH | ConvertFrom-Json
-              $prBody = $event.pull_request.body
-            } catch {
-              $prBody = ""
-            }
-            if ($null -eq $prBody) { $prBody = "" }
-            if ($prBody -imatch "breaking change|major version|\[major\]") {
-              $bumpType = "major"
-            } elseif ($prBody -imatch "feature|minor version|\[minor\]") {
-              $bumpType = "minor"
-            } else {
-              # Default to patch if PR description doesn't match expected format
-              $bumpType = "patch"
-            }
-          } else {
-            # Direct commit to main - check commit message
-            $commitMsg = git log -1 --pretty=%B
-            if ($commitMsg -match "breaking change|major version|\[major\]") {
-              $bumpType = "major"
-            } elseif ($commitMsg -match "feature|minor version|\[minor\]") {
-              $bumpType = "minor"
-            } else {
-              $bumpType = "patch"
-            }
-          }
-
-          Write-Host "Bump type: $bumpType"
-          Write-Host "Is prerelease: $isPrerelease"
-
-          # Calculate new version
-          switch ($bumpType) {
-            "major" { $newVersion = "$($major + 1).0.0" }
-            "minor" { $newVersion = "$major.$($minor + 1).0" }
-            "patch" { $newVersion = "$major.$minor.$($patch + 1)" }
-          }
-
-          # Add prerelease suffix for PR builds, handle missing PR context
-          if ($isPrerelease -eq "true") {
-            try {
-              if (-not $event) { $event = Get-Content -Raw -Path $env:GITHUB_EVENT_PATH | ConvertFrom-Json }
-              $prNumber = $event.pull_request.number
-              $commitSha = $event.pull_request.head.sha
-            } catch { }
-            if (-not $prNumber) { $prNumber = "0" }
-            if (-not $commitSha) { $commitSha = "$env:GITHUB_SHA" }
-            $shortSha = $commitSha.Substring(0,8)
-            $newVersion = "$newVersion-pr.$prNumber.$shortSha"
-          }
-
-          Write-Host "New version: $newVersion"
-          "version=$newVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          "version-tag=v$newVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          "is-prerelease=$isPrerelease" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-
   build:
-    needs: determine-version
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
         include:
           - os: ubuntu-latest
             runtime: linux-x64
             artifact-name: DrPodcast-linux-x64
-          - os: ubuntu-24.04-arm
-            runtime: linux-arm64
-            artifact-name: DrPodcast-linux-arm64
           - os: windows-latest
             runtime: win-x64
             artifact-name: DrPodcast-win-x64
@@ -139,6 +38,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
@@ -149,7 +50,7 @@ jobs:
         run: dotnet restore src/DrPodcast.csproj
 
       - name: Build
-        run: dotnet build src/DrPodcast.csproj --no-restore --configuration Release -p:Version=${{ needs.determine-version.outputs.version }}
+        run: dotnet build src/DrPodcast.csproj --no-restore --configuration Release
 
       - name: Run Tests
         run: dotnet test tests/DrPodcast.Tests/DrPodcast.Tests.csproj --configuration Release --verbosity normal --logger "trx;LogFileName=test-results.trx" --collect:"XPlat Code Coverage"
@@ -172,9 +73,7 @@ jobs:
             --runtime ${{ matrix.runtime }} `
             --self-contained true `
             --output ./publish/${{ matrix.runtime }} `
-            -p:PublishSingleFile=true `
-            -p:PublishTrimmed=true `
-            -p:Version=${{ needs.determine-version.outputs.version }}
+            -p:PublishSingleFile=true
 
       - name: Prepare Executable
         shell: pwsh
@@ -208,9 +107,11 @@ jobs:
           retention-days: 30
 
   release:
-    needs: [determine-version, build]
+    needs: build
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v5
 
@@ -219,19 +120,26 @@ jobs:
         with:
           path: ./artifacts
 
-      - name: Create Release and Upload All Assets
+      - name: Generate version tag
+        id: version
+        run: |
+          # Use date-based versioning: YYYY.MM.DD.BUILD
+          VERSION=$(date +'%Y.%m.%d').${{ github.run_number }}
+          echo "version=v$VERSION" >> $GITHUB_OUTPUT
+          echo "Generated version: v$VERSION"
+
+      - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.determine-version.outputs.version-tag }}
-          name: ${{ needs.determine-version.outputs.is-prerelease == 'true' && format('Prerelease {0}', needs.determine-version.outputs.version-tag) || format('Release {0}', needs.determine-version.outputs.version-tag) }}
+          tag_name: ${{ steps.version.outputs.version }}
+          name: Release ${{ steps.version.outputs.version }}
           body: |
-            ${{ needs.determine-version.outputs.is-prerelease == 'true' && '## 🚧 Prerelease Build' || '## ✅ Stable Release' }}
+            ## Release ${{ steps.version.outputs.version }}
 
-            ${{ needs.determine-version.outputs.is-prerelease == 'true' && format('This is a prerelease build from PR #{0}. Use for testing purposes only.', github.event.pull_request.number) || 'This release was automatically generated and is ready for production use.' }}
+            Automated release build from commit ${{ github.sha }}
 
             ### Download
             - **Linux (x64)**: DrPodcast-linux-x64
-            - **Linux (arm64)**: DrPodcast-linux-arm64
             - **Windows (x64)**: DrPodcast-win-x64.exe
             - **macOS (arm64)**: DrPodcast-osx-arm64
 
@@ -251,58 +159,11 @@ jobs:
             $actual = (Get-FileHash DrPodcast-win-x64.exe -Algorithm SHA256).Hash.ToLower()
             if ($expected -eq $actual) { "✓ Checksum verified" } else { "✗ Checksum mismatch" }
             ```
-
-            ${{ needs.determine-version.outputs.is-prerelease == 'true' && '⚠️ **Warning**: This is a prerelease version and may contain bugs.' || '' }}
           draft: false
-          prerelease: ${{ needs.determine-version.outputs.is-prerelease == 'true' }}
+          prerelease: false
           files: |
             ./artifacts/**/*.exe
             ./artifacts/**/*.sha256
             ./artifacts/DrPodcast-linux-x64/DrPodcast-linux-x64
-            ./artifacts/DrPodcast-linux-arm64/DrPodcast-linux-arm64
             ./artifacts/DrPodcast-osx-arm64/DrPodcast-osx-arm64
           token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Delete Prerelease Versions
-        if: needs.determine-version.outputs.is-prerelease == 'false'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "🧹 Deleting prerelease versions after stable release..."
-
-          # Wait a moment to ensure the stable release is fully created
-          sleep 5
-
-          # Get all releases
-          RELEASES=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
-            "https://api.github.com/repos/${{ github.repository }}/releases")
-
-          # Extract prerelease IDs (only those marked as prerelease AND containing version patterns)
-          PRERELEASE_IDS=$(echo "$RELEASES" | jq -r '.[] | select(.prerelease == true and (.tag_name | test("-pr\\."))) | .id')
-
-          if [ -z "$PRERELEASE_IDS" ]; then
-            echo "No prerelease versions found to delete."
-          else
-            echo "Found prerelease versions to delete:"
-            for ID in $PRERELEASE_IDS; do
-              # Get release info for logging
-              RELEASE_INFO=$(echo "$RELEASES" | jq -r ".[] | select(.id == $ID)")
-              RELEASE_NAME=$(echo "$RELEASE_INFO" | jq -r '.name')
-              RELEASE_TAG=$(echo "$RELEASE_INFO" | jq -r '.tag_name')
-              
-              echo "  - Deleting: $RELEASE_NAME (Tag: $RELEASE_TAG, ID: $ID)"
-              
-              # Delete the prerelease
-              DELETE_RESPONSE=$(curl -s -w "%{http_code}" -X DELETE \
-                -H "Authorization: token $GITHUB_TOKEN" \
-                "https://api.github.com/repos/${{ github.repository }}/releases/$ID")
-              
-              HTTP_CODE=${DELETE_RESPONSE: -3}
-              if [ "$HTTP_CODE" = "204" ]; then
-                echo "    ✅ Successfully deleted prerelease $RELEASE_TAG"
-              else
-                echo "    ❌ Failed to delete prerelease $RELEASE_TAG (HTTP: $HTTP_CODE)"
-              fi
-            done
-            echo "🎉 Prerelease cleanup completed!"
-          fi

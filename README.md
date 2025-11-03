@@ -1,6 +1,6 @@
 # DrPodcast
 
-DrPodcast is an automated podcast RSS feed generator that fetches podcast data from DR (Danmarks Radio) and generates iTunes-compatible RSS feeds. The project features cross-platform NativeAOT compiled binaries and automated CI/CD workflows for building releases and deploying to GitHub Pages.
+DrPodcast is an automated podcast RSS feed generator that fetches podcast data from DR (Danmarks Radio) and generates iTunes-compatible RSS feeds. The project features cross-platform self-contained executables and automated CI/CD workflows for building releases and deploying to GitHub Pages.
 
 This tool currently processes **34 Danish podcasts** from DR's catalog, generating high-quality RSS feeds with full iTunes metadata support.
 
@@ -9,8 +9,8 @@ This tool currently processes **34 Danish podcasts** from DR's catalog, generati
 - **DR API Integration**: Fetches podcast series and episode data from DR's public API with retry policies
 - **iTunes-Compatible RSS**: Generates RSS feeds with full iTunes metadata, categories, and images
 - **Episode Management**: Supports both episodic and serial ordering with automatic pagination
-- **High Performance**: NativeAOT compiled binaries for fast startup and minimal resource usage
-- **Cross-Platform**: Supports Linux (x64, ARM64), Windows (x64), and macOS (Apple Silicon)
+- **High Performance**: Self-contained executables for fast startup and minimal resource usage
+- **Cross-Platform**: Supports Linux (x64), Windows (x64), and macOS (Apple Silicon)
 - **Automated Deployment**: GitHub Actions workflows for continuous integration and feed generation
 - **Web Interface**: Static website for browsing and accessing available podcast feeds
 - **Resilient Operation**: Built-in retry logic and error handling for reliable feed generation
@@ -18,17 +18,13 @@ This tool currently processes **34 Danish podcasts** from DR's catalog, generati
 ## Project Structure
 
 - **[src/](src/)**: C# source code (.NET 9.0)
-  - [DrPodcast.csproj](src/DrPodcast.csproj): Project file with NativeAOT and optimization settings
+  - [DrPodcast.csproj](src/DrPodcast.csproj): Project file with simple configuration
   - [PodcastFeedGenerator.cs](src/PodcastFeedGenerator.cs): Main application entry point and RSS generation logic
-  - [PodcastModels.cs](src/PodcastModels.cs): Data models with source-generated JSON serialization
+  - [PodcastModels.cs](src/PodcastModels.cs): Data models for JSON serialization
   - [PodcastHelpers.cs](src/PodcastHelpers.cs): Helper functions for category mapping and image URL extraction
-  - **Configuration/**: Configuration-related components
-  - **Services/**: Service layer components
 
-- **[tests/](tests/)**: Test suite (xUnit)
-  - [PodcastModelsTests.cs](tests/DrPodcast.Tests/PodcastModelsTests.cs): Model serialization tests
-  - [PodcastHelpersTests.cs](tests/DrPodcast.Tests/PodcastHelpersTests.cs): Helper function tests
-  - [FeedGenerationTests.cs](tests/DrPodcast.Tests/FeedGenerationTests.cs): RSS feed generation tests
+- **[tests/](tests/)**: Test suite (xUnit) - 22 focused tests
+  - [DrPodcastTests.cs](tests/DrPodcast.Tests/DrPodcastTests.cs): Comprehensive test coverage for all functionality
 
 - **[site/](site/)**: Static website for feed browsing
   - [index.html](site/index.html): Main page listing all available podcast feeds
@@ -73,7 +69,6 @@ Generated RSS feeds will be saved in the `output/` directory with filenames matc
 
 Download the latest release for your platform from the [Releases](../../releases) page:
 - **DrPodcast-linux-x64** - Linux (x64)
-- **DrPodcast-linux-arm64** - Linux (ARM64)
 - **DrPodcast-win-x64.exe** - Windows (x64)
 - **DrPodcast-osx-arm64** - macOS (Apple Silicon)
 
@@ -109,7 +104,7 @@ dotnet watch test --project tests/DrPodcast.Tests/DrPodcast.Tests.csproj
 ```
 
 ### Test Coverage
-The test suite includes 52 tests covering:
+The test suite includes 22 focused tests covering:
 - **Model Serialization**: JSON deserialization of podcast models, episodes, and metadata
 - **Helper Functions**: Category mapping, image URL extraction, and priority selection
 - **RSS Feed Generation**: XML structure validation, namespaces, and iTunes metadata
@@ -149,13 +144,13 @@ To find a podcast's URN, inspect DR's website network requests or contact DR for
 
 ## Technical Details
 
-- **Runtime**: .NET 9.0 with NativeAOT compilation for optimal performance
-- **Binary Size**: Small, self-contained executables (~15-30MB per platform)
+- **Runtime**: .NET 9.0 with self-contained single-file executables
+- **Binary Size**: Compact executables (~30-50MB per platform)
 - **HTTP Resilience**: Polly retry policies with exponential backoff for API reliability
-- **JSON Processing**: Source-generated serialization for trim-safe, high-performance parsing
+- **JSON Processing**: Standard System.Text.Json for reliable serialization
 - **RSS Standards**: Compliant with RSS 2.0, iTunes, Atom, and Media RSS specifications
 - **Memory Efficiency**: Streaming processing for large podcast catalogs
-- **Cross-Platform**: Native binaries for Linux (x64/ARM64), Windows (x64), and macOS (ARM64)
+- **Cross-Platform**: Binaries for Linux (x64), Windows (x64), and macOS (ARM64)
 
 ## CI/CD Workflows
 
@@ -165,13 +160,12 @@ Automatically triggered on:
 - Pull requests affecting `src/` or `tests/` directories
 
 **Process:**
-- Semantic versioning from commit messages and PR labels
+- Date-based versioning (YYYY.MM.DD.BUILD_NUMBER)
 - Dependency restoration and project build
 - **Automated test execution** with code coverage collection
 - Test results uploaded as artifacts (retained for 7 days)
-- Cross-platform NativeAOT compilation (Linux x64/ARM64, Windows x64, macOS ARM64)
-- Automated GitHub releases (prereleases for PRs, stable for main)
-- Artifact cleanup and prerelease management
+- Cross-platform compilation (Linux x64, Windows x64, macOS ARM64)
+- Automated GitHub releases with checksums
 
 ### Feed Generation (`generate-feed.yml`)
 Runs on schedule and configuration changes:
