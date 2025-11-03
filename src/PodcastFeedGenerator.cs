@@ -157,13 +157,13 @@ var tasks = podcastList?.Podcasts.Select(async podcast =>
                 string epLink = episode.PresentationUrl ?? "";
                 string? epImage = PodcastHelpers.GetImageUrlFromAssets(episode.ImageAssets) ?? channelModel.Image;
 
-                // Select the highest quality mp3 using LINQ and pattern matching
-                var (epAudio, epAudioLength) = episode.AudioAssets?
-                    .Where(a => a?.Format == "mp3")
+                // Select the highest quality mp4 using LINQ and pattern matching
+                var (epAudio, epAudioLength, epAudioFormat) = episode.AudioAssets?
+                    .Where(a => a?.Format == "mp4")
                     .OrderByDescending(a => a?.Bitrate ?? 0)
                     .FirstOrDefault() is { } best
-                    ? (best.Url ?? "", best.FileSize ?? 0)
-                    : ("", 0);
+                    ? (best.Url ?? "", best.FileSize ?? 0, best.Format ?? "mp4")
+                    : ("", 0, "mp4");
 
                 string itunesDuration = episode.DurationMilliseconds > 0
                     ? TimeSpan.FromMilliseconds(episode.DurationMilliseconds.Value).ToString(@"hh\:mm\:ss")
@@ -203,9 +203,17 @@ var tasks = podcastList?.Podcasts.Select(async podcast =>
 
                 if (!string.IsNullOrEmpty(epAudio))
                 {
+                    // Determine MIME type based on audio format
+                    string mimeType = epAudioFormat switch
+                    {
+                        "mp4" => "audio/mp4",
+                        "mp3" => "audio/mpeg",
+                        _ => "audio/mpeg"
+                    };
+
                     var enclosure = new XElement("enclosure",
                         new XAttribute("url", epAudio),
-                        new XAttribute("type", "audio/mpeg"));
+                        new XAttribute("type", mimeType));
 
                     if (epAudioLength > 0)
                         enclosure.Add(new XAttribute("length", epAudioLength));
