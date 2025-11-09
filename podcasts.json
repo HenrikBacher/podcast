@@ -129,8 +129,12 @@
       "urn": "urn:dr:radio:series:5fa15703da351264f87b46c6"
     },
     {
-      "slug": "bravo",
-      "urn": "urn:dr:radio:series:5fa26536330eac2f135b8368"
+      "slug": "formiddag-med-simpson",
+      "urn": "urn:dr:radio:series:5fa15fc0da351264f87b785d"
+    },
+    {
+      "slug": "nyborg-station",
+      "urn": "urn:dr:radio:series:605db7167952218d2f02f01c"
     }
   ]
 }
