@@ -81,7 +81,7 @@ The test suite includes:
 - `BASE_URL`: Base URL for deployed feeds (default: "https://example.com")
 
 ### Project Configuration
-- **Target Framework**: .NET 9.0
+- **Target Framework**: .NET 10.0
 - **Compilation**: NativeAOT with aggressive trimming and optimization
 - **Warning Policy**: Treats warnings as errors (except CS8618 for nullable reference types)
 - **Globalization**: Invariant mode for smaller binary size
