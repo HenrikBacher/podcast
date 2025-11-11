@@ -69,9 +69,9 @@ public class PodcastHelpersTests
         // Arrange
         var imageAssets = new List<ImageAsset>
         {
-            new() { Id = "default-img", Target = "default", Ratio = "16:9" },
-            new() { Id = "podcast-img", Target = "podcast", Ratio = "1:1" },
-            new() { Id = "other-img", Target = "other", Ratio = "1:1" }
+            new("default-img", "default", "16:9"),
+            new("podcast-img", "podcast", "1:1"),
+            new("other-img", "other", "1:1")
         };
 
         // Act
@@ -87,8 +87,8 @@ public class PodcastHelpersTests
         // Arrange
         var imageAssets = new List<ImageAsset>
         {
-            new() { Id = "default-img", Target = "default", Ratio = "1:1" },
-            new() { Id = "other-img", Target = "other", Ratio = "16:9" }
+            new("default-img", "default", "1:1"),
+            new("other-img", "other", "16:9")
         };
 
         // Act
@@ -104,8 +104,8 @@ public class PodcastHelpersTests
         // Arrange
         var imageAssets = new List<ImageAsset>
         {
-            new() { Id = "podcast-img", Target = "podcast", Ratio = "16:9" },
-            new() { Id = "other-img", Target = "other", Ratio = "1:1" }
+            new("podcast-img", "podcast", "16:9"),
+            new("other-img", "other", "1:1")
         };
 
         // Act
@@ -121,8 +121,8 @@ public class PodcastHelpersTests
         // Arrange
         var imageAssets = new List<ImageAsset>
         {
-            new() { Id = "default-img", Target = "default", Ratio = "16:9" },
-            new() { Id = "other-img", Target = "other", Ratio = "1:1" }
+            new("default-img", "default", "16:9"),
+            new("other-img", "other", "1:1")
         };
 
         // Act
@@ -138,7 +138,7 @@ public class PodcastHelpersTests
         // Arrange
         var imageAssets = new List<ImageAsset>
         {
-            new() { Id = "podcast-img", Target = "PODCAST", Ratio = "1:1" }
+            new("podcast-img", "PODCAST", "1:1")
         };
 
         // Act
@@ -154,7 +154,7 @@ public class PodcastHelpersTests
         // Arrange
         var imageAssets = new List<ImageAsset>
         {
-            new() { Id = "", Target = "podcast", Ratio = "1:1" }
+            new("", "podcast", "1:1")
         };
 
         // Act
@@ -170,7 +170,7 @@ public class PodcastHelpersTests
         // Arrange
         var imageAssets = new List<ImageAsset>
         {
-            new() { Id = null, Target = "podcast", Ratio = "1:1" }
+            new(null, "podcast", "1:1")
         };
 
         // Act
@@ -186,7 +186,7 @@ public class PodcastHelpersTests
         // Arrange
         var imageAssets = new List<ImageAsset>
         {
-            new() { Id = "test-image-id-12345", Target = "podcast", Ratio = "1:1" }
+            new("test-image-id-12345", "podcast", "1:1")
         };
 
         // Act
@@ -202,10 +202,10 @@ public class PodcastHelpersTests
         // Arrange - Test the full priority chain
         var imageAssets = new List<ImageAsset>
         {
-            new() { Id = "img1", Target = "other", Ratio = "1:1" },
-            new() { Id = "img2", Target = "default", Ratio = "16:9" },
-            new() { Id = "img3", Target = "podcast", Ratio = "16:9" },
-            new() { Id = "img4", Target = "default", Ratio = "4:3" }
+            new("img1", "other", "1:1"),
+            new("img2", "default", "16:9"),
+            new("img3", "podcast", "16:9"),
+            new("img4", "default", "4:3")
         };
 
         // Act
