@@ -100,7 +100,7 @@ jobs:
 
           Write-Host "Downloaded and prepared release executable for $platform"
 
-      - name: Run feed generator
+      - name: Run feed generator (generates feeds and website)
         env:
           API_KEY: ${{ secrets.API_KEY }}
           BASE_URL: ${{ secrets.BASE_URL }}
@@ -111,14 +111,6 @@ jobs:
           } else {
             & ./DrPodcast --podcasts podcasts.json
           }
-
-      - name: Copy site files
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Path "output/_site" -Force
-          New-Item -ItemType Directory -Path "output/_site/feeds" -Force
-          Copy-Item -Path "site/*" -Destination "output/_site/" -Recurse -Force
-          Copy-Item -Path "output/*.xml" -Destination "output/_site/feeds/" -Force
 
       - name: Check for deployment changes
         id: deployment_check
@@ -173,57 +165,6 @@ jobs:
           }
 
           "needs_deploy=$needsDeploy" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-
-      - name: Generate index.html
-        if: steps.deployment_check.outputs.needs_deploy == 'true'
-        shell: pwsh
-        run: |
-          # Get current timestamp in ISO 8601 format
-          $currentTime = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-
-          # Generate feeds HTML
-          $feedsHtml = ""
-          $feeds = Get-ChildItem -Path "output/_site/feeds/*.xml"
-          foreach ($feed in $feeds) {
-            $filename = [System.IO.Path]::GetFileNameWithoutExtension($feed.Name)
-            
-            # Extract RSS feed content
-            $content = Get-Content -Path $feed.FullName -Raw
-            
-            # Extract title from RSS feed and remove "(Reproduceret feed)" suffix
-            $titleMatch = [regex]::Match($content, '<title>([^<]+)</title>')
-            $title = if ($titleMatch.Success) {
-              $extractedTitle = $titleMatch.Groups[1].Value
-              # Remove "(Reproduceret feed)" or similar patterns in parentheses at the end
-              $cleanTitle = $extractedTitle -replace '\s*\([^)]*feed[^)]*\)\s*$', ''
-              $cleanTitle.Trim()
-            } else {
-              # Fallback to filename formatting if title extraction fails
-              $filename -replace '-', ' '
-            }
-            
-            # Extract image URL from the RSS feed's itunes:image element
-            $imageMatch = [regex]::Match($content, '<itunes:image[^>]*href="([^"]*)"')
-            $imageUrl = if ($imageMatch.Success) { $imageMatch.Groups[1].Value } else { "" }
-            
-            if ($imageUrl) {
-              $feedsHtml += "<li><a class='feed-link' href='feeds/$filename.xml'><img class='feed-icon' src='$imageUrl' loading='lazy' alt='$title'><span class='feed-title'>$title</span></a></li>"
-            } else {
-              $feedsHtml += "<li><a class='feed-link' href='feeds/$filename.xml'><div class='feed-icon'></div><span class='feed-title'>$title</span></a></li>"
-            }
-          }
-
-          # Read the index.html file
-          $indexContent = Get-Content -Path "output/_site/index.html" -Raw
-
-          # Insert deployment timestamp meta tag after opening head tag
-          $indexContent = $indexContent -replace '(<head>)', "`$1`n    <meta name=`"deployment-time`" content=`"$currentTime`">"
-
-          # Replace entire section between markers with generated feeds
-          $indexContent = $indexContent -replace '(?s)<!-- BEGIN_FEEDS -->.*?<!-- END_FEEDS -->', "<!-- BEGIN_FEEDS -->`n        $feedsHtml`n        <!-- END_FEEDS -->"
-
-          # Write back to file
-          $indexContent | Set-Content -Path "output/_site/index.html" -NoNewline
 
       - name: Setup Pages
         if: steps.deployment_check.outputs.needs_deploy == 'true'

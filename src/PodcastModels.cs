@@ -48,26 +48,6 @@ public record ImageAsset(
     [property: JsonPropertyName("ratio")] string? Ratio
 );
 
-public record Channel(
-    [property: JsonPropertyName("title")] string? Title,
-    [property: JsonPropertyName("link")] string? Link,
-    [property: JsonPropertyName("description")] string? Description,
-    [property: JsonPropertyName("language")] string? Language,
-    [property: JsonPropertyName("copyright")] string? Copyright,
-    [property: JsonPropertyName("lastBuildDate")] string? LastBuildDate,
-    [property: JsonPropertyName("explicit")] string? Explicit,
-    [property: JsonPropertyName("author")] string? Author,
-    [property: JsonPropertyName("block")] string? Block,
-    [property: JsonPropertyName("owner")] ChannelOwner? Owner,
-    [property: JsonPropertyName("new-feed-url")] string? NewFeedUrl,
-    [property: JsonPropertyName("image")] string? Image
-);
-
-public record ChannelOwner(
-    [property: JsonPropertyName("email")] string? Email,
-    [property: JsonPropertyName("name")] string? Name
-);
-
 public record Series(
     [property: JsonPropertyName("type")] string? Type,
     [property: JsonPropertyName("categories")] List<string>? Categories,

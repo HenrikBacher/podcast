@@ -266,31 +266,6 @@ public class PodcastModelsTests
     }
 
     [Fact]
-    public void Channel_ShouldDeserializeWithOwner()
-    {
-        // Arrange
-        var channelModel = new Channel(
-            Title: "Test Channel",
-            Link: "https://example.com",
-            Description: "Test Description",
-            Language: "da",
-            Copyright: "DR",
-            LastBuildDate: "Mon, 01 Jan 2024 12:00:00 +00:00",
-            Explicit: "no",
-            Author: "DR",
-            Block: "yes",
-            Owner: new ChannelOwner("test@dr.dk", "DR Test"),
-            NewFeedUrl: "https://example.com/feed.xml",
-            Image: "https://example.com/image.jpg"
-        );
-
-        // Assert
-        channelModel.Owner.Should().NotBeNull();
-        channelModel.Owner!.Email.Should().Be("test@dr.dk");
-        channelModel.Owner.Name.Should().Be("DR Test");
-    }
-
-    [Fact]
     public void ImageAsset_ShouldHandleAllProperties()
     {
         // Arrange
