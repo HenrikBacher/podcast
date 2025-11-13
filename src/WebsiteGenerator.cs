@@ -20,6 +20,9 @@ public static class WebsiteGenerator
             // Generate index.html with feed list
             GenerateIndexHtml(feeds, config);
 
+            // Generate manifest.json
+            GenerateManifest(feeds, config);
+
             Console.WriteLine("Website generation complete!");
         }
         catch (Exception ex)
@@ -108,5 +111,51 @@ public static class WebsiteGenerator
         }
 
         return sb.ToString().TrimEnd();
+    }
+
+    private static void GenerateManifest(IEnumerable<FeedMetadata> feeds, GeneratorConfig config)
+    {
+        var feedFiles = new List<FeedFileInfo>();
+
+        foreach (var feed in feeds)
+        {
+            var feedPath = Path.Combine(config.FeedsDir, $"{feed.Slug}.xml");
+
+            if (!File.Exists(feedPath))
+            {
+                Console.WriteLine($"Warning: Feed file not found for manifest: {feedPath}");
+                continue;
+            }
+
+            var fileInfo = new FileInfo(feedPath);
+            var hash = ComputeFileHash(feedPath);
+
+            feedFiles.Add(new FeedFileInfo(
+                Name: $"{feed.Slug}.xml",
+                Hash: hash,
+                Size: fileInfo.Length,
+                Title: feed.Title
+            ));
+        }
+
+        var manifest = new FeedManifest(
+            Timestamp: DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+            FeedCount: feedFiles.Count,
+            Feeds: feedFiles.OrderBy(f => f.Title).ToList()
+        );
+
+        var manifestPath = Path.Combine(config.FullSiteDir, "manifest.json");
+        var json = JsonSerializer.Serialize(manifest, PodcastJsonContext.Default.FeedManifest);
+        File.WriteAllText(manifestPath, json);
+
+        Console.WriteLine($"Generated manifest.json with {feedFiles.Count} feeds");
+    }
+
+    private static string ComputeFileHash(string filePath)
+    {
+        using var stream = File.OpenRead(filePath);
+        using var sha256 = System.Security.Cryptography.SHA256.Create();
+        var hash = sha256.ComputeHash(stream);
+        return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
     }
 }

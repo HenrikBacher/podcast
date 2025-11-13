@@ -119,65 +119,68 @@ jobs:
         shell: pwsh
         run: |
           $siteUrl = gh api "repos/$env:GITHUB_REPOSITORY/pages" --jq '.html_url'
+          $manifestPath = "output/_site/manifest.json"
           $needsDeploy = $false
 
-          # Check if feeds directory exists and has files
-          $feedsPath = "output/_site/feeds"
-          if (-not (Test-Path $feedsPath)) {
-            Write-Host "Feeds directory does not exist. No feeds generated."
+          # Check if manifest exists
+          if (-not (Test-Path $manifestPath)) {
+            Write-Host "No manifest.json found. No feeds generated or manifest creation failed."
             "needs_deploy=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
             exit 0
           }
 
-          # Check each feed for changes
-          $feeds = Get-ChildItem -Path "$feedsPath/*.xml" -ErrorAction SilentlyContinue
-          if (-not $feeds) {
-            Write-Host "No feed files found. Skipping deployment."
-            "needs_deploy=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-            exit 0
-          }
+          # Read local manifest
+          $localManifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
+          Write-Host "Local manifest: $($localManifest.feedCount) feeds, timestamp: $($localManifest.timestamp)"
 
-          foreach ($feed in $feeds) {
-            $filename = $feed.Name
+          # Try to fetch remote manifest
+          try {
+            $remoteManifest = Invoke-RestMethod -Uri "${siteUrl}manifest.json" -TimeoutSec 10 -ErrorAction Stop
+            Write-Host "Remote manifest: $($remoteManifest.feedCount) feeds, timestamp: $($remoteManifest.timestamp)"
 
-            # Get current hash
-            $currentHash = (Get-FileHash -Path $feed.FullName -Algorithm SHA256).Hash.ToLower()
-
-            # Try to get deployed file hash
-            try {
-              $deployedContent = Invoke-WebRequest -Uri "${siteUrl}feeds/$filename" -TimeoutSec 10 -ErrorAction Stop
-              $deployedHash = (Get-FileHash -InputStream ([System.IO.MemoryStream]::new([System.Text.Encoding]::UTF8.GetBytes($deployedContent.Content))) -Algorithm SHA256).Hash.ToLower()
-            } catch {
-              $deployedHash = "none"
-            }
-
-            Write-Host "Checking $filename"
-            Write-Host "Current hash: $currentHash"
-            Write-Host "Deployed hash: $deployedHash"
-
-            if ($currentHash -ne $deployedHash) {
-              Write-Host "Changes detected in $filename"
-              $needsDeploy = $true
-              break
-            }
-          }
-
-          if (-not $needsDeploy) {
-            # Check if number of files changed
-            try {
-              $liveContent = Invoke-WebRequest -Uri $siteUrl -TimeoutSec 10 -ErrorAction Stop
-              $liveCount = ([regex]::Matches($liveContent.Content, "class='feed-link'")).Count
-            } catch {
-              $liveCount = 0
-            }
-            $currentCount = (Get-ChildItem -Path "output/_site/feeds" -Filter "*.xml" -ErrorAction SilentlyContinue).Count
-            
-            if ($currentCount -ne $liveCount) {
-              Write-Host "Number of XML files changed (current: $currentCount, live: $liveCount)"
+            # Compare feed counts
+            if ($localManifest.feedCount -ne $remoteManifest.feedCount) {
+              Write-Host "Feed count changed: $($remoteManifest.feedCount) -> $($localManifest.feedCount)"
               $needsDeploy = $true
             }
+            else {
+              # Compare feed hashes
+              $localHashes = ($localManifest.feeds | ForEach-Object { $_.hash }) | Sort-Object
+              $remoteHashes = ($remoteManifest.feeds | ForEach-Object { $_.hash }) | Sort-Object
+
+              $localHashString = $localHashes -join ","
+              $remoteHashString = $remoteHashes -join ","
+
+              if ($localHashString -ne $remoteHashString) {
+                Write-Host "Feed content changed (hash mismatch)"
+
+                # Find which feeds changed
+                $remoteHashTable = @{}
+                foreach ($feed in $remoteManifest.feeds) {
+                  $remoteHashTable[$feed.name] = $feed.hash
+                }
+
+                foreach ($feed in $localManifest.feeds) {
+                  $remoteFeedHash = $remoteHashTable[$feed.name]
+                  if ($remoteFeedHash -and $remoteFeedHash -ne $feed.hash) {
+                    Write-Host "  Changed: $($feed.title) ($($feed.name))"
+                  } elseif (-not $remoteFeedHash) {
+                    Write-Host "  New: $($feed.title) ($($feed.name))"
+                  }
+                }
+
+                $needsDeploy = $true
+              }
+              else {
+                Write-Host "No changes detected - manifests match"
+              }
+            }
+          } catch {
+            Write-Host "Could not fetch remote manifest (first deployment or manifest missing): $_"
+            $needsDeploy = $true
           }
 
+          Write-Host "Deployment needed: $needsDeploy"
           "needs_deploy=$needsDeploy" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Setup Pages

@@ -3,6 +3,7 @@ namespace DrPodcast;
 [JsonSerializable(typeof(PodcastList))]
 [JsonSerializable(typeof(Series))]
 [JsonSerializable(typeof(List<Episode>))]
+[JsonSerializable(typeof(FeedManifest))]
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 public partial class PodcastJsonContext : JsonSerializerContext
 {
@@ -23,6 +24,19 @@ public record GeneratorConfig(
     public string FullSiteDir => Path.Combine(OutputDir, SiteDir);
     public string FeedsDir => Path.Combine(FullSiteDir, "feeds");
 }
+
+public record FeedManifest(
+    [property: JsonPropertyName("timestamp")] string Timestamp,
+    [property: JsonPropertyName("feedCount")] int FeedCount,
+    [property: JsonPropertyName("feeds")] List<FeedFileInfo> Feeds
+);
+
+public record FeedFileInfo(
+    [property: JsonPropertyName("name")] string Name,
+    [property: JsonPropertyName("hash")] string Hash,
+    [property: JsonPropertyName("size")] long Size,
+    [property: JsonPropertyName("title")] string Title
+);
 
 public record PodcastList
 {
