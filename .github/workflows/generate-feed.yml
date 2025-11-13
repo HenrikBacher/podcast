@@ -121,14 +121,28 @@ jobs:
           $siteUrl = gh api "repos/$env:GITHUB_REPOSITORY/pages" --jq '.html_url'
           $needsDeploy = $false
 
+          # Check if feeds directory exists and has files
+          $feedsPath = "output/_site/feeds"
+          if (-not (Test-Path $feedsPath)) {
+            Write-Host "Feeds directory does not exist. No feeds generated."
+            "needs_deploy=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            exit 0
+          }
+
           # Check each feed for changes
-          $feeds = Get-ChildItem -Path "output/_site/feeds/*.xml"
+          $feeds = Get-ChildItem -Path "$feedsPath/*.xml" -ErrorAction SilentlyContinue
+          if (-not $feeds) {
+            Write-Host "No feed files found. Skipping deployment."
+            "needs_deploy=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            exit 0
+          }
+
           foreach ($feed in $feeds) {
             $filename = $feed.Name
-            
+
             # Get current hash
             $currentHash = (Get-FileHash -Path $feed.FullName -Algorithm SHA256).Hash.ToLower()
-            
+
             # Try to get deployed file hash
             try {
               $deployedContent = Invoke-WebRequest -Uri "${siteUrl}feeds/$filename" -TimeoutSec 10 -ErrorAction Stop
@@ -136,11 +150,11 @@ jobs:
             } catch {
               $deployedHash = "none"
             }
-            
+
             Write-Host "Checking $filename"
             Write-Host "Current hash: $currentHash"
             Write-Host "Deployed hash: $deployedHash"
-            
+
             if ($currentHash -ne $deployedHash) {
               Write-Host "Changes detected in $filename"
               $needsDeploy = $true

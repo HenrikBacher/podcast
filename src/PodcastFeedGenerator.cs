@@ -27,99 +27,21 @@ var podcastList = JsonSerializer.Deserialize(
     await File.ReadAllTextAsync("podcasts.json"),
     PodcastJsonContext.Default.PodcastList);
 
-Directory.CreateDirectory("output");
+var config = new GeneratorConfig();
 
+// Generate RSS feeds and collect metadata
 var tasks = podcastList?.Podcasts.Select(podcast =>
-    ProcessPodcastAsync(podcast, httpClientFactory, baseUrl)).ToArray();
+    ProcessPodcastAsync(podcast, httpClientFactory, baseUrl, config)).ToArray();
 
-await Task.WhenAll(tasks!);
-Console.WriteLine("All podcast feeds generated.");
+var results = await Task.WhenAll(tasks!);
+var feedMetadata = results.Where(m => m != null).Cast<FeedMetadata>().ToList();
 
-GenerateWebsite();
+Console.WriteLine($"\nGenerated {feedMetadata.Count} podcast feeds.");
 
-static void GenerateWebsite()
-{
-    Console.WriteLine("Generating website...");
+// Generate website using collected metadata
+WebsiteGenerator.Generate(feedMetadata, config);
 
-    // Create output directories
-    var siteDir = Path.Combine("output", "_site");
-    var feedsDir = Path.Combine(siteDir, "feeds");
-    Directory.CreateDirectory(siteDir);
-    Directory.CreateDirectory(feedsDir);
-
-    // Copy static assets (CSS, JS, HTML template)
-    if (Directory.Exists("site"))
-    {
-        foreach (var file in Directory.GetFiles("site"))
-        {
-            var fileName = Path.GetFileName(file);
-            var destFile = Path.Combine(siteDir, fileName);
-            File.Copy(file, destFile, overwrite: true);
-            Console.WriteLine($"Copied {fileName} to site directory");
-        }
-    }
-
-    // Copy RSS feeds to feeds directory
-    var xmlFiles = Directory.GetFiles("output", "*.xml");
-    foreach (var xmlFile in xmlFiles)
-    {
-        var fileName = Path.GetFileName(xmlFile);
-        var destFile = Path.Combine(feedsDir, fileName);
-        File.Copy(xmlFile, destFile, overwrite: true);
-    }
-    Console.WriteLine($"Copied {xmlFiles.Length} RSS feeds to site/feeds directory");
-
-    // Generate feed list HTML
-    var feedsHtml = new StringBuilder();
-    foreach (var xmlFile in xmlFiles)
-    {
-        var feedFileName = Path.GetFileNameWithoutExtension(xmlFile);
-        var xmlContent = File.ReadAllText(xmlFile);
-
-        // Extract title
-        var titleMatch = Regex.Match(xmlContent, @"<title>([^<]+)</title>");
-        var title = titleMatch.Success
-            ? Regex.Replace(titleMatch.Groups[1].Value, @"\s*\([^)]*feed[^)]*\)\s*$", "", RegexOptions.IgnoreCase).Trim()
-            : feedFileName.Replace("-", " ");
-
-        // Extract image URL from itunes:image
-        var imageMatch = Regex.Match(xmlContent, @"<itunes:image[^>]*href=""([^""]*)""");
-        var imageUrl = imageMatch.Success ? imageMatch.Groups[1].Value : "";
-
-        // Build list item HTML
-        if (!string.IsNullOrEmpty(imageUrl))
-        {
-            feedsHtml.AppendLine($"        <li><a class='feed-link' href='feeds/{feedFileName}.xml'><img class='feed-icon' src='{imageUrl}' loading='lazy' alt='{title}'><span class='feed-title'>{title}</span></a></li>");
-        }
-        else
-        {
-            feedsHtml.AppendLine($"        <li><a class='feed-link' href='feeds/{feedFileName}.xml'><div class='feed-icon'></div><span class='feed-title'>{title}</span></a></li>");
-        }
-    }
-
-    // Read index.html template and inject generated content
-    var indexPath = Path.Combine(siteDir, "index.html");
-    if (File.Exists(indexPath))
-    {
-        var indexContent = File.ReadAllText(indexPath);
-
-        // Add deployment timestamp
-        var timestamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ");
-        indexContent = Regex.Replace(indexContent, @"(<head>)", $"$1\n    <meta name=\"deployment-time\" content=\"{timestamp}\">");
-
-        // Replace feed list content
-        indexContent = Regex.Replace(indexContent,
-            @"(?s)<!-- BEGIN_FEEDS -->.*?<!-- END_FEEDS -->",
-            $"<!-- BEGIN_FEEDS -->\n{feedsHtml}        <!-- END_FEEDS -->");
-
-        File.WriteAllText(indexPath, indexContent);
-        Console.WriteLine("Generated index.html with feed list");
-    }
-
-    Console.WriteLine("Website generation complete!");
-}
-
-static async Task ProcessPodcastAsync(Podcast podcast, IHttpClientFactory factory, string baseUrl)
+static async Task<FeedMetadata?> ProcessPodcastAsync(Podcast podcast, IHttpClientFactory factory, string baseUrl, GeneratorConfig config)
 {
     try
     {
@@ -134,19 +56,26 @@ static async Task ProcessPodcastAsync(Podcast podcast, IHttpClientFactory factor
 
         var episodes = await FetchAllEpisodesAsync($"{ApiUrl}{podcast.Urn}/episodes?limit=256", httpClient);
 
-        var rss = BuildRssFeed(series, episodes, podcast, baseUrl);
+        var (rss, metadata) = BuildRssFeed(series, episodes, podcast, baseUrl);
 
-        string outputPath = Path.Combine("output", $"{podcast.Slug}.xml");
+        // Ensure feeds directory exists
+        Directory.CreateDirectory(config.FeedsDir);
+
+        // Save directly to final location
+        string outputPath = Path.Combine(config.FeedsDir, $"{podcast.Slug}.xml");
         new XDocument(new XDeclaration("1.0", "utf-8", "yes"), rss).Save(outputPath);
-        Console.WriteLine($"Saved RSS feed: {outputPath}");
+        Console.WriteLine($"✓ Generated {podcast.Slug}");
+
+        return metadata;
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Failed to process {podcast.Urn}: {ex.Message}");
+        Console.WriteLine($"✗ Failed to process {podcast.Urn}: {ex.Message}");
+        return null;
     }
 }
 
-static XElement BuildRssFeed(Series? series, List<Episode>? episodes, Podcast podcast, string baseUrl)
+static (XElement rss, FeedMetadata metadata) BuildRssFeed(Series? series, List<Episode>? episodes, Podcast podcast, string baseUrl)
 {
     XNamespace atom = "http://www.w3.org/2005/Atom";
     XNamespace itunes = "http://www.itunes.com/dtds/podcast-1.0.dtd";
@@ -160,6 +89,9 @@ static XElement BuildRssFeed(Series? series, List<Episode>? episodes, Podcast po
         : DateTime.Now.ToString(Rfc822Format, CultureInfo.InvariantCulture);
 
     var itunesType = DetermineItunesType(series);
+
+    var title = series?.Title ?? podcast.Slug.Replace("-", " ");
+    var cleanTitle = Regex.Replace(title, @"\s*\([^)]*feed[^)]*\)\s*$", "", RegexOptions.IgnoreCase).Trim();
 
     var channel = new XElement("channel",
         new XElement(atom + "link",
@@ -207,12 +139,16 @@ static XElement BuildRssFeed(Series? series, List<Episode>? episodes, Podcast po
             channel.Add(BuildEpisodeItem(episode, imageUrl, itunes, media));
     }
 
-    return new XElement("rss",
+    var rss = new XElement("rss",
         new XAttribute("version", "2.0"),
         new XAttribute(XNamespace.Xmlns + "atom", atom),
         new XAttribute(XNamespace.Xmlns + "itunes", itunes),
         new XAttribute(XNamespace.Xmlns + "media", media),
         channel);
+
+    var metadata = new FeedMetadata(podcast.Slug, cleanTitle, imageUrl);
+
+    return (rss, metadata);
 }
 
 static string DetermineItunesType(Series? series) =>

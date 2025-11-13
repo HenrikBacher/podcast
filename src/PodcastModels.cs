@@ -8,6 +8,22 @@ public partial class PodcastJsonContext : JsonSerializerContext
 {
 }
 
+public record FeedMetadata(
+    string Slug,
+    string Title,
+    string? ImageUrl
+);
+
+public record GeneratorConfig(
+    string OutputDir = "output",
+    string SiteDir = "_site",
+    string SiteSourceDir = "site"
+)
+{
+    public string FullSiteDir => Path.Combine(OutputDir, SiteDir);
+    public string FeedsDir => Path.Combine(FullSiteDir, "feeds");
+}
+
 public record PodcastList
 {
     [JsonPropertyName("podcasts")]
