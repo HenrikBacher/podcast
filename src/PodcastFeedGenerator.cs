@@ -131,9 +131,7 @@ static (XElement rss, FeedMetadata metadata) BuildRssFeed(Series? series, List<E
 
     if (episodes is { Count: > 0 })
     {
-        var sorted = itunesType == "serial"
-            ? episodes.OrderBy(e => DateTime.TryParse(e.PublishTime, out var d) ? d : DateTime.MinValue)
-            : episodes.OrderByDescending(e => DateTime.TryParse(e.PublishTime, out var d) ? d : DateTime.MinValue);
+        var sorted = episodes.OrderByDescending(e => DateTime.TryParse(e.PublishTime, out var d) ? d : DateTime.MinValue);
 
         foreach (var episode in sorted)
             channel.Add(BuildEpisodeItem(episode, imageUrl, itunes, media));
