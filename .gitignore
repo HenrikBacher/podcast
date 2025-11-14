@@ -296,3 +296,6 @@ test-publish/
 *.tar.gz
 *.zip
 **/output
+
+# Azure Functions
+local.settings.json

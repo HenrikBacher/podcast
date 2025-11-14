@@ -1,0 +1,74 @@
+name: Deploy to Azure Functions
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - azure-functions-migration
+    paths:
+      - 'src-functions/**'
+      - 'src-shared/**'
+      - 'podcasts.json'
+      - 'site/**'
+      - '.github/workflows/azure-deploy.yml'
+
+env:
+  AZURE_FUNCTIONAPP_NAME: 'drpodcast-functions'
+  AZURE_FUNCTIONAPP_PACKAGE_PATH: 'src-functions'
+  DOTNET_VERSION: '8.0.x'
+
+jobs:
+  build-and-deploy:
+    name: Build and Deploy to Azure
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore dependencies
+        shell: pwsh
+        run: |
+          Write-Host "Restoring dependencies..."
+          dotnet restore src-shared/DrPodcast.Shared.csproj
+          dotnet restore src-functions/DrPodcast.Functions.csproj
+
+      - name: Build project
+        shell: pwsh
+        run: |
+          Write-Host "Building project..."
+          dotnet build src-functions/DrPodcast.Functions.csproj --configuration Release --no-restore
+
+      - name: Publish Azure Functions
+        shell: pwsh
+        run: |
+          Write-Host "Publishing Azure Functions..."
+          dotnet publish src-functions/DrPodcast.Functions.csproj `
+            --configuration Release `
+            --output ./publish `
+            --no-build
+
+      - name: Deploy to Azure Functions
+        uses: Azure/functions-action@v1
+        with:
+          app-name: ${{ env.AZURE_FUNCTIONAPP_NAME }}
+          package: './publish'
+          publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
+
+      - name: Deployment summary
+        shell: pwsh
+        run: |
+          Write-Host "✓ Deployment complete!"
+          Write-Host "Function App: ${{ env.AZURE_FUNCTIONAPP_NAME }}"
+          Write-Host "Next steps:"
+          Write-Host "  1. Configure environment variables in Azure Portal:"
+          Write-Host "     - API_KEY (DR API key)"
+          Write-Host "     - BASE_URL (your custom domain)"
+          Write-Host "     - AZURE_STORAGE_CONNECTION_STRING"
+          Write-Host "     - STORAGE_CONTAINER_NAME (default: `$web)"
+          Write-Host "  2. Timer trigger will run hourly (0 0 * * * *)"
+          Write-Host "  3. Manual trigger available via HTTP endpoint"
