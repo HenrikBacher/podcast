@@ -13,8 +13,10 @@ on:
       - '.github/workflows/azure-deploy.yml'
 
 env:
+  AZURE_RESOURCE_GROUP: 'drpodcast-rg'
+  AZURE_LOCATION: 'swedencentral'
   AZURE_FUNCTIONAPP_NAME: 'drpodcast-functions'
-  AZURE_FUNCTIONAPP_PACKAGE_PATH: 'src-functions'
+  AZURE_STORAGE_ACCOUNT: 'drpodcaststorage'
   DOTNET_VERSION: '8.0.x'
 
 jobs:
@@ -24,6 +26,113 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Ensure Azure Resources Exist
+        shell: pwsh
+        run: |
+          Write-Host "Checking Azure resources..." -ForegroundColor Yellow
+
+          # Create Resource Group if it doesn't exist
+          $rgExists = az group exists --name $env:AZURE_RESOURCE_GROUP
+          if ($rgExists -eq 'false') {
+            Write-Host "Creating resource group: $env:AZURE_RESOURCE_GROUP" -ForegroundColor Yellow
+            az group create `
+              --name $env:AZURE_RESOURCE_GROUP `
+              --location $env:AZURE_LOCATION `
+              --tags Environment=prod ManagedBy=GitHub-Actions
+            Write-Host "✓ Resource group created" -ForegroundColor Green
+          } else {
+            Write-Host "✓ Resource group exists" -ForegroundColor Green
+          }
+
+          # Create Storage Account if it doesn't exist
+          $storageExists = az storage account check-name `
+            --name $env:AZURE_STORAGE_ACCOUNT `
+            --query nameAvailable `
+            --output tsv
+
+          if ($storageExists -eq 'true') {
+            Write-Host "Creating storage account: $env:AZURE_STORAGE_ACCOUNT" -ForegroundColor Yellow
+            az storage account create `
+              --name $env:AZURE_STORAGE_ACCOUNT `
+              --resource-group $env:AZURE_RESOURCE_GROUP `
+              --location $env:AZURE_LOCATION `
+              --sku Standard_LRS `
+              --kind StorageV2 `
+              --allow-blob-public-access true
+            Write-Host "✓ Storage account created" -ForegroundColor Green
+
+            # Enable static website
+            Write-Host "Enabling static website hosting..." -ForegroundColor Yellow
+            az storage blob service-properties update `
+              --account-name $env:AZURE_STORAGE_ACCOUNT `
+              --static-website `
+              --index-document index.html `
+              --404-document index.html
+            Write-Host "✓ Static website enabled" -ForegroundColor Green
+          } else {
+            Write-Host "✓ Storage account exists" -ForegroundColor Green
+          }
+
+          # Create Function App if it doesn't exist
+          $functionExists = az functionapp show `
+            --name $env:AZURE_FUNCTIONAPP_NAME `
+            --resource-group $env:AZURE_RESOURCE_GROUP `
+            --query name `
+            --output tsv 2>$null
+
+          if (-not $functionExists) {
+            Write-Host "Creating function app: $env:AZURE_FUNCTIONAPP_NAME" -ForegroundColor Yellow
+
+            # First create App Service Plan
+            az functionapp plan create `
+              --name "$env:AZURE_FUNCTIONAPP_NAME-plan" `
+              --resource-group $env:AZURE_RESOURCE_GROUP `
+              --location $env:AZURE_LOCATION `
+              --sku Y1 `
+              --is-linux
+
+            # Then create Function App
+            az functionapp create `
+              --name $env:AZURE_FUNCTIONAPP_NAME `
+              --resource-group $env:AZURE_RESOURCE_GROUP `
+              --plan "$env:AZURE_FUNCTIONAPP_NAME-plan" `
+              --storage-account $env:AZURE_STORAGE_ACCOUNT `
+              --runtime dotnet-isolated `
+              --runtime-version 8 `
+              --functions-version 4 `
+              --os-type Linux
+
+            Write-Host "✓ Function app created" -ForegroundColor Green
+
+            # Configure app settings
+            Write-Host "Configuring function app settings..." -ForegroundColor Yellow
+            $storageConnString = az storage account show-connection-string `
+              --name $env:AZURE_STORAGE_ACCOUNT `
+              --resource-group $env:AZURE_RESOURCE_GROUP `
+              --output tsv
+
+            az functionapp config appsettings set `
+              --name $env:AZURE_FUNCTIONAPP_NAME `
+              --resource-group $env:AZURE_RESOURCE_GROUP `
+              --settings `
+                "API_KEY=${{ secrets.DR_API_KEY }}" `
+                "BASE_URL=${{ secrets.BASE_URL }}" `
+                "AZURE_STORAGE_CONNECTION_STRING=$storageConnString" `
+                "STORAGE_CONTAINER_NAME=`$web"
+
+            Write-Host "✓ Function app configured" -ForegroundColor Green
+          } else {
+            Write-Host "✓ Function app exists" -ForegroundColor Green
+          }
+
+          Write-Host ""
+          Write-Host "All Azure resources are ready!" -ForegroundColor Green
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -57,7 +166,6 @@ jobs:
         with:
           app-name: ${{ env.AZURE_FUNCTIONAPP_NAME }}
           package: './publish'
-          publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
 
       - name: Deployment summary
         shell: pwsh

@@ -2,6 +2,8 @@
 
 This guide explains how to deploy DrPodcast as an Azure Function with Azure Blob Storage (Static Website) hosting.
 
+**Note:** Resources are automatically created by the GitHub Actions workflow. You only need to configure secrets!
+
 ## Architecture Overview
 
 ```
@@ -31,11 +33,70 @@ This guide explains how to deploy DrPodcast as an Azure Function with Azure Blob
 ## Prerequisites
 
 1. **Azure Subscription** - [Sign up for free](https://azure.microsoft.com/free/)
-2. **Azure CLI** - [Install Azure CLI](https://docs.microsoft.com/cli/azure/install-azure-cli)
-3. **.NET 10 SDK** - [Download .NET 10](https://dotnet.microsoft.com/download)
-4. **DR API Key** - API key for Danmarks Radio API
+2. **Azure Service Principal** - For GitHub Actions authentication
+3. **DR API Key** - API key for Danmarks Radio API
+4. **GitHub Repository** - Fork or clone this repository
 
-## Step 1: Create Azure Resources
+## Deployment Options
+
+### Option 1: Automatic Deployment (Recommended)
+
+The GitHub Actions workflow automatically creates all required Azure resources if they don't exist. This is the simplest approach!
+
+### Option 2: Manual Deployment
+
+If you prefer to create resources manually, follow the steps in the "Manual Setup" section below.
+
+## Step 1: Create Azure Service Principal (for GitHub Actions)
+
+Create a service principal that GitHub Actions will use to deploy:
+
+```bash
+az login
+
+# Create service principal
+az ad sp create-for-rbac \
+  --name "drpodcast-github-actions" \
+  --role contributor \
+  --scopes /subscriptions/{subscription-id} \
+  --sdk-auth
+```
+
+Copy the JSON output - you'll need it for GitHub Secrets.
+
+## Step 2: Configure GitHub Secrets
+
+Go to your GitHub repository → Settings → Secrets and variables → Actions
+
+Create these secrets:
+
+| Secret Name | Value | Description |
+|------------|-------|-------------|
+| `AZURE_CREDENTIALS` | JSON from step 1 | Service principal credentials |
+| `DR_API_KEY` | Your DR API key | Danmarks Radio API key |
+| `BASE_URL` | `https://your-domain.com` | Base URL for feeds |
+
+## Step 3: Deploy!
+
+That's it! Push to the `azure-functions-migration` branch and GitHub Actions will:
+
+1. ✅ Create resource group (if needed)
+2. ✅ Create storage account (if needed)
+3. ✅ Enable static website hosting
+4. ✅ Create function app (if needed)
+5. ✅ Configure all settings
+6. ✅ Deploy your code
+
+View the deployment:
+- Go to Actions tab in GitHub
+- Click on the running workflow
+- Watch resources being created and code deployed
+
+---
+
+## Manual Setup (Optional)
+
+If you prefer to create resources manually:
 
 ### 1.1 Login to Azure
 
