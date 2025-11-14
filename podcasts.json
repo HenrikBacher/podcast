@@ -135,6 +135,10 @@
     {
       "slug": "nyborg-station",
       "urn": "urn:dr:radio:series:605db7167952218d2f02f01c"
+    },
+    {
+      "slug": "veranda",
+      "urn": "urn:dr:radio:series:679032362a51e1bacbbf12bf"
     }
   ]
 }
