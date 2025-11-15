@@ -113,13 +113,19 @@ static (XElement rss, FeedMetadata metadata) BuildRssFeed(Series? series, List<E
         new XElement(itunes + "type", itunesType));
 
     if (!string.IsNullOrEmpty(imageUrl))
+    {
         channel.Add(new XElement(itunes + "image", new XAttribute("href", imageUrl)));
+    }
 
     if (!string.IsNullOrEmpty(series?.Punchline))
+    {
         channel.Add(new XElement(itunes + "subtitle", series.Punchline));
+    }
 
     if (!string.IsNullOrEmpty(series?.Description))
+    {
         channel.Add(new XElement(itunes + "summary", series.Description));
+    }
 
     AddCategories(channel, series?.Categories, itunes);
 
@@ -127,15 +133,21 @@ static (XElement rss, FeedMetadata metadata) BuildRssFeed(Series? series, List<E
     {
         int seasonCount = series.NumberOfSeasons > 0 ? series.NumberOfSeasons : series.NumberOfSeries;
         if (seasonCount > 0)
+        {
             channel.Add(new XElement(itunes + "season", seasonCount));
+        }
     }
 
     if (episodes is { Count: > 0 })
     {
-        var sorted = episodes.OrderByDescending(e => DateTime.TryParse(e.PublishTime, out var d) ? d : DateTime.MinValue);
+        var sorted = series?.DefaultOrder?.ToLowerInvariant() == "asc"
+            ? episodes.OrderBy(e => e.Order ?? int.MaxValue)
+            : episodes.OrderByDescending(e => e.Order ?? int.MinValue);
 
         foreach (var episode in sorted)
+        {
             channel.Add(BuildEpisodeItem(episode, imageUrl, itunes, media));
+        }
     }
 
     var rss = new XElement("rss",
@@ -150,23 +162,17 @@ static (XElement rss, FeedMetadata metadata) BuildRssFeed(Series? series, List<E
     return (rss, metadata);
 }
 
-static string DetermineItunesType(Series? series) =>
-    series?.DefaultOrder?.ToLowerInvariant() switch
+static string DetermineItunesType(Series? series)
+{
+    if (series?.PresentationType == "Show")
     {
-        "desc" => "episodic",
-        "asc" => "serial",
-        _ => series?.PresentationType?.ToLowerInvariant() switch
-        {
-            "ongoing" => "episodic",
-            "show" => "serial",
-            _ => series?.GroupingType?.ToLowerInvariant() switch
-            {
-                "yearly" => "episodic",
-                "seasons" => "serial",
-                _ => "episodic"
-            }
-        }
-    };
+        return "serial";
+    }
+    else
+    {
+        return "episodic";
+    }
+}
 
 static void AddCategories(XElement element, List<string>? categories, XNamespace itunes)
 {
@@ -197,25 +203,35 @@ static XElement BuildEpisodeItem(Episode episode, string? channelImage, XNamespa
         new XElement("title", episode.Title ?? ""),
         new XElement("description", episode.Description ?? ""),
         new XElement("pubDate", pubDate),
-        new XElement(itunes + "explicit", episode.ExplicitContent ? "yes" : "no"),
+        new XElement(itunes + "explicit", episode.ExplicitContent),
         new XElement(itunes + "author", "DR"),
         new XElement(itunes + "duration", duration)
         );
 
     if (!string.IsNullOrEmpty(imageUrl))
+    {
         item.Add(new XElement(itunes + "image", new XAttribute("href", imageUrl)));
+    }
 
     if (episode.EpisodeNumber is not null)
+    {
         item.Add(new XElement(itunes + "episode", episode.EpisodeNumber.Value));
+    }
 
     if (episode.SeasonNumber is not null)
+    {
         item.Add(new XElement(itunes + "season", episode.SeasonNumber.Value));
+    }
 
     if (!string.IsNullOrEmpty(episode.PresentationUrl))
+    {
         item.Add(new XElement("link", episode.PresentationUrl));
+    }
 
     if (!string.IsNullOrEmpty(episode.Id))
+    {
         item.Add(new XElement("guid", new XAttribute("isPermalink", "false"), episode.Id));
+    }
 
     if (audioAsset?.Url is { } url && !string.IsNullOrEmpty(url))
     {
@@ -223,8 +239,10 @@ static XElement BuildEpisodeItem(Episode episode, string? channelImage, XNamespa
             new XAttribute("url", url),
             new XAttribute("type", "audio/mpeg"));
 
-        if (audioAsset.FileSize > 0)
+        if (audioAsset.FileSize is not null)
+        {
             enclosure.Add(new XAttribute("length", audioAsset.FileSize.Value));
+        }
 
         item.Add(enclosure);
     }
@@ -251,7 +269,9 @@ static async Task<List<Episode>?> FetchAllEpisodesAsync(string initialUrl, HttpC
         {
             var episodes = JsonSerializer.Deserialize(items.GetRawText(), PodcastJsonContext.Default.ListEpisode);
             if (episodes != null)
+            {
                 allEpisodes.AddRange(episodes);
+            }
         }
 
         nextUrl = root.TryGetProperty("next", out var next) && next.ValueKind == JsonValueKind.String
