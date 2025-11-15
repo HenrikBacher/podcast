@@ -63,7 +63,7 @@ public record Episode(
     [property: JsonPropertyName("episodeNumber")] int? EpisodeNumber,
     [property: JsonPropertyName("seasonNumber")] int? SeasonNumber,
     [property: JsonPropertyName("explicitContent")] bool ExplicitContent,
-    [property: JsonPropertyName("order")] int? Order
+    [property: JsonPropertyName("order")] long? Order
 );
 
 public record AudioAsset(

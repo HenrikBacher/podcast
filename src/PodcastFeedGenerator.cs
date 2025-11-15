@@ -141,8 +141,8 @@ static (XElement rss, FeedMetadata metadata) BuildRssFeed(Series? series, List<E
     if (episodes is { Count: > 0 })
     {
         var sorted = series?.DefaultOrder?.ToLowerInvariant() == "asc"
-            ? episodes.OrderBy(e => e.Order ?? int.MaxValue)
-            : episodes.OrderByDescending(e => e.Order ?? int.MinValue);
+            ? episodes.OrderBy(e => e.Order ?? long.MaxValue)
+            : episodes.OrderByDescending(e => e.Order ?? long.MinValue);
 
         foreach (var episode in sorted)
         {
