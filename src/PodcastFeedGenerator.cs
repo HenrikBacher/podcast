@@ -185,12 +185,15 @@ static string DetermineItunesType(Series? series)
 
 static void AddCategories(XElement element, List<string>? categories, XNamespace itunes)
 {
-    if (categories is not null) return;
-
-    foreach (var category in categories.Where(c => !string.IsNullOrEmpty(c)))
+    if (categories is not null)
+    {
+        foreach (var category in categories.Where(c => !string.IsNullOrEmpty(c)))
     {
         element.Add(new XElement(itunes + "category", new XAttribute("text", category)));
     }
+    }
+
+    
 }
 static XElement BuildEpisodeItem(Episode episode, string? channelImage, XNamespace itunes, XNamespace media)
 {
