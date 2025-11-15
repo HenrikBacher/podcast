@@ -129,7 +129,7 @@ static (XElement rss, FeedMetadata metadata) BuildRssFeed(Series? series, List<E
 
     AddCategories(channel, series?.Categories, itunes);
 
-    if (series?.NumberOfSeries is not null)
+    if (series?.NumberOfSeries > 0)
     {
         channel.Add(new XElement(itunes + "season", series.NumberOfSeries));
     }
@@ -138,7 +138,7 @@ static (XElement rss, FeedMetadata metadata) BuildRssFeed(Series? series, List<E
     {
         IOrderedEnumerable<Episode> sorted;
 
-        if (series?.NumberOfSeries is not null)
+        if (series?.NumberOfSeries > 0)
         {
             // For shows with seasons, sort by season descending (latest first), then by order
             sorted = series?.DefaultOrder == "Asc"
