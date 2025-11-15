@@ -98,29 +98,30 @@ static (XElement rss, FeedMetadata metadata) BuildRssFeed(Series? series, List<E
             new XAttribute("href", $"{baseUrl}/feeds/{podcast.Slug}.xml"),
             new XAttribute("rel", "self"),
             new XAttribute("type", "application/rss+xml")),
-        new XElement("title", $"{series?.Title} (Reproduceret feed)"),
-        new XElement("link", series?.PresentationUrl ?? $"https://www.dr.dk/lyd/special-radio/{podcast.Slug}"),
-        new XElement("description", series?.Description ?? series?.Punchline ?? $"Feed for {podcast.Slug}"),
+        new XElement("title", series?.Title),
+        new XElement("link", series?.PresentationUrl),
+        new XElement("description", series?.Description),
         new XElement("language", "da"),
         new XElement("copyright", "DR"),
         new XElement("lastBuildDate", lastBuildDate),
-        new XElement(itunes + "explicit", series?.ExplicitContent == true ? "yes" : "no"),
+        new XElement(itunes + "explicit", series?.ExplicitContent),
         new XElement(itunes + "author", "DR"),
         new XElement(itunes + "block", "yes"),
         new XElement(itunes + "owner",
             new XElement(itunes + "email", "podcast@dr.dk"),
             new XElement(itunes + "name", "DR")),
-        new XElement(itunes + "new-feed-url", $"{baseUrl}/feeds/{podcast.Slug}.xml"),
-        new XElement(itunes + "image", new XAttribute("href", imageUrl ?? "")),
         new XElement(itunes + "type", itunesType));
 
-    AddCategories(channel, series?.Categories, itunes);
+    if (!string.IsNullOrEmpty(imageUrl))
+        channel.Add(new XElement(itunes + "image", new XAttribute("href", imageUrl)));
 
     if (!string.IsNullOrEmpty(series?.Punchline))
         channel.Add(new XElement(itunes + "subtitle", series.Punchline));
 
     if (!string.IsNullOrEmpty(series?.Description))
         channel.Add(new XElement(itunes + "summary", series.Description));
+
+    AddCategories(channel, series?.Categories, itunes);
 
     if (series?.GroupingType?.Contains("Seasons", StringComparison.OrdinalIgnoreCase) == true)
     {
@@ -173,12 +174,9 @@ static void AddCategories(XElement element, List<string>? categories, XNamespace
 
     foreach (var category in categories.Where(c => !string.IsNullOrEmpty(c)))
     {
-        var mapped = PodcastHelpers.MapToPodcastCategory(category);
-        if (!string.IsNullOrEmpty(mapped))
-            element.Add(new XElement(itunes + "category", new XAttribute("text", mapped)));
+        element.Add(new XElement(itunes + "category", new XAttribute("text", category)));
     }
 }
-
 static XElement BuildEpisodeItem(Episode episode, string? channelImage, XNamespace itunes, XNamespace media)
 {
     var audioAsset = episode.AudioAssets?
@@ -199,20 +197,18 @@ static XElement BuildEpisodeItem(Episode episode, string? channelImage, XNamespa
         new XElement("title", episode.Title ?? ""),
         new XElement("description", episode.Description ?? ""),
         new XElement("pubDate", pubDate),
-        new XElement("explicit", episode.ExplicitContent ? "yes" : "no"),
+        new XElement(itunes + "explicit", episode.ExplicitContent ? "yes" : "no"),
         new XElement(itunes + "author", "DR"),
-        new XElement(itunes + "image", new XAttribute("href", imageUrl ?? "")),
-        new XElement(itunes + "duration", duration),
-        new XElement(itunes + "episodeType", "full"),
-        new XElement(media + "restriction",
-            new XAttribute("relationship", "allow"),
-            new XAttribute("type", "country"),
-            "dk"));
+        new XElement(itunes + "duration", duration)
+        );
 
-    if (episode.EpisodeNumber is > 0)
+    if (!string.IsNullOrEmpty(imageUrl))
+        item.Add(new XElement(itunes + "image", new XAttribute("href", imageUrl)));
+
+    if (episode.EpisodeNumber is not null)
         item.Add(new XElement(itunes + "episode", episode.EpisodeNumber.Value));
 
-    if (episode.SeasonNumber is > 0)
+    if (episode.SeasonNumber is not null)
         item.Add(new XElement(itunes + "season", episode.SeasonNumber.Value));
 
     if (!string.IsNullOrEmpty(episode.PresentationUrl))

@@ -5,41 +5,6 @@ namespace DrPodcast.Tests;
 
 public class PodcastHelpersTests
 {
-    [Theory]
-    [InlineData("Dokumentar", "Documentary")]
-    [InlineData("Historie", "History")]
-    [InlineData("Sundhed", "Health & Fitness")]
-    [InlineData("Samfund", "Society & Culture")]
-    [InlineData("Videnskab og tech", "Science")]
-    [InlineData("Tro og eksistens", "Religion & Spirituality")]
-    [InlineData("Kriminal", "True Crime")]
-    [InlineData("Kultur", "Society & Culture")]
-    [InlineData("Nyheder", "News")]
-    [InlineData("Underholdning", "Entertainment")]
-    [InlineData("Sport", "Sports")]
-    [InlineData("Musik", "Music")]
-    public void MapToPodcastCategory_ShouldMapKnownCategories(string danishCategory, string expectedEnglishCategory)
-    {
-        // Act
-        var result = PodcastHelpers.MapToPodcastCategory(danishCategory);
-
-        // Assert
-        result.Should().Be(expectedEnglishCategory);
-    }
-
-    [Fact]
-    public void MapToPodcastCategory_ShouldReturnOriginalForUnknownCategory()
-    {
-        // Arrange
-        var unknownCategory = "UnknownCategory";
-
-        // Act
-        var result = PodcastHelpers.MapToPodcastCategory(unknownCategory);
-
-        // Assert
-        result.Should().Be(unknownCategory);
-    }
-
     [Fact]
     public void GetImageUrlFromAssets_ShouldReturnNullForNullInput()
     {

@@ -2,23 +2,6 @@ namespace DrPodcast;
 
 public static class PodcastHelpers
 {
-    public static string MapToPodcastCategory(string category) => category switch
-    {
-        "Dokumentar" => "Documentary",
-        "Historie" => "History",
-        "Sundhed" => "Health & Fitness",
-        "Samfund" => "Society & Culture",
-        "Videnskab og tech" => "Science",
-        "Tro og eksistens" => "Religion & Spirituality",
-        "Kriminal" => "True Crime",
-        "Kultur" => "Society & Culture",
-        "Nyheder" => "News",
-        "Underholdning" => "Entertainment",
-        "Sport" => "Sports",
-        "Musik" => "Music",
-        _ => category
-    };
-
     public static string? GetImageUrlFromAssets(List<ImageAsset>? imageAssets)
     {
         if (imageAssets is not { Count: > 0 }) return null;
