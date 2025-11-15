@@ -129,20 +129,29 @@ static (XElement rss, FeedMetadata metadata) BuildRssFeed(Series? series, List<E
 
     AddCategories(channel, series?.Categories, itunes);
 
-    if (series?.GroupingType?.Contains("Seasons", StringComparison.OrdinalIgnoreCase) == true)
+    if (series?.NumberOfSeries is not null)
     {
-        int seasonCount = series.NumberOfSeasons > 0 ? series.NumberOfSeasons : series.NumberOfSeries;
-        if (seasonCount > 0)
-        {
-            channel.Add(new XElement(itunes + "season", seasonCount));
-        }
+        channel.Add(new XElement(itunes + "season", series.NumberOfSeries));
     }
 
-    if (episodes is { Count: > 0 })
+    if (episodes is not null)
     {
-        var sorted = series?.DefaultOrder?.ToLowerInvariant() == "asc"
-            ? episodes.OrderBy(e => e.Order ?? long.MaxValue)
-            : episodes.OrderByDescending(e => e.Order ?? long.MinValue);
+        IOrderedEnumerable<Episode> sorted;
+
+        if (series?.NumberOfSeries is not null)
+        {
+            // For shows with seasons, sort by season descending (latest first), then by order
+            sorted = series?.DefaultOrder == "Asc"
+                ? episodes.OrderByDescending(e => e.SeasonNumber ?? int.MinValue).ThenBy(e => e.Order ?? long.MaxValue)
+                : episodes.OrderByDescending(e => e.SeasonNumber ?? int.MinValue).ThenByDescending(e => e.Order ?? long.MinValue);
+        }
+        else
+        {
+            // For non-seasonal shows, use standard order
+            sorted = series?.DefaultOrder == "Asc"
+                ? episodes.OrderBy(e => e.Order ?? long.MaxValue)
+                : episodes.OrderByDescending(e => e.Order ?? long.MinValue);
+        }
 
         foreach (var episode in sorted)
         {
@@ -176,7 +185,7 @@ static string DetermineItunesType(Series? series)
 
 static void AddCategories(XElement element, List<string>? categories, XNamespace itunes)
 {
-    if (categories is not { Count: > 0 }) return;
+    if (categories is not null) return;
 
     foreach (var category in categories.Where(c => !string.IsNullOrEmpty(c)))
     {
@@ -191,7 +200,7 @@ static XElement BuildEpisodeItem(Episode episode, string? channelImage, XNamespa
         .FirstOrDefault();
 
     var imageUrl = PodcastHelpers.GetImageUrlFromAssets(episode.ImageAssets) ?? channelImage;
-    var duration = episode.DurationMilliseconds > 0
+    var duration = episode.DurationMilliseconds is not null
         ? TimeSpan.FromMilliseconds(episode.DurationMilliseconds.Value).ToString(@"hh\:mm\:ss")
         : "";
 
