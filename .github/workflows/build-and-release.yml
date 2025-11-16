@@ -33,53 +33,105 @@ jobs:
 
       - name: Determine Version
         id: version
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: pwsh
         run: |
-          Write-Host "🔖 Simplified Tag-Based Versioning"
-          Write-Host "======================================"
+          Write-Host "🔖 Automatic Versioning from PR Template"
+          Write-Host "=========================================="
 
-          # Get latest tag using git (faster and simpler than gh CLI)
+          # Get latest release version
           $latestTag = git describe --tags --abbrev=0 2>$null
           if (-not $latestTag) {
-            $latestTag = "v0.1.0"  # Default for first build
+            $latestTag = "v0.1.0"
             Write-Host "⚠️  No tags found, using default: $latestTag"
           } else {
-            Write-Host "📌 Latest tag: $latestTag"
+            Write-Host "📌 Latest version: $latestTag"
           }
 
           $version = $latestTag.TrimStart('v')
+          $parts = $version -split '\.'
+          $major = [int]$parts[0]
+          $minor = [int]$parts[1]
+          $patch = [int]$parts[2]
+
           $isRelease = "false"
+          $bumpType = "patch"  # Default
 
           if ("${{ github.event_name }}" -eq "push" -and "${{ github.ref }}" -eq "refs/heads/main") {
-            # Main branch: check if HEAD is tagged
-            $headTag = git describe --exact-match --tags HEAD 2>$null
-            if ($headTag) {
-              # This commit is tagged - it's a release!
-              $isRelease = "true"
-              Write-Host "✅ RELEASE BUILD: $version"
-              Write-Host "   This commit is tagged as $headTag"
+            # Main branch - ALWAYS create release with version bump
+            $isRelease = "true"
+
+            # Get the merge commit message to find PR number
+            $commitMsg = git log -1 --pretty=%B
+            if ($commitMsg -match '#(\d+)') {
+              $prNumber = $matches[1]
+              Write-Host "📝 Merged PR #$prNumber"
+
+              # Fetch PR body to check version bump selection
+              try {
+                $prData = gh pr view $prNumber --json body --jq '.body' 2>$null
+                if ($prData) {
+                  Write-Host "📋 Checking PR template..."
+                  if ($prData -match '\[x\]\s+\*\*Major\*\*') {
+                    $bumpType = "major"
+                    Write-Host "   ⬆️  MAJOR bump"
+                  } elseif ($prData -match '\[x\]\s+\*\*Minor\*\*') {
+                    $bumpType = "minor"
+                    Write-Host "   ➕ MINOR bump"
+                  } else {
+                    Write-Host "   🔧 PATCH bump (default)"
+                  }
+                }
+              } catch {
+                Write-Host "   ⚠️  Could not read PR, using PATCH (default)"
+              }
             } else {
-              # Main branch but not tagged - add build metadata
-              $commitCount = git rev-list --count "$latestTag..HEAD"
-              $shortSha = git rev-parse --short=7 HEAD
-              $version = "$version+main.$commitCount.$shortSha"
-              Write-Host "🔨 Main branch build: $version"
-              Write-Host "   ($commitCount commits since $latestTag)"
+              Write-Host "   ⚠️  No PR found, using PATCH (default)"
             }
+
+            # Calculate new version
+            switch ($bumpType) {
+              "major" { $newVersion = "$($major + 1).0.0" }
+              "minor" { $newVersion = "$major.$($minor + 1).0" }
+              "patch" { $newVersion = "$major.$minor.$($patch + 1)" }
+            }
+            $version = $newVersion
+
+            Write-Host ""
+            Write-Host "✅ RELEASE: v$version ($bumpType from v$latestTag)"
           } else {
-            # PR build - add build metadata (not prerelease!)
+            # PR build - use prerelease format
             $prNumber = "${{ github.event.pull_request.number }}"
             if (-not $prNumber) { $prNumber = "0" }
             $shortSha = git rev-parse --short=7 HEAD
-            $version = "$version+pr$prNumber.$shortSha"
-            Write-Host "🚧 PR build: $version"
-            Write-Host "   (PR #$prNumber based on tag $latestTag)"
+
+            # Determine bump type from PR template for preview
+            $bumpType = "patch"  # Default
+            try {
+              $prBody = "${{ github.event.pull_request.body }}"
+              if ($prBody -match '\[x\]\s+\*\*Major\*\*') {
+                $bumpType = "major"
+              } elseif ($prBody -match '\[x\]\s+\*\*Patch\*\*') {
+                $bumpType = "patch"
+              }
+            } catch { }
+
+            # Show what version it WILL become
+            switch ($bumpType) {
+              "major" { $nextVersion = "$($major + 1).0.0" }
+              "minor" { $nextVersion = "$major.$($minor + 1).0" }
+              "patch" { $nextVersion = "$major.$minor.$($patch + 1)" }
+            }
+
+            $version = "$nextVersion-pr$prNumber-$shortSha"
+            Write-Host "🚧 PR #$prNumber: $version"
+            Write-Host "   Will become v$nextVersion when merged"
           }
 
           Write-Host ""
-          Write-Host "📦 Final version: $version"
-          Write-Host "🏷️  Version tag: v$version"
-          Write-Host "🚀 Is release: $isRelease"
+          Write-Host "📦 Version: $version"
+          Write-Host "🏷️  Tag: v$version"
 
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           "version-tag=v$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
