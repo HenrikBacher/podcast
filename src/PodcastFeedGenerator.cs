@@ -29,17 +29,20 @@ var podcastList = JsonSerializer.Deserialize(
 
 var config = new GeneratorConfig();
 
+// Create feeds directory once before processing (instead of for each podcast)
+Directory.CreateDirectory(config.FeedsDir);
+
 // Generate RSS feeds and collect metadata
 var tasks = podcastList?.Podcasts.Select(podcast =>
     ProcessPodcastAsync(podcast, httpClientFactory, baseUrl, config)).ToArray();
 
 var results = await Task.WhenAll(tasks!);
-var feedMetadata = results.Where(m => m != null).Cast<FeedMetadata>().ToList();
+var feedMetadata = results.OfType<FeedMetadata>().ToList();
 
 Console.WriteLine($"\nGenerated {feedMetadata.Count} podcast feeds.");
 
 // Generate website using collected metadata
-WebsiteGenerator.Generate(feedMetadata, config);
+await WebsiteGenerator.GenerateAsync(feedMetadata, config);
 
 static async Task<FeedMetadata?> ProcessPodcastAsync(Podcast podcast, IHttpClientFactory factory, string baseUrl, GeneratorConfig config)
 {
@@ -60,12 +63,12 @@ static async Task<FeedMetadata?> ProcessPodcastAsync(Podcast podcast, IHttpClien
 
         var (rss, metadata) = BuildRssFeed(series, episodes, podcast, baseUrl);
 
-        // Ensure feeds directory exists
-        Directory.CreateDirectory(config.FeedsDir);
-
-        // Save directly to final location
+        // Save using async I/O for better performance
         string outputPath = Path.Combine(config.FeedsDir, $"{podcast.Slug}.xml");
-        new XDocument(new XDeclaration("1.0", "utf-8", "yes"), rss).Save(outputPath);
+        await using var fileStream = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true);
+        await using var writer = new StreamWriter(fileStream, new UTF8Encoding(false));
+        var xmlDoc = new XDocument(new XDeclaration("1.0", "utf-8", "yes"), rss);
+        await writer.WriteAsync(xmlDoc.ToString());
         Console.WriteLine($"✓ Generated {podcast.Slug}");
 
         return metadata;
@@ -180,8 +183,10 @@ static void AddCategories(XElement element, List<string>? categories, XNamespace
 {
     if (categories is null) return;
 
-    foreach (var category in categories.Where(c => !string.IsNullOrEmpty(c)))
+    // Avoid LINQ overhead - use direct foreach
+    foreach (var category in categories)
     {
+        if (string.IsNullOrEmpty(category)) continue;
         element.Add(new XElement(itunes + "category", new XAttribute("text", category)));
     }
 }
@@ -258,16 +263,16 @@ static XElement BuildEpisodeItem(Episode episode, string? channelImage, XNamespa
 
 static string GetMimeTypeFromFormat(string? format)
 {
-    return format?.ToLowerInvariant() switch
-    {
-        "mp3" => "audio/mpeg",
-        "aac" => "audio/aac",
-        "m4a" => "audio/mp4",
-        "ogg" => "audio/ogg",
-        "wav" => "audio/wav",
-        "flac" => "audio/flac",
-        _ => "audio/mpeg" // Default fallback
-    };
+    if (format is null) return "audio/mpeg";
+
+    // Use ordinal comparison to avoid allocation from ToLowerInvariant()
+    return format.Equals("mp3", StringComparison.OrdinalIgnoreCase) ? "audio/mpeg" :
+           format.Equals("aac", StringComparison.OrdinalIgnoreCase) ? "audio/aac" :
+           format.Equals("m4a", StringComparison.OrdinalIgnoreCase) ? "audio/mp4" :
+           format.Equals("ogg", StringComparison.OrdinalIgnoreCase) ? "audio/ogg" :
+           format.Equals("wav", StringComparison.OrdinalIgnoreCase) ? "audio/wav" :
+           format.Equals("flac", StringComparison.OrdinalIgnoreCase) ? "audio/flac" :
+           "audio/mpeg"; // Default fallback
 }
 
 static async Task<List<Episode>?> FetchAllEpisodesAsync(string initialUrl, HttpClient httpClient)
