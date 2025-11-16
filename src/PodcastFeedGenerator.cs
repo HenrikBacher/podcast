@@ -247,9 +247,10 @@ static XElement BuildEpisodeItem(Episode episode, string? channelImage, XNamespa
 
     if (audioAsset?.Url is { } url && !string.IsNullOrEmpty(url))
     {
+        var mimeType = GetMimeTypeFromFormat(audioAsset.Format);
         var enclosure = new XElement("enclosure",
             new XAttribute("url", url),
-            new XAttribute("type", "audio/mpeg"));
+            new XAttribute("type", mimeType));
 
         if (audioAsset.FileSize is not null)
         {
@@ -262,6 +263,20 @@ static XElement BuildEpisodeItem(Episode episode, string? channelImage, XNamespa
     AddCategories(item, episode.Categories, itunes);
 
     return item;
+}
+
+static string GetMimeTypeFromFormat(string? format)
+{
+    return format?.ToLowerInvariant() switch
+    {
+        "mp3" => "audio/mpeg",
+        "aac" => "audio/aac",
+        "m4a" => "audio/mp4",
+        "ogg" => "audio/ogg",
+        "wav" => "audio/wav",
+        "flac" => "audio/flac",
+        _ => "audio/mpeg" // Default fallback
+    };
 }
 
 static async Task<List<Episode>?> FetchAllEpisodesAsync(string initialUrl, HttpClient httpClient)
