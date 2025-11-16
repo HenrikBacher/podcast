@@ -125,7 +125,7 @@ jobs:
             }
 
             $version = "$nextVersion-pr$prNumber-$shortSha"
-            Write-Host "🚧 PR #$prNumber: $version"
+            Write-Host "🚧 PR #${prNumber}: $version"
             Write-Host "   Will become v$nextVersion when merged"
           }
 
