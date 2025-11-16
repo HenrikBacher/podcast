@@ -108,8 +108,9 @@ jobs:
             } catch { }
             if (-not $prNumber) { $prNumber = "0" }
             if (-not $commitSha) { $commitSha = "$env:GITHUB_SHA" }
-            $shortSha = $commitSha.Substring(0,8)
-            $newVersion = "$newVersion-pr.$prNumber.$shortSha"
+            $shortSha = $commitSha.Substring(0,7)
+            # Use format compatible with NuGet SemVer: pr<number>-<sha> (dashes instead of dots)
+            $newVersion = "$newVersion-pr$prNumber-$shortSha"
           }
 
           Write-Host "New version: $newVersion"
