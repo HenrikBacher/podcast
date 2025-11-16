@@ -112,8 +112,8 @@ jobs:
               $prBody = "${{ github.event.pull_request.body }}"
               if ($prBody -match '\[x\]\s+\*\*Major\*\*') {
                 $bumpType = "major"
-              } elseif ($prBody -match '\[x\]\s+\*\*Patch\*\*') {
-                $bumpType = "patch"
+              } elseif ($prBody -match '\[x\]\s+\*\*Minor\*\*') {
+                $bumpType = "minor"
               }
             } catch { }
 
