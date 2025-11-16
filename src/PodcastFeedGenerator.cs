@@ -171,30 +171,19 @@ static (XElement rss, FeedMetadata metadata) BuildRssFeed(Series? series, List<E
     return (rss, metadata);
 }
 
-static string DetermineItunesType(Series? series)
-{
-    if (series?.PresentationType == "Show")
-    {
-        return "serial";
-    }
-    else
-    {
-        return "episodic";
-    }
-}
+static string DetermineItunesType(Series? series) =>
+      series?.PresentationType == "Show" ? "serial" : "episodic";
 
 static void AddCategories(XElement element, List<string>? categories, XNamespace itunes)
 {
-    if (categories is not null)
-    {
-        foreach (var category in categories.Where(c => !string.IsNullOrEmpty(c)))
+    if (categories is null) return;
+
+    foreach (var category in categories.Where(c => !string.IsNullOrEmpty(c)))
     {
         element.Add(new XElement(itunes + "category", new XAttribute("text", category)));
     }
-    }
-
-    
 }
+
 static XElement BuildEpisodeItem(Episode episode, string? channelImage, XNamespace itunes, XNamespace media)
 {
     var audioAsset = episode.AudioAssets?
