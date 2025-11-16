@@ -64,7 +64,8 @@ jobs:
 
             # Get the merge commit message to find PR number
             $commitMsg = git log -1 --pretty=%B
-            if ($commitMsg -match '#(\d+)') {
+            $prMatch = $commitMsg -match '#(\d+)'
+            if ($prMatch -and $matches -and $matches.Count -gt 1) {
               $prNumber = $matches[1]
               Write-Host "📝 Merged PR #$prNumber"
 
