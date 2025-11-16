@@ -34,12 +34,12 @@ var tasks = podcastList?.Podcasts.Select(podcast =>
     ProcessPodcastAsync(podcast, httpClientFactory, baseUrl, config)).ToArray();
 
 var results = await Task.WhenAll(tasks!);
-var feedMetadata = results.Where(m => m != null).Cast<FeedMetadata>().ToList();
+var feedMetadata = results.OfType<FeedMetadata>().ToList();
 
 Console.WriteLine($"\nGenerated {feedMetadata.Count} podcast feeds.");
 
 // Generate website using collected metadata
-WebsiteGenerator.Generate(feedMetadata, config);
+await WebsiteGenerator.GenerateAsync(feedMetadata, config);
 
 static async Task<FeedMetadata?> ProcessPodcastAsync(Podcast podcast, IHttpClientFactory factory, string baseUrl, GeneratorConfig config)
 {

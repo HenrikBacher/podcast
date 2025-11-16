@@ -2,7 +2,7 @@ namespace DrPodcast;
 
 public static class WebsiteGenerator
 {
-    public static void Generate(IEnumerable<FeedMetadata> feeds, GeneratorConfig? config = null)
+    public static async Task GenerateAsync(IEnumerable<FeedMetadata> feeds, GeneratorConfig? config = null)
     {
         config ??= new GeneratorConfig();
 
@@ -15,13 +15,13 @@ public static class WebsiteGenerator
             Directory.CreateDirectory(config.FeedsDir);
 
             // Copy static assets
-            CopyStaticAssets(config);
+            await CopyStaticAssetsAsync(config);
 
             // Generate index.html with feed list
-            GenerateIndexHtml(feeds, config);
+            await GenerateIndexHtmlAsync(feeds, config);
 
             // Generate manifest.json
-            GenerateManifest(feeds, config);
+            await GenerateManifestAsync(feeds, config);
 
             Console.WriteLine("Website generation complete!");
         }
@@ -32,7 +32,7 @@ public static class WebsiteGenerator
         }
     }
 
-    private static void CopyStaticAssets(GeneratorConfig config)
+    private static async Task CopyStaticAssetsAsync(GeneratorConfig config)
     {
         if (!Directory.Exists(config.SiteSourceDir))
         {
@@ -45,12 +45,16 @@ public static class WebsiteGenerator
         {
             var fileName = Path.GetFileName(file);
             var destFile = Path.Combine(config.FullSiteDir, fileName);
-            File.Copy(file, destFile, overwrite: true);
+
+            // Use async file copy
+            await using var source = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true);
+            await using var dest = new FileStream(destFile, FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true);
+            await source.CopyToAsync(dest);
             Console.WriteLine($"Copied {fileName} to site directory");
         }
     }
 
-    private static void GenerateIndexHtml(IEnumerable<FeedMetadata> feeds, GeneratorConfig config)
+    private static async Task GenerateIndexHtmlAsync(IEnumerable<FeedMetadata> feeds, GeneratorConfig config)
     {
         var templatePath = Path.Combine(config.SiteSourceDir, "index.html");
         if (!File.Exists(templatePath))
@@ -61,7 +65,7 @@ public static class WebsiteGenerator
 
         var feedsList = feeds.OrderBy(f => f.Title).ToList();
         var feedsHtml = GenerateFeedsHtml(feedsList);
-        var template = File.ReadAllText(templatePath);
+        var template = await File.ReadAllTextAsync(templatePath);
 
         // Replace template placeholders
         var html = template
@@ -71,7 +75,7 @@ public static class WebsiteGenerator
             .Replace("<!-- END_FEEDS -->", "");
 
         var outputPath = Path.Combine(config.FullSiteDir, "index.html");
-        File.WriteAllText(outputPath, html);
+        await File.WriteAllTextAsync(outputPath, html);
         Console.WriteLine($"Generated index.html with {feedsList.Count} feeds");
     }
 
@@ -113,7 +117,7 @@ public static class WebsiteGenerator
         return sb.ToString().TrimEnd();
     }
 
-    private static void GenerateManifest(IEnumerable<FeedMetadata> feeds, GeneratorConfig config)
+    private static async Task GenerateManifestAsync(IEnumerable<FeedMetadata> feeds, GeneratorConfig config)
     {
         var feedFiles = new List<FeedFileInfo>();
 
@@ -128,7 +132,7 @@ public static class WebsiteGenerator
             }
 
             var fileInfo = new FileInfo(feedPath);
-            var hash = ComputeFileHash(feedPath);
+            var hash = await ComputeFileHashAsync(feedPath);
 
             feedFiles.Add(new FeedFileInfo(
                 Name: $"{feed.Slug}.xml",
@@ -146,16 +150,17 @@ public static class WebsiteGenerator
 
         var manifestPath = Path.Combine(config.FullSiteDir, "manifest.json");
         var json = JsonSerializer.Serialize(manifest, PodcastJsonContext.Default.FeedManifest);
-        File.WriteAllText(manifestPath, json);
+        await File.WriteAllTextAsync(manifestPath, json);
 
         Console.WriteLine($"Generated manifest.json with {feedFiles.Count} feeds");
     }
 
-    private static string ComputeFileHash(string filePath)
+    private static async Task<string> ComputeFileHashAsync(string filePath)
     {
-        using var stream = File.OpenRead(filePath);
+        await using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true);
         using var sha256 = System.Security.Cryptography.SHA256.Create();
-        var hash = sha256.ComputeHash(stream);
-        return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+        var hash = await sha256.ComputeHashAsync(stream);
+        // Use Convert.ToHexString instead of BitConverter.ToString for better performance
+        return Convert.ToHexString(hash).ToLowerInvariant();
     }
 }
