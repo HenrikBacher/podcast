@@ -50,8 +50,10 @@ static async Task<FeedMetadata?> ProcessPodcastAsync(Podcast podcast, IHttpClien
         var seriesResponse = await httpClient.GetAsync($"{ApiUrl}{podcast.Urn}");
         seriesResponse.EnsureSuccessStatusCode();
 
-        var series = JsonSerializer.Deserialize(
-            await seriesResponse.Content.ReadAsStringAsync(),
+        // Use streaming to avoid allocating entire response as string
+        await using var stream = await seriesResponse.Content.ReadAsStreamAsync();
+        var series = await JsonSerializer.DeserializeAsync(
+            stream,
             PodcastJsonContext.Default.Series);
 
         var episodes = await FetchAllEpisodesAsync($"{ApiUrl}{podcast.Urn}/episodes?limit=256", httpClient);
@@ -91,7 +93,7 @@ static (XElement rss, FeedMetadata metadata) BuildRssFeed(Series? series, List<E
     var itunesType = DetermineItunesType(series);
 
     var title = series?.Title ?? podcast.Slug.Replace("-", " ");
-    var cleanTitle = Regex.Replace(title, @"\s*\([^)]*feed[^)]*\)\s*$", "", RegexOptions.IgnoreCase).Trim();
+    var cleanTitle = RegexCache.FeedTitleCleanup.Replace(title, "").Trim();
 
     var channel = new XElement("channel",
         new XElement(atom + "link",
@@ -270,7 +272,11 @@ static string GetMimeTypeFromFormat(string? format)
 
 static async Task<List<Episode>?> FetchAllEpisodesAsync(string initialUrl, HttpClient httpClient)
 {
-    List<Episode> allEpisodes = [];
+    // Parse limit from URL to preallocate capacity (reduces array reallocations)
+    var limitMatch = Regex.Match(initialUrl, @"limit=(\d+)");
+    var estimatedCapacity = limitMatch.Success ? int.Parse(limitMatch.Groups[1].Value) : 256;
+    List<Episode> allEpisodes = new(estimatedCapacity);
+
     string? nextUrl = initialUrl;
 
     while (!string.IsNullOrEmpty(nextUrl))
@@ -278,12 +284,15 @@ static async Task<List<Episode>?> FetchAllEpisodesAsync(string initialUrl, HttpC
         var response = await httpClient.GetAsync(nextUrl);
         response.EnsureSuccessStatusCode();
 
-        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        // Use streaming to avoid allocating entire response as string
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        using var doc = await JsonDocument.ParseAsync(stream);
         var root = doc.RootElement;
 
         if (root.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array)
         {
-            var episodes = JsonSerializer.Deserialize(items.GetRawText(), PodcastJsonContext.Default.ListEpisode);
+            // Deserialize directly from JsonElement instead of GetRawText() to avoid double parsing
+            var episodes = items.Deserialize(PodcastJsonContext.Default.ListEpisode);
             if (episodes != null)
             {
                 allEpisodes.AddRange(episodes);
@@ -296,4 +305,10 @@ static async Task<List<Episode>?> FetchAllEpisodesAsync(string initialUrl, HttpC
     }
 
     return allEpisodes;
+}
+
+// Compiled regex cache for better performance
+file static class RegexCache
+{
+    public static readonly Regex FeedTitleCleanup = new(@"\s*\([^)]*feed[^)]*\)\s*$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 }
