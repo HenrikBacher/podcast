@@ -27,7 +27,7 @@ jobs:
       version-tag: ${{ steps.version.outputs.version-tag }}
       is-release: ${{ steps.version.outputs.is-release }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0  # Need full history for tags
 
@@ -159,7 +159,7 @@ jobs:
             artifact-name: DrPodcast-osx-arm64
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
@@ -235,7 +235,7 @@ jobs:
     # Build metadata versions (PR builds, untagged main) don't create releases
     if: needs.determine-version.outputs.is-release == 'true'
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Download all artifacts
         uses: actions/download-artifact@v6
