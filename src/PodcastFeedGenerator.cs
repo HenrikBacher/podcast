@@ -29,17 +29,20 @@ var podcastList = JsonSerializer.Deserialize(
 
 var config = new GeneratorConfig();
 
+// Create feeds directory once before processing (instead of for each podcast)
+Directory.CreateDirectory(config.FeedsDir);
+
 // Generate RSS feeds and collect metadata
 var tasks = podcastList?.Podcasts.Select(podcast =>
     ProcessPodcastAsync(podcast, httpClientFactory, baseUrl, config)).ToArray();
 
 var results = await Task.WhenAll(tasks!);
-var feedMetadata = results.Where(m => m != null).Cast<FeedMetadata>().ToList();
+var feedMetadata = results.OfType<FeedMetadata>().ToList();
 
 Console.WriteLine($"\nGenerated {feedMetadata.Count} podcast feeds.");
 
 // Generate website using collected metadata
-WebsiteGenerator.Generate(feedMetadata, config);
+await WebsiteGenerator.GenerateAsync(feedMetadata, config);
 
 static async Task<FeedMetadata?> ProcessPodcastAsync(Podcast podcast, IHttpClientFactory factory, string baseUrl, GeneratorConfig config)
 {
@@ -50,20 +53,22 @@ static async Task<FeedMetadata?> ProcessPodcastAsync(Podcast podcast, IHttpClien
         var seriesResponse = await httpClient.GetAsync($"{ApiUrl}{podcast.Urn}");
         seriesResponse.EnsureSuccessStatusCode();
 
-        var series = JsonSerializer.Deserialize(
-            await seriesResponse.Content.ReadAsStringAsync(),
+        // Use streaming to avoid allocating entire response as string
+        await using var stream = await seriesResponse.Content.ReadAsStreamAsync();
+        var series = await JsonSerializer.DeserializeAsync(
+            stream,
             PodcastJsonContext.Default.Series);
 
         var episodes = await FetchAllEpisodesAsync($"{ApiUrl}{podcast.Urn}/episodes?limit=256", httpClient);
 
         var (rss, metadata) = BuildRssFeed(series, episodes, podcast, baseUrl);
 
-        // Ensure feeds directory exists
-        Directory.CreateDirectory(config.FeedsDir);
-
-        // Save directly to final location
+        // Save using async I/O for better performance
         string outputPath = Path.Combine(config.FeedsDir, $"{podcast.Slug}.xml");
-        new XDocument(new XDeclaration("1.0", "utf-8", "yes"), rss).Save(outputPath);
+        await using var fileStream = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true);
+        await using var writer = new StreamWriter(fileStream, new UTF8Encoding(false));
+        var xmlDoc = new XDocument(new XDeclaration("1.0", "utf-8", "yes"), rss);
+        await writer.WriteAsync(xmlDoc.ToString());
         Console.WriteLine($"✓ Generated {podcast.Slug}");
 
         return metadata;
@@ -91,7 +96,7 @@ static (XElement rss, FeedMetadata metadata) BuildRssFeed(Series? series, List<E
     var itunesType = DetermineItunesType(series);
 
     var title = series?.Title ?? podcast.Slug.Replace("-", " ");
-    var cleanTitle = Regex.Replace(title, @"\s*\([^)]*feed[^)]*\)\s*$", "", RegexOptions.IgnoreCase).Trim();
+    var cleanTitle = RegexCache.FeedTitleCleanup.Replace(title, "").Trim();
 
     var channel = new XElement("channel",
         new XElement(atom + "link",
@@ -171,30 +176,21 @@ static (XElement rss, FeedMetadata metadata) BuildRssFeed(Series? series, List<E
     return (rss, metadata);
 }
 
-static string DetermineItunesType(Series? series)
-{
-    if (series?.PresentationType == "Show")
-    {
-        return "serial";
-    }
-    else
-    {
-        return "episodic";
-    }
-}
+static string DetermineItunesType(Series? series) =>
+      series?.PresentationType == "Show" ? "serial" : "episodic";
 
 static void AddCategories(XElement element, List<string>? categories, XNamespace itunes)
 {
-    if (categories is not null)
+    if (categories is null) return;
+
+    // Avoid LINQ overhead - use direct foreach
+    foreach (var category in categories)
     {
-        foreach (var category in categories.Where(c => !string.IsNullOrEmpty(c)))
-    {
+        if (string.IsNullOrEmpty(category)) continue;
         element.Add(new XElement(itunes + "category", new XAttribute("text", category)));
     }
-    }
-
-    
 }
+
 static XElement BuildEpisodeItem(Episode episode, string? channelImage, XNamespace itunes, XNamespace media)
 {
     var audioAsset = episode.AudioAssets?
@@ -247,9 +243,10 @@ static XElement BuildEpisodeItem(Episode episode, string? channelImage, XNamespa
 
     if (audioAsset?.Url is { } url && !string.IsNullOrEmpty(url))
     {
+        var mimeType = GetMimeTypeFromFormat(audioAsset.Format);
         var enclosure = new XElement("enclosure",
             new XAttribute("url", url),
-            new XAttribute("type", "audio/mpeg"));
+            new XAttribute("type", mimeType));
 
         if (audioAsset.FileSize is not null)
         {
@@ -264,9 +261,27 @@ static XElement BuildEpisodeItem(Episode episode, string? channelImage, XNamespa
     return item;
 }
 
+static string GetMimeTypeFromFormat(string? format)
+{
+    if (format is null) return "audio/mpeg";
+
+    // Use ordinal comparison to avoid allocation from ToLowerInvariant()
+    return format.Equals("mp3", StringComparison.OrdinalIgnoreCase) ? "audio/mpeg" :
+           format.Equals("aac", StringComparison.OrdinalIgnoreCase) ? "audio/aac" :
+           format.Equals("m4a", StringComparison.OrdinalIgnoreCase) ? "audio/mp4" :
+           format.Equals("ogg", StringComparison.OrdinalIgnoreCase) ? "audio/ogg" :
+           format.Equals("wav", StringComparison.OrdinalIgnoreCase) ? "audio/wav" :
+           format.Equals("flac", StringComparison.OrdinalIgnoreCase) ? "audio/flac" :
+           "audio/mpeg"; // Default fallback
+}
+
 static async Task<List<Episode>?> FetchAllEpisodesAsync(string initialUrl, HttpClient httpClient)
 {
-    List<Episode> allEpisodes = [];
+    // Parse limit from URL to preallocate capacity (reduces array reallocations)
+    var limitMatch = Regex.Match(initialUrl, @"limit=(\d+)");
+    var estimatedCapacity = limitMatch.Success ? int.Parse(limitMatch.Groups[1].Value) : 256;
+    List<Episode> allEpisodes = new(estimatedCapacity);
+
     string? nextUrl = initialUrl;
 
     while (!string.IsNullOrEmpty(nextUrl))
@@ -274,12 +289,15 @@ static async Task<List<Episode>?> FetchAllEpisodesAsync(string initialUrl, HttpC
         var response = await httpClient.GetAsync(nextUrl);
         response.EnsureSuccessStatusCode();
 
-        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        // Use streaming to avoid allocating entire response as string
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        using var doc = await JsonDocument.ParseAsync(stream);
         var root = doc.RootElement;
 
         if (root.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array)
         {
-            var episodes = JsonSerializer.Deserialize(items.GetRawText(), PodcastJsonContext.Default.ListEpisode);
+            // Deserialize directly from JsonElement instead of GetRawText() to avoid double parsing
+            var episodes = items.Deserialize(PodcastJsonContext.Default.ListEpisode);
             if (episodes != null)
             {
                 allEpisodes.AddRange(episodes);
@@ -292,4 +310,10 @@ static async Task<List<Episode>?> FetchAllEpisodesAsync(string initialUrl, HttpC
     }
 
     return allEpisodes;
+}
+
+// Compiled regex cache for better performance
+file static class RegexCache
+{
+    public static readonly Regex FeedTitleCleanup = new(@"\s*\([^)]*feed[^)]*\)\s*$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 }
