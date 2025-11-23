@@ -18,7 +18,7 @@ on:
       - "**/podcasts.json"
       - "site/**"
   schedule:
-    - cron: "0 * * * *"
+    - cron: "*/15 * * * *"
 
 jobs:
   update-and-deploy-feeds:
