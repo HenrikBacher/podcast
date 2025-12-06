@@ -7,21 +7,33 @@ string apiKey = Environment.GetEnvironmentVariable("API_KEY") ?? "";
 string baseUrl = Environment.GetEnvironmentVariable("BASE_URL") ?? "https://example.com";
 
 ServiceCollection services = [];
+services.AddLogging(builder =>
+{
+    builder.AddConsole(options => options.FormatterName = "simple");
+    builder.SetMinimumLevel(LogLevel.Information);
+});
 services.AddHttpClient("DrApi", client =>
 {
     client.DefaultRequestHeaders.Add("X-Apikey", apiKey);
     client.Timeout = TimeSpan.FromSeconds(30);
 })
-.AddPolicyHandler(HttpPolicyExtensions
-    .HandleTransientHttpError()
-    .OrResult(msg => !msg.IsSuccessStatusCode)
-    .WaitAndRetryAsync(3,
-        retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
-        onRetry: (outcome, timespan, retryCount, _) =>
-            Console.WriteLine($"Retry {retryCount} after {timespan} seconds")));
+.AddPolicyHandler((provider, _) =>
+{
+    var logger = provider.GetRequiredService<ILoggerFactory>().CreateLogger("HttpRetry");
+    return HttpPolicyExtensions
+        .HandleTransientHttpError()
+        .OrResult(msg => !msg.IsSuccessStatusCode)
+        .WaitAndRetryAsync(3,
+            retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
+            onRetry: (outcome, timespan, retryCount, _) =>
+                logger.LogWarning("Retry {RetryCount} after {Delay}s - {Reason}",
+                    retryCount, timespan.TotalSeconds,
+                    outcome.Exception?.Message ?? $"Status {outcome.Result?.StatusCode}"));
+});
 
 await using var serviceProvider = services.BuildServiceProvider();
 var httpClientFactory = serviceProvider.GetRequiredService<IHttpClientFactory>();
+var logger = serviceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("PodcastFeedGenerator");
 
 var podcastList = JsonSerializer.Deserialize(
     await File.ReadAllTextAsync("podcasts.json"),
@@ -34,17 +46,17 @@ Directory.CreateDirectory(config.FeedsDir);
 
 // Generate RSS feeds and collect metadata
 var tasks = podcastList?.Podcasts.Select(podcast =>
-    ProcessPodcastAsync(podcast, httpClientFactory, baseUrl, config)).ToArray();
+    ProcessPodcastAsync(podcast, httpClientFactory, baseUrl, config, logger)).ToArray();
 
 var results = await Task.WhenAll(tasks!);
 var feedMetadata = results.OfType<FeedMetadata>().ToList();
 
-Console.WriteLine($"\nGenerated {feedMetadata.Count} podcast feeds.");
+logger.LogInformation("Generated {FeedCount} podcast feeds", feedMetadata.Count);
 
 // Generate website using collected metadata
-await WebsiteGenerator.GenerateAsync(feedMetadata, config);
+await WebsiteGenerator.GenerateAsync(feedMetadata, config, logger);
 
-static async Task<FeedMetadata?> ProcessPodcastAsync(Podcast podcast, IHttpClientFactory factory, string baseUrl, GeneratorConfig config)
+static async Task<FeedMetadata?> ProcessPodcastAsync(Podcast podcast, IHttpClientFactory factory, string baseUrl, GeneratorConfig config, ILogger logger)
 {
     try
     {
@@ -69,13 +81,13 @@ static async Task<FeedMetadata?> ProcessPodcastAsync(Podcast podcast, IHttpClien
         await using var writer = new StreamWriter(fileStream, new UTF8Encoding(false));
         var xmlDoc = new XDocument(new XDeclaration("1.0", "utf-8", "yes"), rss);
         await writer.WriteAsync(xmlDoc.ToString());
-        Console.WriteLine($"✓ Generated {podcast.Slug}");
+        logger.LogInformation("Generated {Slug}", podcast.Slug);
 
         return metadata;
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"✗ Failed to process {podcast.Urn}: {ex.Message}");
+        logger.LogError(ex, "Failed to process {Urn}", podcast.Urn);
         return null;
     }
 }
