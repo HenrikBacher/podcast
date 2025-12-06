@@ -6,6 +6,5 @@ global using System.Text.RegularExpressions;
 global using System.Xml.Linq;
 global using Microsoft.Extensions.DependencyInjection;
 global using Microsoft.Extensions.Http;
-global using Microsoft.Extensions.Logging;
 global using Polly;
 global using Polly.Extensions.Http;
