@@ -8,7 +8,7 @@ public static class WebsiteGenerator
 
         try
         {
-            logger?.LogInformation("Generating website...");
+            logger?.LogDebug("Generating website...");
 
             // Create output directories
             Directory.CreateDirectory(config.FullSiteDir);
@@ -76,7 +76,7 @@ public static class WebsiteGenerator
 
         var outputPath = Path.Combine(config.FullSiteDir, "index.html");
         await File.WriteAllTextAsync(outputPath, html);
-        logger?.LogInformation("Generated index.html with {FeedCount} feeds", feedsList.Count);
+        logger?.LogDebug("Generated index.html with {FeedCount} feeds", feedsList.Count);
     }
 
     private static string GenerateFeedsHtml(IEnumerable<FeedMetadata> feeds)
@@ -152,7 +152,7 @@ public static class WebsiteGenerator
         var json = JsonSerializer.Serialize(manifest, PodcastJsonContext.Default.FeedManifest);
         await File.WriteAllTextAsync(manifestPath, json);
 
-        logger?.LogInformation("Generated manifest.json with {FeedCount} feeds", feedFiles.Count);
+        logger?.LogDebug("Generated manifest.json with {FeedCount} feeds", feedFiles.Count);
     }
 
     private static async Task<string> ComputeFileHashAsync(string filePath)

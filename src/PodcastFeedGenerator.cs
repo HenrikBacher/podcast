@@ -81,7 +81,7 @@ static async Task<FeedMetadata?> ProcessPodcastAsync(Podcast podcast, IHttpClien
         await using var writer = new StreamWriter(fileStream, new UTF8Encoding(false));
         var xmlDoc = new XDocument(new XDeclaration("1.0", "utf-8", "yes"), rss);
         await writer.WriteAsync(xmlDoc.ToString());
-        logger.LogInformation("Generated {Slug}", podcast.Slug);
+        logger.LogDebug("Generated {Slug}", podcast.Slug);
 
         return metadata;
     }
