@@ -11,3 +11,7 @@ updates:
     directory: "/src" # Location of the project files
     schedule:
       interval: "daily" # How often to check for updates
+    groups:
+      dotnet-patch:
+        update-types:
+          - "patch"
