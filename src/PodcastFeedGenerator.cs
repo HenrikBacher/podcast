@@ -12,7 +12,7 @@ if (args.Contains("--generate"))
     var config = GeneratorConfig.FromEnvironment();
 
     ServiceCollection services = [];
-    services.AddLogging(b => b.AddConsole());
+    services.AddLogging(b => b.AddConsole().SetMinimumLevel(LogLevel.Warning));
     services.AddHttpClient("DrApi", client =>
     {
         client.DefaultRequestHeaders.Add("X-Apikey", apiKey);
