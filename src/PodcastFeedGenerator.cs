@@ -62,7 +62,7 @@ else
     var app = builder.Build();
 
     // Health check endpoint
-    app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
+    app.MapGet("/health", () => Results.Text("healthy"));
 
     // Serve static files from the generated site directory
     var config = GeneratorConfig.FromEnvironment();

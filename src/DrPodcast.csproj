@@ -10,15 +10,18 @@
     <WarningsAsErrors />
     <WarningsNotAsErrors>CS8618</WarningsNotAsErrors>
 
-    <!-- NativeAOT / trimming / perf -->
+    <!-- NativeAOT / trimming / size -->
     <PublishAot>true</PublishAot>
-    <TrimMode>link</TrimMode>
+    <TrimMode>full</TrimMode>
     <InvariantGlobalization>true</InvariantGlobalization>
     <DebuggerSupport>false</DebuggerSupport>
     <EnableUnsafeBinaryFormatterSerialization>false</EnableUnsafeBinaryFormatterSerialization>
     <SuppressTrimAnalysisWarnings>false</SuppressTrimAnalysisWarnings>
-    <TieredPGO>true</TieredPGO>
-    <Optimize>true</Optimize>
+    <OptimizationPreference>Size</OptimizationPreference>
+    <IlcFoldIdenticalMethodBodies>true</IlcFoldIdenticalMethodBodies>
+    <StackTraceSupport>false</StackTraceSupport>
+    <UseSystemResourceKeys>true</UseSystemResourceKeys>
+    <EventSourceSupport>false</EventSourceSupport>
 
     <!-- Optional flag to toggle OpenTelemetry packages usage -->
     <EnableOpenTelemetry>false</EnableOpenTelemetry>
@@ -29,8 +32,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.DotNet.ILCompiler" Version="10.0.2" />
-    <PackageReference Include="Microsoft.NET.ILLink.Tasks" Version="10.0.2" />
     <None Update="podcasts.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

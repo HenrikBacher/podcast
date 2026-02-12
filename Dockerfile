@@ -1,5 +1,6 @@
-# Build stage
+# Build stage — NativeAOT requires clang and linker
 FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine AS build
+RUN apk add --no-cache clang build-base zlib-dev
 WORKDIR /src
 COPY src/DrPodcast.csproj src/
 RUN dotnet restore src/DrPodcast.csproj -r linux-musl-x64
@@ -7,12 +8,11 @@ COPY src/ src/
 COPY site/ site/
 COPY podcasts.json src/
 RUN dotnet publish src/DrPodcast.csproj -c Release -r linux-musl-x64 \
-    --self-contained -p:PublishAot=false -p:PublishTrimmed=true \
-    -p:PublishSingleFile=true -o /out
+    -p:DebugType=none -p:StripSymbols=true -o /out
 
-# Runtime stage — bare Alpine, no .NET runtime needed
-FROM mcr.microsoft.com/dotnet/runtime-deps:10.0-alpine
-
+# Runtime stage
+FROM alpine:3
+RUN apk add --no-cache libstdc++
 WORKDIR /app
 COPY --from=build /out/DrPodcast ./
 COPY --from=build /out/podcasts.json ./
