@@ -8,17 +8,15 @@ COPY src/ src/
 COPY site/ site/
 COPY podcasts.json src/
 RUN dotnet publish src/DrPodcast.csproj -c Release -r linux-musl-x64 \
-    -p:DebugType=none -p:StripSymbols=true -p:StaticExecutable=true -o /out \
-    && mkdir /output-dir
+    -p:DebugType=none -p:StripSymbols=true -p:StaticExecutable=true -o /out
 
 # Runtime stage — static binary, no OS needed
 FROM scratch
 WORKDIR /app
-COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /out/DrPodcast ./
 COPY --from=build /out/podcasts.json ./
 COPY --from=build /src/site/ site/
-COPY --from=build --chown=1000:1000 /output-dir output
 USER 1000
 
 EXPOSE 8080
