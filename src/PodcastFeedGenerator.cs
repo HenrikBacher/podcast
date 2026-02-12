@@ -83,14 +83,6 @@ else
         {
             var contentType = ctx.Context.Response.ContentType ?? "";
 
-            // Ensure UTF-8 charset on text and JSON responses
-            if (!contentType.Contains("charset", StringComparison.OrdinalIgnoreCase)
-                && (contentType.StartsWith("text/", StringComparison.OrdinalIgnoreCase)
-                    || contentType.Contains("json", StringComparison.OrdinalIgnoreCase)))
-            {
-                ctx.Context.Response.ContentType = contentType + "; charset=utf-8";
-            }
-
             // Content-hash ETag — survives atomic rewrites when content is unchanged
             var filePath = ctx.File.PhysicalPath;
             if (filePath is not null && File.Exists(filePath))
@@ -101,7 +93,6 @@ else
                 ctx.Context.Response.Headers.ETag = $"\"{hash}\"";
             }
 
-            // Feeds refresh every 15 min — cache 5 min, then revalidate via ETag
             var headers = ctx.Context.Response.GetTypedHeaders();
             if (contentType.Contains("xml", StringComparison.OrdinalIgnoreCase))
                 headers.CacheControl = new() { Public = true, MaxAge = TimeSpan.FromMinutes(5) };
