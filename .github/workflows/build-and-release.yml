@@ -21,6 +21,8 @@ on:
       - "podcasts.json"
       - "Dockerfile"
       - ".github/workflows/build-and-release.yml"
+  schedule:
+    - cron: '0 2 * * Wed'
 
 env:
   DOTNET_VERSION: "10.0.x"
