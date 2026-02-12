@@ -12,7 +12,7 @@ services:
       - TZ=Europe/Copenhagen
     read_only: true
     tmpfs:
-      - /app/output
+      - /app/output:uid=1000,gid=1000
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "./DrPodcast", "--healthcheck"]
