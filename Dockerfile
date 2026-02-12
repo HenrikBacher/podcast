@@ -12,14 +12,13 @@ RUN dotnet publish src/DrPodcast.csproj -c Release -r linux-musl-x64 \
 
 # Runtime stage
 FROM alpine:3
-RUN apk add --no-cache libstdc++ && \
-    addgroup -g 1000 appuser && adduser -D -u 1000 -G appuser appuser
+RUN apk add --no-cache libstdc++
 WORKDIR /app
 COPY --from=build /out/DrPodcast ./
 COPY --from=build /out/podcasts.json ./
 COPY --from=build /src/site/ site/
-RUN mkdir -p output && chown -R appuser:appuser /app
-USER appuser
+RUN mkdir -p output && chown -R 99:100 /app
+USER 99:100
 
 EXPOSE 8080
 ENV ASPNETCORE_URLS=http://+:8080 \
