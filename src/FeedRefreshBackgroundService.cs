@@ -2,6 +2,7 @@ namespace DrPodcast;
 
 public sealed class FeedRefreshBackgroundService(
     FeedGenerationService feedService,
+    FeedHealthStatus healthStatus,
     ILogger<FeedRefreshBackgroundService> logger) : BackgroundService
 {
     private const int MaxBackoffMinutes = 60;
@@ -42,7 +43,8 @@ public sealed class FeedRefreshBackgroundService(
         try
         {
             logger.LogInformation("Starting feed generation...");
-            await feedService.GenerateFeedsAsync(podcastsJsonPath, baseUrl, config, cancellationToken);
+            var feedCount = await feedService.GenerateFeedsAsync(podcastsJsonPath, baseUrl, config, cancellationToken);
+            healthStatus.ReportSuccess(feedCount);
             logger.LogInformation("Feed generation complete.");
             return 0;
         }
@@ -54,6 +56,7 @@ public sealed class FeedRefreshBackgroundService(
         catch (Exception ex)
         {
             consecutiveFailures++;
+            healthStatus.ReportFailure();
             logger.LogError(ex, "Feed generation failed ({Failures} consecutive). Will retry at next interval.", consecutiveFailures);
             return consecutiveFailures;
         }

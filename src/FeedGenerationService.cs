@@ -5,7 +5,7 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
     private const string ApiUrl = "https://api.dr.dk/radio/v2/series/";
     private const string Rfc822Format = "ddd, dd MMM yyyy HH:mm:ss zzz";
 
-    public async Task GenerateFeedsAsync(string podcastsJsonPath, string baseUrl, GeneratorConfig config, CancellationToken cancellationToken = default)
+    public async Task<int> GenerateFeedsAsync(string podcastsJsonPath, string baseUrl, GeneratorConfig config, CancellationToken cancellationToken = default)
     {
         var podcastList = JsonSerializer.Deserialize(
             await File.ReadAllTextAsync(podcastsJsonPath, cancellationToken),
@@ -22,6 +22,8 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
         logger.LogInformation("Generated {Count} podcast feeds.", feedMetadata.Count);
 
         await WebsiteGenerator.GenerateAsync(feedMetadata, config);
+
+        return feedMetadata.Count;
     }
 
     private async Task<FeedMetadata?> ProcessPodcastAsync(Podcast podcast, string baseUrl, GeneratorConfig config, CancellationToken cancellationToken)

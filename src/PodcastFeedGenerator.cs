@@ -1,8 +1,7 @@
-using System.Collections.Concurrent;
-using System.Security.Cryptography;
 using DrPodcast;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Net.Http.Headers;
 
@@ -59,12 +58,31 @@ else
                 Console.WriteLine($"Retry {retryCount} after {timespan} seconds")));
 
     builder.Services.AddSingleton<FeedGenerationService>();
+    builder.Services.AddSingleton<FeedHealthStatus>();
     builder.Services.AddHostedService<FeedRefreshBackgroundService>();
+    builder.Services.AddResponseCompression(options =>
+    {
+        options.EnableForHttps = true;
+        options.MimeTypes = ResponseCompressionDefaults.MimeTypes.Concat(["application/rss+xml"]);
+    });
 
     var app = builder.Build();
 
+    app.UseResponseCompression();
+
     // Health check endpoint
-    app.MapGet("/health", () => Results.Text("healthy"));
+    app.MapGet("/health", (FeedHealthStatus status) =>
+    {
+        const string jsonContentType = "application/json";
+
+        if (!status.HasCompletedOnce)
+            return Results.Text("""{"status":"starting","message":"Initial feed generation in progress"}""", jsonContentType, statusCode: 503);
+
+        if (status.ConsecutiveFailures >= 3)
+            return Results.Text($$"""{"status":"degraded","consecutiveFailures":{{status.ConsecutiveFailures}},"lastSuccess":"{{status.LastSuccessUtc:O}}"}""", jsonContentType, statusCode: 503);
+
+        return Results.Text($$"""{"status":"healthy","lastSuccess":"{{status.LastSuccessUtc:O}}","feedCount":{{status.FeedCount}}}""", jsonContentType);
+    });
 
     // Serve static files from the generated site directory
     var config = GeneratorConfig.FromEnvironment();
@@ -76,9 +94,6 @@ else
 
     var fileProvider = new PhysicalFileProvider(Path.GetFullPath(config.FullSiteDir));
 
-    // Cache ETag hashes: keyed on (path, lastWriteUtc) so we only rehash when the file changes
-    var etagCache = new ConcurrentDictionary<(string Path, DateTime LastWrite), string>();
-
     app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = fileProvider });
     app.UseStaticFiles(new StaticFileOptions
     {
@@ -87,22 +102,6 @@ else
         OnPrepareResponse = ctx =>
         {
             var contentType = ctx.Context.Response.ContentType ?? "";
-
-            // Content-hash ETag — survives atomic rewrites when content is unchanged
-            var filePath = ctx.File.PhysicalPath;
-            if (filePath is not null && File.Exists(filePath))
-            {
-                var lastWrite = File.GetLastWriteTimeUtc(filePath);
-                var key = (filePath, lastWrite);
-                var hash = etagCache.GetOrAdd(key, static k =>
-                {
-                    using var stream = File.OpenRead(k.Path);
-                    var hashBytes = SHA256.HashData(stream);
-                    return Convert.ToHexStringLower(hashBytes);
-                });
-                ctx.Context.Response.Headers.ETag = $"\"{hash}\"";
-            }
-
             var headers = ctx.Context.Response.GetTypedHeaders();
             if (contentType.Contains("xml", StringComparison.OrdinalIgnoreCase))
                 headers.CacheControl = new() { Public = true, MaxAge = TimeSpan.FromMinutes(5) };

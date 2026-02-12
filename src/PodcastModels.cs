@@ -15,6 +15,23 @@ public record FeedMetadata(
     string? ImageUrl
 );
 
+public sealed class FeedHealthStatus
+{
+    public bool HasCompletedOnce { get; private set; }
+    public DateTime? LastSuccessUtc { get; private set; }
+    public int ConsecutiveFailures { get; private set; }
+    public int FeedCount
+    public void ReportSuccess(int feedCount)
+    {
+        HasCompletedOnce = true;
+        LastSuccessUtc = DateTime.UtcNow;
+        ConsecutiveFailures = 0;
+        FeedCount = feedCount;
+    }
+
+    public void ReportFailure() => ConsecutiveFailures++;
+}
+
 public record GeneratorConfig(
     string OutputDir = "output",
     string SiteDir = "_site",
