@@ -6,20 +6,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Net.Http.Headers;
 
-if (args.Contains("--healthcheck"))
-{
-    using var client = new HttpClient();
-    try
-    {
-        var response = await client.GetAsync("http://localhost:8080/health");
-        return response.IsSuccessStatusCode ? 0 : 1;
-    }
-    catch
-    {
-        return 1;
-    }
-}
-
 if (args.Contains("--generate"))
 {
     // Console mode: generate feeds once and exit (CI/CD behavior)
@@ -51,7 +37,6 @@ if (args.Contains("--generate"))
     var podcastsJsonPath = args.SkipWhile(a => a != "--podcasts").Skip(1).FirstOrDefault() ?? "podcasts.json";
 
     await feedService.GenerateFeedsAsync(podcastsJsonPath, baseUrl, config);
-    return 0;
 }
 else
 {
@@ -126,6 +111,5 @@ else
         }
     });
 
-    await app.RunAsync();
-    return 0;
+    app.Run();
 }
