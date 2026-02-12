@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Security.Cryptography;
 using DrPodcast;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -74,6 +76,9 @@ else
 
     var fileProvider = new PhysicalFileProvider(Path.GetFullPath(config.FullSiteDir));
 
+    // Cache ETag hashes: keyed on (path, lastWriteUtc) so we only rehash when the file changes
+    var etagCache = new ConcurrentDictionary<(string Path, DateTime LastWrite), string>();
+
     app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = fileProvider });
     app.UseStaticFiles(new StaticFileOptions
     {
@@ -87,9 +92,14 @@ else
             var filePath = ctx.File.PhysicalPath;
             if (filePath is not null && File.Exists(filePath))
             {
-                using var stream = File.OpenRead(filePath);
-                using var sha = System.Security.Cryptography.SHA256.Create();
-                var hash = Convert.ToHexStringLower(sha.ComputeHash(stream));
+                var lastWrite = File.GetLastWriteTimeUtc(filePath);
+                var key = (filePath, lastWrite);
+                var hash = etagCache.GetOrAdd(key, static k =>
+                {
+                    using var stream = File.OpenRead(k.Path);
+                    var hashBytes = SHA256.HashData(stream);
+                    return Convert.ToHexStringLower(hashBytes);
+                });
                 ctx.Context.Response.Headers.ETag = $"\"{hash}\"";
             }
 

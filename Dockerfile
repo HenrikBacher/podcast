@@ -25,6 +25,6 @@ EXPOSE 8080
 ENV ASPNETCORE_URLS=http://+:8080 \
     BASE_URL=http://localhost:8080 \
     REFRESH_INTERVAL_MINUTES=15
-HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-  CMD wget -qO/dev/null http://localhost:8080/health || exit 1
+HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
+  CMD wget -q --spider http://localhost:8080/health || exit 1
 ENTRYPOINT ["./DrPodcast"]

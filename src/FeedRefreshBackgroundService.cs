@@ -4,6 +4,8 @@ public sealed class FeedRefreshBackgroundService(
     FeedGenerationService feedService,
     ILogger<FeedRefreshBackgroundService> logger) : BackgroundService
 {
+    private const int MaxBackoffMinutes = 60;
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var baseUrl = Environment.GetEnvironmentVariable("BASE_URL") ?? "https://example.com";
@@ -16,31 +18,44 @@ public sealed class FeedRefreshBackgroundService(
 
         logger.LogInformation("Feed refresh service started. Interval: {Interval} minutes.", intervalMinutes);
 
+        int consecutiveFailures = 0;
+
         // Generate feeds immediately on startup
-        await RunGenerationAsync(podcastsJsonPath, baseUrl, config, stoppingToken);
+        consecutiveFailures = await RunGenerationAsync(podcastsJsonPath, baseUrl, config, consecutiveFailures, stoppingToken);
 
         using var timer = new PeriodicTimer(TimeSpan.FromMinutes(intervalMinutes));
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
-            await RunGenerationAsync(podcastsJsonPath, baseUrl, config, stoppingToken);
+            if (consecutiveFailures >= 3)
+            {
+                var backoffMinutes = Math.Min(intervalMinutes * (1 << (consecutiveFailures - 2)), MaxBackoffMinutes);
+                logger.LogWarning("Backing off for {Backoff} minutes after {Failures} consecutive failures.", backoffMinutes, consecutiveFailures);
+                await Task.Delay(TimeSpan.FromMinutes(backoffMinutes), stoppingToken);
+            }
+
+            consecutiveFailures = await RunGenerationAsync(podcastsJsonPath, baseUrl, config, consecutiveFailures, stoppingToken);
         }
     }
 
-    private async Task RunGenerationAsync(string podcastsJsonPath, string baseUrl, GeneratorConfig config, CancellationToken cancellationToken)
+    private async Task<int> RunGenerationAsync(string podcastsJsonPath, string baseUrl, GeneratorConfig config, int consecutiveFailures, CancellationToken cancellationToken)
     {
         try
         {
             logger.LogInformation("Starting feed generation...");
             await feedService.GenerateFeedsAsync(podcastsJsonPath, baseUrl, config, cancellationToken);
             logger.LogInformation("Feed generation complete.");
+            return 0;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             // Graceful shutdown
+            return consecutiveFailures;
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Feed generation failed. Will retry at next interval.");
+            consecutiveFailures++;
+            logger.LogError(ex, "Feed generation failed ({Failures} consecutive). Will retry at next interval.", consecutiveFailures);
+            return consecutiveFailures;
         }
     }
 

@@ -83,7 +83,7 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
         var itunesType = DetermineItunesType(series);
 
         var title = series?.Title ?? podcast.Slug.Replace("-", " ");
-        var cleanTitle = RegexCache.FeedTitleCleanup.Replace(title, "").Trim();
+        var cleanTitle = RegexCache.FeedTitleCleanup().Replace(title, "").Trim();
 
         var channel = new XElement("channel",
             new XElement(atom + "link",
@@ -297,7 +297,8 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
     }
 }
 
-file static class RegexCache
+internal static partial class RegexCache
 {
-    public static readonly Regex FeedTitleCleanup = new(@"\s*\([^)]*feed[^)]*\)\s*$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    [GeneratedRegex(@"\s*\([^)]*feed[^)]*\)\s*$", RegexOptions.IgnoreCase)]
+    public static partial Regex FeedTitleCleanup();
 }
