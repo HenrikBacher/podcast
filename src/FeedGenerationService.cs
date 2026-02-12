@@ -87,7 +87,7 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
 
         var channel = new XElement("channel",
             new XElement(atom + "link",
-                new XAttribute("href", $"{baseUrl}/feeds/{podcast.Slug}.xml"),
+                new XAttribute("href", $"https://{baseUrl}/feeds/{podcast.Slug}.xml"),
                 new XAttribute("rel", "self"),
                 new XAttribute("type", "application/rss+xml")),
             new XElement("title", series?.Title),
