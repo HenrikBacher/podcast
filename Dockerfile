@@ -1,6 +1,6 @@
 # Build stage — NativeAOT requires clang and linker
 FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine AS build
-RUN apk add --no-cache clang build-base zlib-dev zlib-static openssl-dev openssl-libs-static
+RUN apk add --no-cache clang build-base zlib-dev zlib-static
 WORKDIR /src
 COPY src/DrPodcast.csproj src/
 RUN dotnet restore src/DrPodcast.csproj -r linux-musl-x64
