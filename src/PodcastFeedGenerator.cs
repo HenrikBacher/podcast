@@ -58,7 +58,6 @@ else
                 Console.WriteLine($"Retry {retryCount} after {timespan} seconds")));
 
     builder.Services.AddSingleton<FeedGenerationService>();
-    builder.Services.AddSingleton<FeedHealthStatus>();
     builder.Services.AddHostedService<FeedRefreshBackgroundService>();
     builder.Services.AddResponseCompression(options =>
     {
@@ -71,18 +70,7 @@ else
     app.UseResponseCompression();
 
     // Health check endpoint
-    app.MapGet("/health", (FeedHealthStatus status) =>
-    {
-        const string jsonContentType = "application/json";
-
-        if (!status.HasCompletedOnce)
-            return Results.Text("""{"status":"starting","message":"Initial feed generation in progress"}""", jsonContentType, statusCode: 503);
-
-        if (status.ConsecutiveFailures >= 3)
-            return Results.Text($$"""{"status":"degraded","consecutiveFailures":{{status.ConsecutiveFailures}},"lastSuccess":"{{status.LastSuccessUtc:O}}"}""", jsonContentType, statusCode: 503);
-
-        return Results.Text($$"""{"status":"healthy","lastSuccess":"{{status.LastSuccessUtc:O}}","feedCount":{{status.FeedCount}}}""", jsonContentType);
-    });
+    app.MapGet("/health", () => Results.Text("healthy"));
 
     // Serve static files from the generated site directory
     var config = GeneratorConfig.FromEnvironment();

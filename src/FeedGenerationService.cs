@@ -5,7 +5,7 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
     private const string ApiUrl = "https://api.dr.dk/radio/v2/series/";
     private const string Rfc822Format = "ddd, dd MMM yyyy HH:mm:ss zzz";
 
-    public async Task<int> GenerateFeedsAsync(string podcastsJsonPath, string baseUrl, GeneratorConfig config, CancellationToken cancellationToken = default)
+    public async Task GenerateFeedsAsync(string podcastsJsonPath, string baseUrl, GeneratorConfig config, CancellationToken cancellationToken = default)
     {
         var podcastList = JsonSerializer.Deserialize(
             await File.ReadAllTextAsync(podcastsJsonPath, cancellationToken),
@@ -22,8 +22,6 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
         logger.LogInformation("Generated {Count} podcast feeds.", feedMetadata.Count);
 
         await WebsiteGenerator.GenerateAsync(feedMetadata, config);
-
-        return feedMetadata.Count;
     }
 
     private async Task<FeedMetadata?> ProcessPodcastAsync(Podcast podcast, string baseUrl, GeneratorConfig config, CancellationToken cancellationToken)
@@ -41,12 +39,23 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
                 PodcastJsonContext.Default.Series,
                 cancellationToken);
 
+            // Skip regeneration if the feed is already up-to-date, so Last-Modified stays stable
+            string outputPath = Path.Combine(config.FeedsDir, $"{podcast.Slug}.xml");
+            if (File.Exists(outputPath) && !HasNewerEpisodes(outputPath, series))
+            {
+                logger.LogInformation("Skipped {Slug} (unchanged)", podcast.Slug);
+                var imageUrl = PodcastHelpers.GetImageUrlFromAssets(series?.ImageAssets)
+                               ?? PodcastHelpers.GetImageUrlFromAssets(podcast.ImageAssets);
+                var title = series?.Title ?? podcast.Slug.Replace("-", " ");
+                var cleanTitle = RegexCache.FeedTitleCleanup().Replace(title, "").Trim();
+                return new FeedMetadata(podcast.Slug, cleanTitle, imageUrl);
+            }
+
             var episodes = await FetchAllEpisodesAsync($"{ApiUrl}{podcast.Urn}/episodes?limit=256", httpClient, cancellationToken);
 
             var (rss, metadata) = BuildRssFeed(series, episodes, podcast, baseUrl);
 
             // Atomic write: write to temp file then rename to avoid serving partial files
-            string outputPath = Path.Combine(config.FeedsDir, $"{podcast.Slug}.xml");
             string tempPath = outputPath + ".tmp";
             await using (var fileStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true))
             await using (var writer = new StreamWriter(fileStream, new UTF8Encoding(false)))
@@ -165,6 +174,26 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
         var metadata = new FeedMetadata(podcast.Slug, cleanTitle, imageUrl);
 
         return (rss, metadata);
+    }
+
+    private static bool HasNewerEpisodes(string feedPath, Series? series)
+    {
+        if (!DateTime.TryParse(series?.LatestEpisodeStartTime, out var latestEpisode))
+            return true; // Can't determine, regenerate to be safe
+
+        try
+        {
+            var doc = XDocument.Load(feedPath);
+            var lastBuildDate = doc.Root?.Element("channel")?.Element("lastBuildDate")?.Value;
+            if (lastBuildDate is null || !DateTime.TryParse(lastBuildDate, out var existing))
+                return true;
+
+            return latestEpisode > existing;
+        }
+        catch
+        {
+            return true; // Corrupt/unreadable file, regenerate
+        }
     }
 
     private static string DetermineItunesType(Series? series) =>
