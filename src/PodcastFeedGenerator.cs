@@ -41,6 +41,7 @@ else
 {
     // Web server mode: serve static feeds + periodic background regeneration
     var builder = WebApplication.CreateBuilder(args);
+    builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
 
     var apiKey = Environment.GetEnvironmentVariable("API_KEY") ?? "";
 
