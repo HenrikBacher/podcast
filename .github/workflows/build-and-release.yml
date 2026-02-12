@@ -7,6 +7,9 @@ on:
     paths:
       - "src/**"
       - "tests/**"
+      - "site/**"
+      - "podcasts.json"
+      - "Dockerfile"
       - ".github/workflows/build-and-release.yml"
   pull_request:
     branches:
@@ -14,10 +17,14 @@ on:
     paths:
       - "src/**"
       - "tests/**"
+      - "site/**"
+      - "podcasts.json"
+      - "Dockerfile"
       - ".github/workflows/build-and-release.yml"
 
 env:
   DOTNET_VERSION: "10.0.x"
+  IMAGE_NAME: ghcr.io/${{ github.repository }}
 
 jobs:
   determine-version:
@@ -29,7 +36,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          fetch-depth: 0  # Need full history for tags
+          fetch-depth: 0
 
       - name: Determine Version
         id: version
@@ -37,16 +44,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: pwsh
         run: |
-          Write-Host "🔖 Automatic Versioning from PR Template"
-          Write-Host "=========================================="
-
-          # Get latest release version
           $latestTag = git describe --tags --abbrev=0 2>$null
           if (-not $latestTag) {
             $latestTag = "v0.1.0"
-            Write-Host "⚠️  No tags found, using default: $latestTag"
+            Write-Host "No tags found, using default: $latestTag"
           } else {
-            Write-Host "📌 Latest version: $latestTag"
+            Write-Host "Latest version: $latestTag"
           }
 
           $version = $latestTag.TrimStart('v')
@@ -56,69 +59,50 @@ jobs:
           $patch = [int]$parts[2]
 
           $isRelease = "false"
-          $bumpType = "patch"  # Default
+          $bumpType = "patch"
 
           if ("${{ github.event_name }}" -eq "push" -and "${{ github.ref }}" -eq "refs/heads/main") {
-            # Main branch - ALWAYS create release with version bump
             $isRelease = "true"
 
-            # Get the merge commit message to find PR number
             $commitMsg = git log -1 --pretty=%B
             $prMatch = $commitMsg -match '#(\d+)'
             if ($prMatch -and $matches -and $matches.Count -gt 1) {
               $prNumber = $matches[1]
-              Write-Host "📝 Merged PR #$prNumber"
+              Write-Host "Merged PR #$prNumber"
 
-              # Fetch PR body to check version bump selection
               try {
                 $prData = gh pr view $prNumber --json body --jq '.body' 2>$null
                 if ($prData) {
-                  Write-Host "📋 Checking PR template..."
                   if ($prData -match '\[x\]\s+\*\*Major\*\*') {
                     $bumpType = "major"
-                    Write-Host "   ⬆️  MAJOR bump"
                   } elseif ($prData -match '\[x\]\s+\*\*Minor\*\*') {
                     $bumpType = "minor"
-                    Write-Host "   ➕ MINOR bump"
-                  } else {
-                    Write-Host "   🔧 PATCH bump (default)"
                   }
                 }
               } catch {
-                Write-Host "   ⚠️  Could not read PR, using PATCH (default)"
+                Write-Host "Could not read PR, using PATCH (default)"
               }
-            } else {
-              Write-Host "   ⚠️  No PR found, using PATCH (default)"
             }
 
-            # Calculate new version
             switch ($bumpType) {
               "major" { $newVersion = "$($major + 1).0.0" }
               "minor" { $newVersion = "$major.$($minor + 1).0" }
               "patch" { $newVersion = "$major.$minor.$($patch + 1)" }
             }
             $version = $newVersion
-
-            Write-Host ""
-            Write-Host "✅ RELEASE: v$version ($bumpType from v$latestTag)"
+            Write-Host "Release: v$version ($bumpType)"
           } else {
-            # PR build - use prerelease format
             $prNumber = "${{ github.event.pull_request.number }}"
             if (-not $prNumber) { $prNumber = "0" }
             $shortSha = git rev-parse --short=7 HEAD
 
-            # Determine bump type from PR template for preview
-            $bumpType = "patch"  # Default
+            $bumpType = "patch"
             try {
               $prBody = "${{ github.event.pull_request.body }}"
-              if ($prBody -match '\[x\]\s+\*\*Major\*\*') {
-                $bumpType = "major"
-              } elseif ($prBody -match '\[x\]\s+\*\*Minor\*\*') {
-                $bumpType = "minor"
-              }
+              if ($prBody -match '\[x\]\s+\*\*Major\*\*') { $bumpType = "major" }
+              elseif ($prBody -match '\[x\]\s+\*\*Minor\*\*') { $bumpType = "minor" }
             } catch { }
 
-            # Show what version it WILL become
             switch ($bumpType) {
               "major" { $nextVersion = "$($major + 1).0.0" }
               "minor" { $nextVersion = "$major.$($minor + 1).0" }
@@ -126,38 +110,15 @@ jobs:
             }
 
             $version = "$nextVersion-pr$prNumber-$shortSha"
-            Write-Host "🚧 PR #${prNumber}: $version"
-            Write-Host "   Will become v$nextVersion when merged"
+            Write-Host "PR #${prNumber}: $version"
           }
-
-          Write-Host ""
-          Write-Host "📦 Version: $version"
-          Write-Host "🏷️  Tag: v$version"
 
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           "version-tag=v$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           "is-release=$isRelease" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
-  build:
-    needs: determine-version
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-latest]
-        include:
-          - os: ubuntu-latest
-            runtime: linux-x64
-            artifact-name: DrPodcast-linux-x64
-          - os: ubuntu-24.04-arm
-            runtime: linux-arm64
-            artifact-name: DrPodcast-linux-arm64
-          - os: windows-latest
-            runtime: win-x64
-            artifact-name: DrPodcast-win-x64
-          - os: macos-latest
-            runtime: osx-arm64
-            artifact-name: DrPodcast-osx-arm64
-
+  test:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
 
@@ -166,131 +127,68 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Restore dependencies
-        run: dotnet restore src/DrPodcast.csproj
-
-      - name: Build
-        run: dotnet build src/DrPodcast.csproj --no-restore --configuration Release -p:Version=${{ needs.determine-version.outputs.version }}
-
       - name: Run Tests
-        run: dotnet test tests/DrPodcast.Tests/DrPodcast.Tests.csproj --configuration Release --verbosity normal --logger "trx;LogFileName=test-results.trx" --collect:"XPlat Code Coverage"
+        run: dotnet test tests/DrPodcast.Tests/DrPodcast.Tests.csproj --configuration Release --verbosity normal --collect:"XPlat Code Coverage"
 
-      - name: Upload Test Results
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: test-results-${{ matrix.runtime }}
-          path: |
-            **/test-results.trx
-            **/TestResults/**/coverage.cobertura.xml
-          retention-days: 7
-
-      - name: Publish
-        shell: pwsh
-        run: |
-          dotnet publish src/DrPodcast.csproj `
-            --configuration Release `
-            --runtime ${{ matrix.runtime }} `
-            --self-contained true `
-            --output ./publish/${{ matrix.runtime }} `
-            -p:PublishSingleFile=true `
-            -p:PublishTrimmed=true `
-            -p:Version=${{ needs.determine-version.outputs.version }}
-
-      - name: Prepare Executable
-        shell: pwsh
-        run: |
-          if ("${{ matrix.runtime }}" -eq "win-x64") {
-            Copy-Item "publish/${{ matrix.runtime }}/DrPodcast.exe" "${{ matrix.artifact-name }}.exe"
-          } else {
-            Copy-Item "publish/${{ matrix.runtime }}/DrPodcast" "${{ matrix.artifact-name }}"
-          }
-
-      - name: Generate Checksums
-        shell: pwsh
-        run: |
-          if ("${{ matrix.runtime }}" -eq "win-x64") {
-            $hash = (Get-FileHash -Path "${{ matrix.artifact-name }}.exe" -Algorithm SHA256).Hash.ToLower()
-            "$hash  ${{ matrix.artifact-name }}.exe" | Out-File -FilePath "${{ matrix.artifact-name }}.sha256" -Encoding ASCII -NoNewline
-          } else {
-            $hash = (Get-FileHash -Path "${{ matrix.artifact-name }}" -Algorithm SHA256).Hash.ToLower()
-            "$hash  ${{ matrix.artifact-name }}" | Out-File -FilePath "${{ matrix.artifact-name }}.sha256" -Encoding ASCII -NoNewline
-          }
-          Write-Host "Generated checksum: $hash"
-
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v6
-        with:
-          name: ${{ matrix.artifact-name }}
-          path: |
-            ${{ matrix.artifact-name }}.exe
-            ${{ matrix.artifact-name }}
-            ${{ matrix.artifact-name }}.sha256
-          retention-days: 30
-
-  release:
-    needs: [determine-version, build]
+  docker:
+    needs: [determine-version, test]
     runs-on: ubuntu-latest
-    # Only create releases for tagged commits on main (is-release == true)
-    # Build metadata versions (PR builds, untagged main) don't create releases
-    if: needs.determine-version.outputs.is-release == 'true'
+    permissions:
+      contents: write
+      packages: write
     steps:
       - uses: actions/checkout@v6
 
-      - name: Download all artifacts
-        uses: actions/download-artifact@v7
-        with:
-          path: ./artifacts
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Create Release and Upload All Assets
+      - name: Log in to GitHub Container Registry
+        if: needs.determine-version.outputs.is-release == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable=${{ needs.determine-version.outputs.is-release == 'true' }}
+            type=raw,value=${{ needs.determine-version.outputs.version-tag }},enable=${{ needs.determine-version.outputs.is-release == 'true' }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: ${{ needs.determine-version.outputs.is-release == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Create GitHub Release
+        if: needs.determine-version.outputs.is-release == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.determine-version.outputs.version-tag }}
           name: Release ${{ needs.determine-version.outputs.version-tag }}
           body: |
-            ## ✅ Release ${{ needs.determine-version.outputs.version }}
+            ## Release ${{ needs.determine-version.outputs.version }}
 
-            This release was automatically created from tag `${{ needs.determine-version.outputs.version-tag }}`.
+            ### Docker
 
-            ### 📥 Download
-
-            Choose the appropriate executable for your platform:
-            - **Linux (x64)**: `DrPodcast-linux-x64`
-            - **Linux (arm64)**: `DrPodcast-linux-arm64`
-            - **Windows (x64)**: `DrPodcast-win-x64.exe`
-            - **macOS (arm64)**: `DrPodcast-osx-arm64`
-
-            ### 🚀 Installation
-
-            1. Download the executable for your platform
-            2. Run it directly (no extraction required)
-            3. On Linux/macOS, make it executable: `chmod +x DrPodcast-*`
-
-            ### 🔐 Verification
-
-            SHA256 checksums are provided for each binary (`.sha256` files):
-
-            **Linux/macOS:**
             ```bash
-            sha256sum -c DrPodcast-*.sha256
+            docker pull ${{ env.IMAGE_NAME }}:${{ needs.determine-version.outputs.version-tag }}
             ```
 
-            **Windows (PowerShell):**
-            ```powershell
-            $expected = (Get-Content DrPodcast-win-x64.sha256).Split()[0]
-            $actual = (Get-FileHash DrPodcast-win-x64.exe -Algorithm SHA256).Hash.ToLower()
-            if ($expected -eq $actual) { "✓ Checksum verified" } else { "✗ Checksum mismatch" }
+            Or use `latest`:
+
+            ```bash
+            docker pull ${{ env.IMAGE_NAME }}:latest
             ```
-
-            ---
-
-            🤖 *Automated release via GitHub Actions*
           draft: false
           prerelease: false
-          files: |
-            ./artifacts/**/*.exe
-            ./artifacts/**/*.sha256
-            ./artifacts/DrPodcast-linux-x64/DrPodcast-linux-x64
-            ./artifacts/DrPodcast-linux-arm64/DrPodcast-linux-arm64
-            ./artifacts/DrPodcast-osx-arm64/DrPodcast-osx-arm64
           token: ${{ secrets.GITHUB_TOKEN }}

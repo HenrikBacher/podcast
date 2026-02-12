@@ -23,6 +23,8 @@ public record GeneratorConfig(
 {
     public string FullSiteDir => Path.Combine(OutputDir, SiteDir);
     public string FeedsDir => Path.Combine(FullSiteDir, "feeds");
+
+    public static GeneratorConfig FromEnvironment() => new GeneratorConfig();
 }
 
 public record FeedManifest(

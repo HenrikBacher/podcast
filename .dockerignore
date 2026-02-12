@@ -1,0 +1,16 @@
+bin/
+obj/
+.git/
+.github/
+tests/
+output/
+*.md
+*.yml
+.dockerignore
+Dockerfile
+.gitignore
+.editorconfig
+*.sln
+nul
+temp_*
+dr_feed.xml
