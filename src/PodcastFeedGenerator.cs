@@ -88,16 +88,18 @@ else
     // Audio proxy: streams M4A/MP4 audio from DR with corrected Content-Type
     app.MapGet("/proxy/audio", async (HttpContext context, IHttpClientFactory clientFactory) =>
     {
-        var path = context.Request.Query["path"].FirstOrDefault();
-        if (string.IsNullOrEmpty(path) || !path.StartsWith('/'))
+        var ep = context.Request.Query["ep"].FirstOrDefault();
+        var asset = context.Request.Query["asset"].FirstOrDefault();
+        if (string.IsNullOrEmpty(ep) || string.IsNullOrEmpty(asset)
+            || !RegexCache.HexString().IsMatch(ep) || !RegexCache.HexString().IsMatch(asset))
         {
-            return Results.BadRequest("Invalid path.");
+            return Results.BadRequest("Invalid parameters.");
         }
 
-        var upstream_url = new Uri($"https://api.dr.dk{path}");
+        var upstreamUrl = new Uri($"https://api.dr.dk/radio/v1/assetlinks/urn:dr:radio:episode:{ep}/{asset}");
 
         using var client = clientFactory.CreateClient("AudioProxy");
-        using var request = new HttpRequestMessage(HttpMethod.Get, upstream_url);
+        using var request = new HttpRequestMessage(HttpMethod.Get, upstreamUrl);
 
         // Forward Range header for seek support
         if (context.Request.Headers.TryGetValue("Range", out var rangeHeader))

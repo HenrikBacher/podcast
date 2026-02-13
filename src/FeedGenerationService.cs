@@ -268,12 +268,14 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
         if (audioAsset?.Url is { } url && !string.IsNullOrEmpty(url))
         {
             Uri.TryCreate(url, UriKind.Absolute, out var audioUri);
+            var assetMatch = audioUri is not null ? RegexCache.DrAssetUrl().Match(audioUri.PathAndQuery) : Match.Empty;
             var canProxy = needsProxy
                 && !string.IsNullOrEmpty(baseUrl)
                 && audioUri is { Scheme: "https" }
-                && audioUri.Host.EndsWith(".dr.dk", StringComparison.OrdinalIgnoreCase);
+                && audioUri.Host.EndsWith(".dr.dk", StringComparison.OrdinalIgnoreCase)
+                && assetMatch.Success;
             var enclosureUrl = canProxy
-                ? $"{baseUrl.TrimEnd('/')}/proxy/audio?path={Uri.EscapeDataString(audioUri!.PathAndQuery)}"
+                ? $"{baseUrl.TrimEnd('/')}/proxy/audio?ep={assetMatch.Groups["ep"].Value}&asset={assetMatch.Groups["asset"].Value}"
                 : url;
             var mimeType = canProxy ? "audio/mp4" : GetMimeTypeFromFormat(audioAsset.Format);
             var enclosure = new XElement("enclosure",
@@ -346,4 +348,10 @@ internal static partial class RegexCache
 {
     [GeneratedRegex(@"\s*\([^)]*feed[^)]*\)\s*$", RegexOptions.IgnoreCase)]
     public static partial Regex FeedTitleCleanup();
+
+    [GeneratedRegex(@"^/radio/v\d+/assetlinks/urn:dr:radio:episode:(?<ep>[0-9a-f]+)/(?<asset>[0-9a-f]+)$")]
+    public static partial Regex DrAssetUrl();
+
+    [GeneratedRegex(@"^[0-9a-f]+$")]
+    public static partial Regex HexString();
 }
