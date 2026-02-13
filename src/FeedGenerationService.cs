@@ -98,7 +98,7 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
 
         var channel = new XElement("channel",
             new XElement(atom + "link",
-                new XAttribute("href", $"https://{baseUrl}/feeds/{podcast.Slug}.xml"),
+                new XAttribute("href", $"{baseUrl.TrimEnd('/')}/feeds/{podcast.Slug}.xml"),
                 new XAttribute("rel", "self"),
                 new XAttribute("type", "application/rss+xml")),
             new XElement("title", series?.Title),
@@ -160,7 +160,7 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
 
             foreach (var episode in sorted)
             {
-                channel.Add(BuildEpisodeItem(episode, imageUrl, itunes, media));
+                channel.Add(BuildEpisodeItem(episode, imageUrl, baseUrl, itunes, media));
             }
         }
 
@@ -210,11 +210,17 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
         }
     }
 
-    private static XElement BuildEpisodeItem(Episode episode, string? channelImage, XNamespace itunes, XNamespace media)
+    private static XElement BuildEpisodeItem(Episode episode, string? channelImage, string baseUrl, XNamespace itunes, XNamespace media)
     {
+        // Prefer highest-bitrate M4A/MP4 (better quality, proxied to fix content-type), fall back to MP3
         var audioAsset = episode.AudioAssets?
-            .Where(a => a?.Format == "mp3")
-            .MaxBy(a => a?.Bitrate ?? 0);
+            .Where(a => a?.Format is "mp4" or "m4a")
+            .MaxBy(a => a?.Bitrate ?? 0)
+            ?? episode.AudioAssets?
+                .Where(a => a?.Format == "mp3")
+                .MaxBy(a => a?.Bitrate ?? 0);
+
+        var needsProxy = audioAsset?.Format is "mp4" or "m4a";
 
         var imageUrl = PodcastHelpers.GetImageUrlFromAssets(episode.ImageAssets) ?? channelImage;
         var duration = episode.DurationMilliseconds is not null
@@ -261,9 +267,17 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
 
         if (audioAsset?.Url is { } url && !string.IsNullOrEmpty(url))
         {
-            var mimeType = GetMimeTypeFromFormat(audioAsset.Format);
+            Uri.TryCreate(url, UriKind.Absolute, out var audioUri);
+            var canProxy = needsProxy
+                && !string.IsNullOrEmpty(baseUrl)
+                && audioUri is { Scheme: "https" }
+                && audioUri.Host.EndsWith(".dr.dk", StringComparison.OrdinalIgnoreCase);
+            var enclosureUrl = canProxy
+                ? $"{baseUrl.TrimEnd('/')}/proxy/audio?path={Uri.EscapeDataString(audioUri!.PathAndQuery)}"
+                : url;
+            var mimeType = canProxy ? "audio/mp4" : GetMimeTypeFromFormat(audioAsset.Format);
             var enclosure = new XElement("enclosure",
-                new XAttribute("url", url),
+                new XAttribute("url", enclosureUrl),
                 new XAttribute("type", mimeType));
 
             if (audioAsset.FileSize is not null)
@@ -284,6 +298,7 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
         if (format is null) return "audio/mpeg";
 
         return format.Equals("mp3", StringComparison.OrdinalIgnoreCase) ? "audio/mpeg" :
+               format.Equals("mp4", StringComparison.OrdinalIgnoreCase) ? "audio/mp4" :
                format.Equals("aac", StringComparison.OrdinalIgnoreCase) ? "audio/aac" :
                format.Equals("m4a", StringComparison.OrdinalIgnoreCase) ? "audio/mp4" :
                format.Equals("ogg", StringComparison.OrdinalIgnoreCase) ? "audio/ogg" :

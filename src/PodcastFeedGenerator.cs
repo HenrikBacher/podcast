@@ -58,6 +58,18 @@ else
             onRetry: (outcome, timespan, retryCount, _) =>
                 Console.WriteLine($"Retry {retryCount} after {timespan} seconds")));
 
+    builder.Services.AddHttpClient("AudioProxy", client =>
+    {
+        client.Timeout = TimeSpan.FromMinutes(5);
+    })
+    .AddPolicyHandler(HttpPolicyExtensions
+        .HandleTransientHttpError()
+        .OrResult(msg => !msg.IsSuccessStatusCode)
+        .WaitAndRetryAsync(3,
+            retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
+            onRetry: (outcome, timespan, retryCount, _) =>
+                Console.WriteLine($"AudioProxy retry {retryCount} after {timespan} seconds")));
+
     builder.Services.AddSingleton<FeedGenerationService>();
     builder.Services.AddHostedService<FeedRefreshBackgroundService>();
     builder.Services.AddResponseCompression(options =>
@@ -72,6 +84,52 @@ else
 
     // Health check endpoint
     app.MapGet("/health", () => Results.Text("healthy"));
+
+    // Audio proxy: streams M4A/MP4 audio from DR with corrected Content-Type
+    app.MapGet("/proxy/audio", async (HttpContext context, IHttpClientFactory clientFactory) =>
+    {
+        var path = context.Request.Query["path"].FirstOrDefault();
+        if (string.IsNullOrEmpty(path) || !path.StartsWith('/'))
+        {
+            return Results.BadRequest("Invalid path.");
+        }
+
+        var upstream_url = new Uri($"https://api.dr.dk{path}");
+
+        using var client = clientFactory.CreateClient("AudioProxy");
+        using var request = new HttpRequestMessage(HttpMethod.Get, upstream_url);
+
+        // Forward Range header for seek support
+        if (context.Request.Headers.TryGetValue("Range", out var rangeHeader))
+        {
+            request.Headers.TryAddWithoutValidation("Range", rangeHeader.ToString());
+        }
+
+        var upstream = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, context.RequestAborted);
+
+        context.Response.StatusCode = (int)upstream.StatusCode;
+        context.Response.ContentType = "audio/mp4";
+
+        if (upstream.Content.Headers.ContentLength is { } length)
+        {
+            context.Response.ContentLength = length;
+        }
+
+        if (upstream.Headers.AcceptRanges.Count > 0)
+        {
+            context.Response.Headers["Accept-Ranges"] = upstream.Headers.AcceptRanges.ToString();
+        }
+
+        if (upstream.Content.Headers.ContentRange is { } contentRange)
+        {
+            context.Response.Headers["Content-Range"] = contentRange.ToString();
+        }
+
+        await using var upstreamStream = await upstream.Content.ReadAsStreamAsync(context.RequestAborted);
+        await upstreamStream.CopyToAsync(context.Response.Body, context.RequestAborted);
+
+        return Results.Empty;
+    });
 
     // Serve static files from the generated site directory
     var config = GeneratorConfig.FromEnvironment();
