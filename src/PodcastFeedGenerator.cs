@@ -85,7 +85,7 @@ else
     // Health check endpoint
     app.MapGet("/health", () => Results.Text("healthy"));
 
-    // Audio proxy endpoint: streams m4a from DR with corrected Content-Type
+    // Audio proxy endpoint: streams MP4/M4A from DR with corrected Content-Type
     app.MapGet("/proxy/audio", async (HttpContext context, IHttpClientFactory clientFactory) =>
     {
         var url = context.Request.Query["url"].FirstOrDefault();
