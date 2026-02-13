@@ -160,7 +160,7 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
 
             foreach (var episode in sorted)
             {
-                channel.Add(BuildEpisodeItem(episode, imageUrl, baseUrl, itunes, media));
+                channel.Add(BuildEpisodeItem(episode, imageUrl, itunes, media));
             }
         }
 
@@ -210,17 +210,11 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
         }
     }
 
-    private static XElement BuildEpisodeItem(Episode episode, string? channelImage, string baseUrl, XNamespace itunes, XNamespace media)
+    private static XElement BuildEpisodeItem(Episode episode, string? channelImage, XNamespace itunes, XNamespace media)
     {
-        // Prefer highest-bitrate M4A/MP4 (better quality, proxied to fix content-type), fall back to MP3
         var audioAsset = episode.AudioAssets?
-            .Where(a => a?.Format is "mp4" or "m4a")
-            .MaxBy(a => a?.Bitrate ?? 0)
-            ?? episode.AudioAssets?
-                .Where(a => a?.Format == "mp3")
-                .MaxBy(a => a?.Bitrate ?? 0);
-
-        var needsProxy = audioAsset?.Format is "mp4" or "m4a";
+            .Where(a => a?.Format == "mp3")
+            .MaxBy(a => a?.Bitrate ?? 0);
 
         var imageUrl = PodcastHelpers.GetImageUrlFromAssets(episode.ImageAssets) ?? channelImage;
         var duration = episode.DurationMilliseconds is not null
@@ -267,19 +261,9 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
 
         if (audioAsset?.Url is { } url && !string.IsNullOrEmpty(url))
         {
-            Uri.TryCreate(url, UriKind.Absolute, out var audioUri);
-            var assetMatch = audioUri is not null ? RegexCache.DrAssetUrl().Match(audioUri.PathAndQuery) : Match.Empty;
-            var canProxy = needsProxy
-                && !string.IsNullOrEmpty(baseUrl)
-                && audioUri is { Scheme: "https" }
-                && audioUri.Host.EndsWith(".dr.dk", StringComparison.OrdinalIgnoreCase)
-                && assetMatch.Success;
-            var enclosureUrl = canProxy
-                ? $"{baseUrl.TrimEnd('/')}/proxy/audio/{assetMatch.Groups["ep"].Value}/{assetMatch.Groups["asset"].Value}"
-                : url;
-            var mimeType = canProxy ? "audio/mp4" : GetMimeTypeFromFormat(audioAsset.Format);
+            var mimeType = GetMimeTypeFromFormat(audioAsset.Format);
             var enclosure = new XElement("enclosure",
-                new XAttribute("url", enclosureUrl),
+                new XAttribute("url", url),
                 new XAttribute("type", mimeType));
 
             if (audioAsset.FileSize is not null)
@@ -300,7 +284,6 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
         if (format is null) return "audio/mpeg";
 
         return format.Equals("mp3", StringComparison.OrdinalIgnoreCase) ? "audio/mpeg" :
-               format.Equals("mp4", StringComparison.OrdinalIgnoreCase) ? "audio/mp4" :
                format.Equals("aac", StringComparison.OrdinalIgnoreCase) ? "audio/aac" :
                format.Equals("m4a", StringComparison.OrdinalIgnoreCase) ? "audio/mp4" :
                format.Equals("ogg", StringComparison.OrdinalIgnoreCase) ? "audio/ogg" :
@@ -348,10 +331,4 @@ internal static partial class RegexCache
 {
     [GeneratedRegex(@"\s*\([^)]*feed[^)]*\)\s*$", RegexOptions.IgnoreCase)]
     public static partial Regex FeedTitleCleanup();
-
-    [GeneratedRegex(@"^/radio/v\d+/assetlinks/urn:dr:radio:episode:(?<ep>[0-9a-f]+)/(?<asset>[0-9a-f]+)$")]
-    public static partial Regex DrAssetUrl();
-
-    [GeneratedRegex(@"^[0-9a-f]+$")]
-    public static partial Regex HexString();
 }
