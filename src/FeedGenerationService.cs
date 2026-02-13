@@ -160,7 +160,7 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
 
             foreach (var episode in sorted)
             {
-                channel.Add(BuildEpisodeItem(episode, imageUrl, itunes, media));
+                channel.Add(BuildEpisodeItem(episode, imageUrl, baseUrl, itunes, media));
             }
         }
 
@@ -210,12 +210,19 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
         }
     }
 
-    private static XElement BuildEpisodeItem(Episode episode, string? channelImage, XNamespace itunes, XNamespace media)
+    private static XElement BuildEpisodeItem(Episode episode, string? channelImage, string baseUrl, XNamespace itunes, XNamespace media)
     {
+        // Prefer highest-bitrate M4A (proxied to fix content-type), fall back to MP3
         var audioAsset = episode.AudioAssets?
-            .Where(a => a?.Format == "mp3")
+            .Where(a => a?.Format is "m4a")
             .OrderByDescending(a => a?.Bitrate ?? 0)
-            .FirstOrDefault();
+            .FirstOrDefault()
+            ?? episode.AudioAssets?
+                .Where(a => a?.Format == "mp3")
+                .OrderByDescending(a => a?.Bitrate ?? 0)
+                .FirstOrDefault();
+
+        var needsProxy = audioAsset?.Format is "m4a";
 
         var imageUrl = PodcastHelpers.GetImageUrlFromAssets(episode.ImageAssets) ?? channelImage;
         var duration = episode.DurationMilliseconds is not null
@@ -262,9 +269,12 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
 
         if (audioAsset?.Url is { } url && !string.IsNullOrEmpty(url))
         {
-            var mimeType = GetMimeTypeFromFormat(audioAsset.Format);
+            var enclosureUrl = needsProxy && !string.IsNullOrEmpty(baseUrl)
+                ? $"{baseUrl.TrimEnd('/')}/proxy/audio?url={Uri.EscapeDataString(url)}"
+                : url;
+            var mimeType = needsProxy ? "audio/m4a" : GetMimeTypeFromFormat(audioAsset.Format);
             var enclosure = new XElement("enclosure",
-                new XAttribute("url", url),
+                new XAttribute("url", enclosureUrl),
                 new XAttribute("type", mimeType));
 
             if (audioAsset.FileSize is not null)

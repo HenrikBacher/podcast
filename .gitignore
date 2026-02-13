@@ -296,3 +296,6 @@ test-publish/
 *.tar.gz
 *.zip
 **/output
+
+# Windows reserved device name artifact
+nul
