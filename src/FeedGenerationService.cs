@@ -11,12 +11,18 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
             await File.ReadAllTextAsync(podcastsJsonPath, cancellationToken),
             PodcastJsonContext.Default.PodcastList);
 
+        if (podcastList is null || podcastList.Podcasts.Count == 0)
+        {
+            logger.LogWarning("No podcasts found in {Path}", podcastsJsonPath);
+            return;
+        }
+
         Directory.CreateDirectory(config.FeedsDir);
 
-        var tasks = podcastList?.Podcasts.Select(podcast =>
+        var tasks = podcastList.Podcasts.Select(podcast =>
             ProcessPodcastAsync(podcast, baseUrl, config, cancellationToken)).ToArray();
 
-        var results = await Task.WhenAll(tasks!);
+        var results = await Task.WhenAll(tasks);
         var feedMetadata = results.OfType<FeedMetadata>().ToList();
 
         logger.LogInformation("Generated {Count} podcast feeds.", feedMetadata.Count);
@@ -58,10 +64,10 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
             // Atomic write: write to temp file then rename to avoid serving partial files
             string tempPath = outputPath + ".tmp";
             await using (var fileStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true))
-            await using (var writer = new StreamWriter(fileStream, new UTF8Encoding(false)))
+            using (var writer = new StreamWriter(fileStream, new UTF8Encoding(false)))
             {
                 var xmlDoc = new XDocument(new XDeclaration("1.0", "utf-8", "yes"), rss);
-                await writer.WriteAsync(xmlDoc.ToString());
+                xmlDoc.Save(writer);
             }
             File.Move(tempPath, outputPath, overwrite: true);
 
@@ -106,7 +112,7 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
             new XElement("description", series?.Description),
             new XElement("language", "da"),
             new XElement("copyright", "DR"),
-            new XElement(itunes + "explicit", series?.ExplicitContent),
+            new XElement(itunes + "explicit", series?.ExplicitContent == true ? "yes" : "no"),
             new XElement(itunes + "author", "DR"),
             new XElement(itunes + "block", "yes"),
             new XElement(itunes + "owner",
@@ -185,7 +191,8 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
         {
             var doc = XDocument.Load(feedPath);
             var lastBuildDate = doc.Root?.Element("channel")?.Element("lastBuildDate")?.Value;
-            if (lastBuildDate is null || !DateTime.TryParse(lastBuildDate, out var existing))
+            if (lastBuildDate is null || !DateTime.TryParseExact(lastBuildDate, Rfc822Format,
+                    CultureInfo.InvariantCulture, DateTimeStyles.None, out var existing))
                 return true;
 
             return latestEpisode > existing;
@@ -229,7 +236,7 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
             new XElement("title", episode.Title ?? ""),
             new XElement("description", episode.Description ?? ""),
             new XElement("pubDate", pubDate),
-            new XElement(itunes + "explicit", episode.ExplicitContent),
+            new XElement(itunes + "explicit", episode.ExplicitContent ? "yes" : "no"),
             new XElement(itunes + "author", "DR"),
             new XElement(itunes + "duration", duration)
             );
