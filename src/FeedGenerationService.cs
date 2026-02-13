@@ -86,7 +86,6 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
     {
         XNamespace atom = "http://www.w3.org/2005/Atom";
         XNamespace itunes = "http://www.itunes.com/dtds/podcast-1.0.dtd";
-        XNamespace media = "http://search.yahoo.com/mrss/";
 
         var imageUrl = PodcastHelpers.GetImageUrlFromAssets(series?.ImageAssets)
                        ?? PodcastHelpers.GetImageUrlFromAssets(podcast.ImageAssets);
@@ -166,7 +165,7 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
 
             foreach (var episode in sorted)
             {
-                channel.Add(BuildEpisodeItem(episode, imageUrl, itunes, media));
+                channel.Add(BuildEpisodeItem(episode, imageUrl, itunes));
             }
         }
 
@@ -174,7 +173,6 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
             new XAttribute("version", "2.0"),
             new XAttribute(XNamespace.Xmlns + "atom", atom),
             new XAttribute(XNamespace.Xmlns + "itunes", itunes),
-            new XAttribute(XNamespace.Xmlns + "media", media),
             channel);
 
         var metadata = new FeedMetadata(podcast.Slug, cleanTitle, imageUrl);
@@ -217,7 +215,7 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
         }
     }
 
-    private static XElement BuildEpisodeItem(Episode episode, string? channelImage, XNamespace itunes, XNamespace media)
+    private static XElement BuildEpisodeItem(Episode episode, string? channelImage, XNamespace itunes)
     {
         var audioAsset = episode.AudioAssets?
             .Where(a => a?.Format == "mp3")
