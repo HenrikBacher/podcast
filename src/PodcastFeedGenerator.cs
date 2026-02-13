@@ -86,51 +86,59 @@ else
     app.MapGet("/health", () => Results.Text("healthy"));
 
     // Audio proxy: streams M4A/MP4 audio from DR with corrected Content-Type
-    app.MapGet("/proxy/audio", async (HttpContext context, IHttpClientFactory clientFactory) =>
+    app.MapGet("/proxy/audio/{ep}/{asset}", async (string ep, string asset, HttpContext context, IHttpClientFactory clientFactory, ILogger<FeedGenerationService> logger) =>
     {
-        var ep = context.Request.Query["ep"].FirstOrDefault();
-        var asset = context.Request.Query["asset"].FirstOrDefault();
         if (string.IsNullOrEmpty(ep) || string.IsNullOrEmpty(asset)
             || !RegexCache.HexString().IsMatch(ep) || !RegexCache.HexString().IsMatch(asset))
         {
-            return Results.BadRequest("Invalid parameters.");
+            context.Response.StatusCode = 400;
+            return;
         }
 
         var upstreamUrl = new Uri($"https://api.dr.dk/radio/v1/assetlinks/urn:dr:radio:episode:{ep}/{asset}");
+        var client = clientFactory.CreateClient("AudioProxy");
 
-        using var client = clientFactory.CreateClient("AudioProxy");
-        using var request = new HttpRequestMessage(HttpMethod.Get, upstreamUrl);
-
-        // Forward Range header for seek support
-        if (context.Request.Headers.TryGetValue("Range", out var rangeHeader))
+        try
         {
-            request.Headers.TryAddWithoutValidation("Range", rangeHeader.ToString());
+            using var request = new HttpRequestMessage(HttpMethod.Get, upstreamUrl);
+
+            // Forward Range header for seek support
+            if (context.Request.Headers.TryGetValue("Range", out var rangeHeader))
+            {
+                request.Headers.TryAddWithoutValidation("Range", rangeHeader.ToString());
+            }
+
+            using var upstream = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, context.RequestAborted);
+
+            context.Response.StatusCode = (int)upstream.StatusCode;
+            context.Response.ContentType = "audio/mp4";
+
+            if (upstream.Content.Headers.ContentLength is { } length)
+            {
+                context.Response.ContentLength = length;
+            }
+
+            if (upstream.Headers.AcceptRanges.Count > 0)
+            {
+                context.Response.Headers["Accept-Ranges"] = upstream.Headers.AcceptRanges.ToString();
+            }
+
+            if (upstream.Content.Headers.ContentRange is { } contentRange)
+            {
+                context.Response.Headers["Content-Range"] = contentRange.ToString();
+            }
+
+            await using var upstreamStream = await upstream.Content.ReadAsStreamAsync(context.RequestAborted);
+            await upstreamStream.CopyToAsync(context.Response.Body, context.RequestAborted);
         }
-
-        var upstream = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, context.RequestAborted);
-
-        context.Response.StatusCode = (int)upstream.StatusCode;
-        context.Response.ContentType = "audio/mp4";
-
-        if (upstream.Content.Headers.ContentLength is { } length)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            context.Response.ContentLength = length;
+            logger.LogError(ex, "Audio proxy failed for ep={Ep}", ep);
+            if (!context.Response.HasStarted)
+            {
+                context.Response.StatusCode = 502;
+            }
         }
-
-        if (upstream.Headers.AcceptRanges.Count > 0)
-        {
-            context.Response.Headers["Accept-Ranges"] = upstream.Headers.AcceptRanges.ToString();
-        }
-
-        if (upstream.Content.Headers.ContentRange is { } contentRange)
-        {
-            context.Response.Headers["Content-Range"] = contentRange.ToString();
-        }
-
-        await using var upstreamStream = await upstream.Content.ReadAsStreamAsync(context.RequestAborted);
-        await upstreamStream.CopyToAsync(context.Response.Body, context.RequestAborted);
-
-        return Results.Empty;
     });
 
     // Serve static files from the generated site directory

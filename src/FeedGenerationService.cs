@@ -275,7 +275,7 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
                 && audioUri.Host.EndsWith(".dr.dk", StringComparison.OrdinalIgnoreCase)
                 && assetMatch.Success;
             var enclosureUrl = canProxy
-                ? $"{baseUrl.TrimEnd('/')}/proxy/audio?ep={assetMatch.Groups["ep"].Value}&asset={assetMatch.Groups["asset"].Value}"
+                ? $"{baseUrl.TrimEnd('/')}/proxy/audio/{assetMatch.Groups["ep"].Value}/{assetMatch.Groups["asset"].Value}"
                 : url;
             var mimeType = canProxy ? "audio/mp4" : GetMimeTypeFromFormat(audioAsset.Format);
             var enclosure = new XElement("enclosure",
