@@ -76,6 +76,9 @@ if (config.PreferMp4)
             if (context.Request.Headers.TryGetValue("Range", out var rangeHeader))
                 request.Headers.TryAddWithoutValidation("Range", rangeHeader.ToString());
 
+            if (context.Request.Headers.TryGetValue("User-Agent", out var userAgent))
+                request.Headers.TryAddWithoutValidation("User-Agent", userAgent.ToString());
+
             using var upstream = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, context.RequestAborted);
 
             context.Response.StatusCode = (int)upstream.StatusCode;
