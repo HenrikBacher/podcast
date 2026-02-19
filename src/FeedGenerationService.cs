@@ -288,7 +288,7 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
             var enclosureUrl = canProxy
                 ? $"{baseUrl.TrimEnd('/')}/proxy/audio?path={Uri.EscapeDataString(audioUri!.PathAndQuery)}"
                 : url;
-            var mimeType = canProxy ? "audio/mp4" : GetMimeTypeFromFormat(audioAsset.Format);
+            var mimeType = needsProxy ? "audio/mp4" : GetMimeTypeFromFormat(audioAsset.Format);
             var enclosure = new XElement("enclosure",
                 new XAttribute("url", enclosureUrl),
                 new XAttribute("type", mimeType));
