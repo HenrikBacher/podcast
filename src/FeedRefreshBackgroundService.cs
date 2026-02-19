@@ -20,8 +20,8 @@ public sealed class FeedRefreshBackgroundService(
 
         int consecutiveFailures = 0;
 
-        // Generate feeds immediately on startup
-        consecutiveFailures = await RunGenerationAsync(podcastsJsonPath, baseUrl, config, consecutiveFailures, stoppingToken);
+        // Force regeneration on startup so code changes are always applied when the container restarts
+        consecutiveFailures = await RunGenerationAsync(podcastsJsonPath, baseUrl, config, consecutiveFailures, forceRegenerate: true, stoppingToken);
 
         using var timer = new PeriodicTimer(TimeSpan.FromMinutes(intervalMinutes));
         while (await timer.WaitForNextTickAsync(stoppingToken))
@@ -33,16 +33,16 @@ public sealed class FeedRefreshBackgroundService(
                 await Task.Delay(TimeSpan.FromMinutes(backoffMinutes), stoppingToken);
             }
 
-            consecutiveFailures = await RunGenerationAsync(podcastsJsonPath, baseUrl, config, consecutiveFailures, stoppingToken);
+            consecutiveFailures = await RunGenerationAsync(podcastsJsonPath, baseUrl, config, consecutiveFailures, forceRegenerate: false, stoppingToken);
         }
     }
 
-    private async Task<int> RunGenerationAsync(string podcastsJsonPath, string baseUrl, GeneratorConfig config, int consecutiveFailures, CancellationToken cancellationToken)
+    private async Task<int> RunGenerationAsync(string podcastsJsonPath, string baseUrl, GeneratorConfig config, int consecutiveFailures, bool forceRegenerate, CancellationToken cancellationToken)
     {
         try
         {
-            logger.LogInformation("Starting feed generation...");
-            await feedService.GenerateFeedsAsync(podcastsJsonPath, baseUrl, config, cancellationToken);
+            logger.LogInformation("Starting feed generation{Force}...", forceRegenerate ? " (forced)" : "");
+            await feedService.GenerateFeedsAsync(podcastsJsonPath, baseUrl, config, forceRegenerate, cancellationToken);
             logger.LogInformation("Feed generation complete.");
             return 0;
         }

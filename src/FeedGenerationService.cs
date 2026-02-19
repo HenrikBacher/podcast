@@ -5,7 +5,7 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
     private const string ApiUrl = "https://api.dr.dk/radio/v2/series/";
     private const string Rfc822Format = "ddd, dd MMM yyyy HH:mm:ss zzz";
 
-    public async Task GenerateFeedsAsync(string podcastsJsonPath, string baseUrl, GeneratorConfig config, CancellationToken cancellationToken = default)
+    public async Task GenerateFeedsAsync(string podcastsJsonPath, string baseUrl, GeneratorConfig config, bool forceRegenerate = false, CancellationToken cancellationToken = default)
     {
         var podcastList = JsonSerializer.Deserialize(
             await File.ReadAllTextAsync(podcastsJsonPath, cancellationToken),
@@ -20,7 +20,7 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
         Directory.CreateDirectory(config.FeedsDir);
 
         var tasks = podcastList.Podcasts.Select(podcast =>
-            ProcessPodcastAsync(podcast, baseUrl, config, cancellationToken)).ToArray();
+            ProcessPodcastAsync(podcast, baseUrl, config, forceRegenerate, cancellationToken)).ToArray();
 
         var results = await Task.WhenAll(tasks);
         var feedMetadata = results.OfType<FeedMetadata>().ToList();
@@ -30,7 +30,7 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
         await WebsiteGenerator.GenerateAsync(feedMetadata, config);
     }
 
-    private async Task<FeedMetadata?> ProcessPodcastAsync(Podcast podcast, string baseUrl, GeneratorConfig config, CancellationToken cancellationToken)
+    private async Task<FeedMetadata?> ProcessPodcastAsync(Podcast podcast, string baseUrl, GeneratorConfig config, bool forceRegenerate, CancellationToken cancellationToken)
     {
         try
         {
@@ -45,9 +45,10 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
                 PodcastJsonContext.Default.Series,
                 cancellationToken);
 
-            // Skip regeneration if the feed is already up-to-date, so Last-Modified stays stable
+            // Skip regeneration if the feed is already up-to-date, so Last-Modified stays stable.
+            // On startup (forceRegenerate=true) this check is bypassed so code changes are applied.
             string outputPath = Path.Combine(config.FeedsDir, $"{podcast.Slug}.xml");
-            if (File.Exists(outputPath) && !HasNewerEpisodes(outputPath, series))
+            if (!forceRegenerate && File.Exists(outputPath) && !HasNewerEpisodes(outputPath, series))
             {
                 logger.LogInformation("Skipped {Slug} (unchanged)", podcast.Slug);
                 var imageUrl = PodcastHelpers.GetImageUrlFromAssets(series?.ImageAssets)
@@ -281,12 +282,14 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
         {
             var needsProxy = preferMp4 && audioAsset.Format is "mp4" or "m4a";
             Uri.TryCreate(url, UriKind.Absolute, out var audioUri);
+            var assetMatch = audioUri is not null ? RegexCache.DrAssetUrl().Match(audioUri.PathAndQuery) : Match.Empty;
             var canProxy = needsProxy
                 && !string.IsNullOrEmpty(baseUrl)
                 && audioUri is { Scheme: "https" }
-                && audioUri.Host.EndsWith(".dr.dk", StringComparison.OrdinalIgnoreCase);
+                && audioUri.Host.EndsWith(".dr.dk", StringComparison.OrdinalIgnoreCase)
+                && assetMatch.Success;
             var enclosureUrl = canProxy
-                ? $"{baseUrl.TrimEnd('/')}/proxy/audio?path={Uri.EscapeDataString(audioUri!.PathAndQuery)}"
+                ? $"{baseUrl.TrimEnd('/')}/proxy/audio/{assetMatch.Groups["ep"].Value}/{assetMatch.Groups["asset"].Value}"
                 : url;
             var mimeType = needsProxy ? "audio/mp4" : GetMimeTypeFromFormat(audioAsset.Format);
             var enclosure = new XElement("enclosure",
@@ -359,4 +362,10 @@ internal static partial class RegexCache
 {
     [GeneratedRegex(@"\s*\([^)]*feed[^)]*\)\s*$", RegexOptions.IgnoreCase)]
     public static partial Regex FeedTitleCleanup();
+
+    [GeneratedRegex(@"^/radio/v\d+/assetlinks/urn:dr:radio:episode:(?<ep>[0-9a-f]+)/(?<asset>[0-9a-f]+)$")]
+    public static partial Regex DrAssetUrl();
+
+    [GeneratedRegex(@"^[0-9a-f]+$")]
+    public static partial Regex HexString();
 }

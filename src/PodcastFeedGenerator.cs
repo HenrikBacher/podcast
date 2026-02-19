@@ -58,38 +58,47 @@ app.MapGet("/health", () => Results.Text("healthy"));
 // Audio proxy: streams M4A/MP4 audio from DR with corrected Content-Type (only when PREFER_MP4 is enabled)
 if (config.PreferMp4)
 {
-    app.MapGet("/proxy/audio", async (HttpContext context, IHttpClientFactory clientFactory) =>
+    app.MapGet("/proxy/audio/{ep}/{asset}", async (string ep, string asset, HttpContext context, IHttpClientFactory clientFactory, ILogger<FeedGenerationService> logger) =>
     {
-        var path = context.Request.Query["path"].FirstOrDefault();
-        if (string.IsNullOrEmpty(path) || !path.StartsWith('/'))
-            return Results.BadRequest("Invalid path.");
+        if (!RegexCache.HexString().IsMatch(ep) || !RegexCache.HexString().IsMatch(asset))
+        {
+            context.Response.StatusCode = 400;
+            return;
+        }
 
-        var upstreamUrl = new Uri($"https://api.dr.dk{path}");
+        var upstreamUrl = new Uri($"https://api.dr.dk/radio/v1/assetlinks/urn:dr:radio:episode:{ep}/{asset}");
+        var client = clientFactory.CreateClient("AudioProxy");
 
-        using var client = clientFactory.CreateClient("AudioProxy");
-        using var request = new HttpRequestMessage(HttpMethod.Get, upstreamUrl);
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, upstreamUrl);
 
-        if (context.Request.Headers.TryGetValue("Range", out var rangeHeader))
-            request.Headers.TryAddWithoutValidation("Range", rangeHeader.ToString());
+            if (context.Request.Headers.TryGetValue("Range", out var rangeHeader))
+                request.Headers.TryAddWithoutValidation("Range", rangeHeader.ToString());
 
-        var upstream = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, context.RequestAborted);
+            using var upstream = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, context.RequestAborted);
 
-        context.Response.StatusCode = (int)upstream.StatusCode;
-        context.Response.ContentType = "audio/mp4";
+            context.Response.StatusCode = (int)upstream.StatusCode;
+            context.Response.ContentType = "audio/mp4";
 
-        if (upstream.Content.Headers.ContentLength is { } length)
-            context.Response.ContentLength = length;
+            if (upstream.Content.Headers.ContentLength is { } length)
+                context.Response.ContentLength = length;
 
-        if (upstream.Headers.AcceptRanges.Count > 0)
-            context.Response.Headers["Accept-Ranges"] = upstream.Headers.AcceptRanges.ToString();
+            if (upstream.Headers.AcceptRanges.Count > 0)
+                context.Response.Headers["Accept-Ranges"] = upstream.Headers.AcceptRanges.ToString();
 
-        if (upstream.Content.Headers.ContentRange is { } contentRange)
-            context.Response.Headers["Content-Range"] = contentRange.ToString();
+            if (upstream.Content.Headers.ContentRange is { } contentRange)
+                context.Response.Headers["Content-Range"] = contentRange.ToString();
 
-        await using var upstreamStream = await upstream.Content.ReadAsStreamAsync(context.RequestAborted);
-        await upstreamStream.CopyToAsync(context.Response.Body, context.RequestAborted);
-
-        return Results.Empty;
+            await using var upstreamStream = await upstream.Content.ReadAsStreamAsync(context.RequestAborted);
+            await upstreamStream.CopyToAsync(context.Response.Body, context.RequestAborted);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "Audio proxy failed for ep={Ep}", ep);
+            if (!context.Response.HasStarted)
+                context.Response.StatusCode = 502;
+        }
     });
 }
 
