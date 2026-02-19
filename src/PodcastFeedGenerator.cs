@@ -84,8 +84,7 @@ if (config.PreferMp4)
             if (upstream.Content.Headers.ContentLength is { } length)
                 context.Response.ContentLength = length;
 
-            if (upstream.Headers.AcceptRanges.Count > 0)
-                context.Response.Headers["Accept-Ranges"] = upstream.Headers.AcceptRanges.ToString();
+            context.Response.Headers["Accept-Ranges"] = "bytes";
 
             if (upstream.Content.Headers.ContentRange is { } contentRange)
                 context.Response.Headers["Content-Range"] = contentRange.ToString();
