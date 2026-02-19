@@ -59,7 +59,7 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
 
             var episodes = await FetchAllEpisodesAsync($"{ApiUrl}{podcast.Urn}/episodes?limit=256", httpClient, cancellationToken);
 
-            var (rss, metadata) = BuildRssFeed(series, episodes, podcast, baseUrl);
+            var (rss, metadata) = BuildRssFeed(series, episodes, podcast, baseUrl, config.PreferMp4);
 
             // Atomic write: write to temp file then rename to avoid serving partial files
             string tempPath = outputPath + ".tmp";
@@ -82,7 +82,7 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
         }
     }
 
-    private static (XElement rss, FeedMetadata metadata) BuildRssFeed(Series? series, List<Episode>? episodes, Podcast podcast, string baseUrl)
+    private static (XElement rss, FeedMetadata metadata) BuildRssFeed(Series? series, List<Episode>? episodes, Podcast podcast, string baseUrl, bool preferMp4 = false)
     {
         XNamespace atom = "http://www.w3.org/2005/Atom";
         XNamespace itunes = "http://www.itunes.com/dtds/podcast-1.0.dtd";
@@ -165,7 +165,7 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
 
             foreach (var episode in sorted)
             {
-                channel.Add(BuildEpisodeItem(episode, imageUrl, itunes));
+                channel.Add(BuildEpisodeItem(episode, imageUrl, baseUrl, preferMp4, itunes));
             }
         }
 
@@ -215,11 +215,24 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
         }
     }
 
-    private static XElement BuildEpisodeItem(Episode episode, string? channelImage, XNamespace itunes)
+    private static XElement BuildEpisodeItem(Episode episode, string? channelImage, string baseUrl, bool preferMp4, XNamespace itunes)
     {
-        var audioAsset = episode.AudioAssets?
-            .Where(a => a?.Format == "mp3")
-            .MaxBy(a => a?.Bitrate ?? 0);
+        AudioAsset? audioAsset;
+        if (preferMp4)
+        {
+            audioAsset = episode.AudioAssets?
+                             .Where(a => a?.Format is "mp4" or "m4a")
+                             .MaxBy(a => a?.Bitrate ?? 0)
+                         ?? episode.AudioAssets?
+                             .Where(a => a?.Format == "mp3")
+                             .MaxBy(a => a?.Bitrate ?? 0);
+        }
+        else
+        {
+            audioAsset = episode.AudioAssets?
+                .Where(a => a?.Format == "mp3")
+                .MaxBy(a => a?.Bitrate ?? 0);
+        }
 
         var imageUrl = PodcastHelpers.GetImageUrlFromAssets(episode.ImageAssets) ?? channelImage;
         var duration = episode.DurationMilliseconds is not null
@@ -266,9 +279,18 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
 
         if (audioAsset?.Url is { } url && !string.IsNullOrEmpty(url))
         {
-            var mimeType = GetMimeTypeFromFormat(audioAsset.Format);
+            var needsProxy = preferMp4 && audioAsset.Format is "mp4" or "m4a";
+            Uri.TryCreate(url, UriKind.Absolute, out var audioUri);
+            var canProxy = needsProxy
+                && !string.IsNullOrEmpty(baseUrl)
+                && audioUri is { Scheme: "https" }
+                && audioUri.Host.EndsWith(".dr.dk", StringComparison.OrdinalIgnoreCase);
+            var enclosureUrl = canProxy
+                ? $"{baseUrl.TrimEnd('/')}/proxy/audio?path={Uri.EscapeDataString(audioUri!.PathAndQuery)}"
+                : url;
+            var mimeType = canProxy ? "audio/mp4" : GetMimeTypeFromFormat(audioAsset.Format);
             var enclosure = new XElement("enclosure",
-                new XAttribute("url", url),
+                new XAttribute("url", enclosureUrl),
                 new XAttribute("type", mimeType));
 
             if (audioAsset.FileSize is not null)
@@ -289,6 +311,7 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
         if (format is null) return "audio/mpeg";
 
         return format.Equals("mp3", StringComparison.OrdinalIgnoreCase) ? "audio/mpeg" :
+               format.Equals("mp4", StringComparison.OrdinalIgnoreCase) ? "audio/mp4" :
                format.Equals("aac", StringComparison.OrdinalIgnoreCase) ? "audio/aac" :
                format.Equals("m4a", StringComparison.OrdinalIgnoreCase) ? "audio/mp4" :
                format.Equals("ogg", StringComparison.OrdinalIgnoreCase) ? "audio/ogg" :

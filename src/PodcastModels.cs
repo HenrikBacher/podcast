@@ -18,13 +18,16 @@ public record FeedMetadata(
 public record GeneratorConfig(
     string OutputDir = "output",
     string SiteDir = "_site",
-    string SiteSourceDir = "site"
+    string SiteSourceDir = "site",
+    bool PreferMp4 = false
 )
 {
     public string FullSiteDir => Path.Combine(OutputDir, SiteDir);
     public string FeedsDir => Path.Combine(FullSiteDir, "feeds");
 
-    public static GeneratorConfig FromEnvironment() => new GeneratorConfig();
+    public static GeneratorConfig FromEnvironment() => new GeneratorConfig(
+        PreferMp4: Environment.GetEnvironmentVariable("PREFER_MP4") is "true" or "1"
+    );
 }
 
 public record FeedManifest(

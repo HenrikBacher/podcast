@@ -9,6 +9,7 @@ using Microsoft.Net.Http.Headers;
 var builder = WebApplication.CreateBuilder(args);
 builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
 
+var config = GeneratorConfig.FromEnvironment();
 var apiKey = Environment.GetEnvironmentVariable("API_KEY") ?? "";
 
 builder.Services.AddHttpClient("DrApi", client =>
@@ -23,6 +24,21 @@ builder.Services.AddHttpClient("DrApi", client =>
         retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
         onRetry: (outcome, timespan, retryCount, _) =>
             Console.WriteLine($"Retry {retryCount} after {timespan} seconds")));
+
+if (config.PreferMp4)
+{
+    builder.Services.AddHttpClient("AudioProxy", client =>
+    {
+        client.Timeout = TimeSpan.FromMinutes(5);
+    })
+    .AddPolicyHandler(HttpPolicyExtensions
+        .HandleTransientHttpError()
+        .OrResult(msg => !msg.IsSuccessStatusCode)
+        .WaitAndRetryAsync(3,
+            retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
+            onRetry: (outcome, timespan, retryCount, _) =>
+                Console.WriteLine($"AudioProxy retry {retryCount} after {timespan} seconds")));
+}
 
 builder.Services.AddSingleton<FeedGenerationService>();
 builder.Services.AddHostedService<FeedRefreshBackgroundService>();
@@ -39,8 +55,45 @@ app.UseResponseCompression();
 // Health check endpoint
 app.MapGet("/health", () => Results.Text("healthy"));
 
+// Audio proxy: streams M4A/MP4 audio from DR with corrected Content-Type (only when PREFER_MP4 is enabled)
+if (config.PreferMp4)
+{
+    app.MapGet("/proxy/audio", async (HttpContext context, IHttpClientFactory clientFactory) =>
+    {
+        var path = context.Request.Query["path"].FirstOrDefault();
+        if (string.IsNullOrEmpty(path) || !path.StartsWith('/'))
+            return Results.BadRequest("Invalid path.");
+
+        var upstreamUrl = new Uri($"https://api.dr.dk{path}");
+
+        using var client = clientFactory.CreateClient("AudioProxy");
+        using var request = new HttpRequestMessage(HttpMethod.Get, upstreamUrl);
+
+        if (context.Request.Headers.TryGetValue("Range", out var rangeHeader))
+            request.Headers.TryAddWithoutValidation("Range", rangeHeader.ToString());
+
+        var upstream = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, context.RequestAborted);
+
+        context.Response.StatusCode = (int)upstream.StatusCode;
+        context.Response.ContentType = "audio/mp4";
+
+        if (upstream.Content.Headers.ContentLength is { } length)
+            context.Response.ContentLength = length;
+
+        if (upstream.Headers.AcceptRanges.Count > 0)
+            context.Response.Headers["Accept-Ranges"] = upstream.Headers.AcceptRanges.ToString();
+
+        if (upstream.Content.Headers.ContentRange is { } contentRange)
+            context.Response.Headers["Content-Range"] = contentRange.ToString();
+
+        await using var upstreamStream = await upstream.Content.ReadAsStreamAsync(context.RequestAborted);
+        await upstreamStream.CopyToAsync(context.Response.Body, context.RequestAborted);
+
+        return Results.Empty;
+    });
+}
+
 // Serve static files from the generated site directory
-var config = GeneratorConfig.FromEnvironment();
 Directory.CreateDirectory(config.FullSiteDir);
 Directory.CreateDirectory(config.FeedsDir);
 
