@@ -1,6 +1,6 @@
 # DrPodcast
 
-Automated podcast RSS feed generator for DR (Danmarks Radio). Generates iTunes-compatible RSS feeds for **41 Danish podcasts** with cross-platform NativeAOT binaries and GitHub Pages deployment.
+Automated podcast RSS feed generator for DR (Danmarks Radio). Generates iTunes-compatible RSS feeds for **41 Danish podcasts** as a self-hosted web server with periodic background refresh.
 
 ## Quick Start
 
@@ -18,23 +18,21 @@ export BASE_URL="https://your-domain.com"
 dotnet run --project src/DrPodcast.csproj
 ```
 
-### Pre-built Binaries
-Download from [Releases](../../releases):
-- `DrPodcast-linux-x64` / `DrPodcast-linux-arm64`
-- `DrPodcast-win-x64.exe`
-- `DrPodcast-osx-arm64`
-
+### Docker
 ```bash
-API_KEY=<key> BASE_URL=<url> ./DrPodcast-linux-x64
+docker pull ghcr.io/YOUR_ORG/drpodcast:latest
+docker run -e API_KEY=<key> -e BASE_URL=<url> -p 8080:8080 ghcr.io/YOUR_ORG/drpodcast:latest
 ```
 
 ## Configuration
 
 ### Environment Variables
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `API_KEY` | Yes | DR API key |
-| `BASE_URL` | No | Base URL for feeds (default: `https://example.com`) |
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `API_KEY` | Yes | — | DR API key |
+| `BASE_URL` | No | `https://example.com` | Base URL for feed URLs in RSS output |
+| `PREFER_MP4` | No | `false` | Prefer MP4/M4A audio over MP3; enables `/proxy/audio` endpoint |
+| `REFRESH_INTERVAL_MINUTES` | No | `15` | How often feeds are regenerated in the background |
 
 ### Adding Podcasts
 Edit [podcasts.json](podcasts.json):
@@ -55,24 +53,28 @@ dotnet test tests/DrPodcast.Tests/DrPodcast.Tests.csproj
 
 ```
 src/
-  PodcastFeedGenerator.cs   # Main entry point and RSS generation
-  PodcastModels.cs          # Data models with JSON source generation
-  PodcastHelpers.cs         # Image URL extraction and category mapping
-  WebsiteGenerator.cs       # Static website and manifest generation
-tests/                      # xUnit test suite
-site/                       # Static website for feed browsing
+  PodcastFeedGenerator.cs      # Entry point: HTTP server, audio proxy, rate limiting
+  FeedGenerationService.cs     # RSS feed generation and DR API integration
+  FeedRefreshBackgroundService.cs  # Periodic background refresh with backoff
+  PodcastModels.cs             # Data models with source-generated JSON serialization
+  PodcastHelpers.cs            # Image URL extraction
+  WebsiteGenerator.cs          # Static website and manifest generation
+  podcasts.json                # List of podcast slugs and URNs
+tests/                         # xUnit test suite
+site/                          # Static website assets for feed browsing
 .github/workflows/
-  build-and-release.yml     # Cross-platform builds and releases
-  generate-feed.yml         # Hourly feed generation and Pages deployment
+  build-and-release.yml        # Docker build, versioning, and GitHub releases
 ```
 
 ## Technical Details
 
-- .NET 10.0 with NativeAOT compilation
-- Polly retry policies for resilient HTTP
-- RSS 2.0 with iTunes, Atom, and Media RSS namespaces
-- Source-generated JSON serialization (trim-safe)
-- Cross-platform: Linux x64/ARM64, Windows x64, macOS ARM64
+- .NET 10.0 with NativeAOT compilation (trim-safe, invariant globalization)
+- Polly retry policies for resilient HTTP against the DR API
+- RSS 2.0 with iTunes and Atom namespaces
+- Source-generated JSON serialization
+- Atomic feed writes (temp file → rename) to avoid serving partial content
+- Sliding window rate limiter on the audio proxy (20 req/min per IP)
+- Change detection via `<lastBuildDate>` comparison to skip unnecessary regenerations
 
 ## License
 

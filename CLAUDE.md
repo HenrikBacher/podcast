@@ -36,10 +36,9 @@ dotnet watch test --project tests/DrPodcast.Tests/DrPodcast.Tests.csproj
 
 The test suite includes:
 - **PodcastModelsTests.cs**: Tests for JSON serialization/deserialization of podcast models
-- **PodcastHelpersTests.cs**: Tests for helper functions (category mapping, image URL extraction)
-- **FeedGenerationTests.cs**: Tests for RSS feed XML generation and structure validation
+- **PodcastHelpersTests.cs**: Tests for helper functions (image URL extraction)
 
-**CI/CD Integration**: Tests are automatically executed as part of the build pipeline on all pull requests and pushes to main. Test results and code coverage are uploaded as artifacts for review.
+**CI/CD Integration**: Tests are automatically executed as part of the build pipeline on all pull requests and pushes to main.
 
 ## Coding Conventions
 
@@ -58,30 +57,40 @@ The test suite includes:
 ## Architecture Overview
 
 ### Core Components
-- **PodcastFeedGenerator.cs**: Main application entry point and RSS feed generation logic
+- **PodcastFeedGenerator.cs**: Main application entry point — ASP.NET Core host setup, audio proxy endpoint with rate limiting, static file serving
+- **FeedGenerationService.cs**: RSS feed generation logic — fetches from DR API, sorts episodes, builds XML, writes atomically to disk
+- **FeedRefreshBackgroundService.cs**: Background service — runs feed generation on startup and on a periodic timer with exponential backoff on failure
 - **PodcastModels.cs**: Data models with JSON source generation for NativeAOT compatibility
 - **PodcastHelpers.cs**: Helper functions for image URL extraction with priority-based selection
 - **WebsiteGenerator.cs**: Generates static website with feed listing, manifest.json, and proper HTML escaping
-- **podcasts.json**: Configuration file containing podcast slugs and URNs to process (35 Danish podcasts)
+- **podcasts.json**: Configuration file containing podcast slugs and URNs to process (41 Danish podcasts)
 
 ### Key Design Patterns
 - **NativeAOT Optimization**: Uses source-generated JSON serialization, trim-safe patterns, and aggressive optimization settings
 - **Resilient HTTP**: HttpClient configured with Polly retry policies for reliable API calls
-- **RSS Standards Compliance**: Generates feeds with iTunes, Atom, and Media RSS namespaces
-- **Pagination Handling**: Automatically fetches all episodes across multiple API pages
+- **RSS Standards Compliance**: Generates feeds with iTunes and Atom namespaces
+- **Pagination Handling**: Automatically fetches all episodes across multiple API pages (capped at 100 pages per series)
+- **Atomic Writes**: Feeds written to a `.tmp` file then renamed to avoid serving partial content
+- **Rate Limiting**: Audio proxy endpoint uses ASP.NET Core's built-in sliding window rate limiter (20 req/min per IP), returns `Retry-After` header on rejection
+- **Change Detection**: Skips regenerating feeds whose `<lastBuildDate>` already matches the API's `LatestEpisodeStartTime`, using `XmlReader` to read only the first few elements without loading the full document
 
 ### Data Flow
 1. Load podcast configuration from `podcasts.json`
 2. For each podcast (processed in parallel), fetch series metadata from DR API
-3. Paginate through all episodes for the series (up to 256 per page)
-4. Generate RSS XML with full iTunes metadata (iTunes, Atom, Media RSS namespaces)
-5. Save feeds to `output/_site/feeds/` directory
-6. Generate static website with feed listing in `output/_site/`
-7. Create `manifest.json` with feed metadata and SHA256 hashes for change detection
+3. Compare `LatestEpisodeStartTime` against existing feed's `<lastBuildDate>` — skip if unchanged
+4. Paginate through all episodes for the series (up to 256 per page, max 100 pages)
+5. Sort episodes and generate RSS XML with full iTunes metadata
+6. Atomically write feed to `output/_site/feeds/{slug}.xml`
+7. Generate static website with feed listing in `output/_site/`
+8. Create `manifest.json` with feed metadata and SHA256 hashes
 
 ### Environment Variables
-- `API_KEY`: DR API key (required)
-- `BASE_URL`: Base URL for deployed feeds (default: "https://example.com")
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `API_KEY` | Yes | — | DR API key |
+| `BASE_URL` | No | `https://example.com` | Base URL for deployed feeds |
+| `PREFER_MP4` | No | `false` | Prefer MP4/M4A audio over MP3; enables audio proxy endpoint |
+| `REFRESH_INTERVAL_MINUTES` | No | `15` | How often the background service regenerates feeds |
 
 ### Project Configuration
 - **Target Framework**: .NET 10.0
@@ -95,37 +104,34 @@ The application uses different sorting strategies depending on whether a podcast
 - **Seasonal shows** (NumberOfSeries > 0): Sort by season descending (latest first), then by episode order
   - Ascending order (DefaultOrder="Asc"): Latest season first, then episodes 1→N within season
   - Descending order: Latest season first, then episodes N→1 within season
-  - See PodcastFeedGenerator.cs:144-146
+  - See `FeedGenerationService.cs` — `BuildRssFeed`
 
 - **Non-seasonal shows**: Standard order without season consideration
   - Ascending order: Episodes ordered 1→N by Order field
   - Descending order: Episodes ordered N→1 by Order field
-  - See PodcastFeedGenerator.cs:151-153
+  - See `FeedGenerationService.cs` — `BuildRssFeed`
 
 ### Image URL Selection Priority
-When extracting image URLs from ImageAssets (PodcastHelpers.cs:5-16):
+When extracting image URLs from ImageAssets (`PodcastHelpers.cs`):
 1. Podcast target with 1:1 ratio (preferred for podcast feeds)
 2. Default target with 1:1 ratio
 3. Podcast target with any ratio
 4. Default target with any ratio
 5. Falls back to channel image if episode has no suitable image
 
+### Audio Proxy
+When `PREFER_MP4=true`, the application serves an `/proxy/audio/{ep}/{asset}` endpoint that:
+- Validates `ep` and `asset` are hex strings
+- Proxies requests to `https://api.dr.dk/radio/v1/assetlinks/...`
+- Rewrites `Content-Type` to `audio/mp4` (correcting the upstream header)
+- Forwards `Range` and `User-Agent` headers for seek support
+- Rate limits to 20 requests/minute per IP with a `Retry-After` response header on rejection
+
 ### CI/CD Workflows
 
 #### build-and-release.yml
-- **Triggers**: Pushes/PRs to main affecting `src/` or `tests/` directories
-- **Semantic Versioning**: Determined by commit messages or PR body
-  - `[major]` or "breaking change" → major version bump
-  - `[minor]` or "feature" → minor version bump
-  - Default → patch version bump
-- **Build Matrix**: Cross-platform builds (Linux x64/ARM64, Windows x64, macOS ARM64)
-- **Test Execution**: Runs full test suite with code coverage on all platforms
-- **Artifacts**: Binaries with SHA256 checksums, retained for 30 days
-- **Prerelease Management**: PRs create prereleases (v1.2.3-pr.X.HASH), deleted when stable release is created
-
-#### generate-feed.yml
-- **Triggers**: Hourly cron schedule, workflow_dispatch, or changes to `podcasts.json`/`site/`
-- **Runner**: Uses ubuntu-24.04-arm for cost efficiency
-- **Deployment Logic**: Hash-based change detection using manifest.json to avoid unnecessary deployments
-- **GitHub Pages**: Deploys to Pages only if feed content has changed (compares SHA256 hashes)
-- **Manual Override**: Supports `use_prerelease` input to test with prerelease binaries
+- **Triggers**: Pushes/PRs to main affecting `src/`, `tests/`, `site/`, `podcasts.json`, or `Dockerfile`; weekly scheduled run
+- **Versioning**: Determined by PR body checkboxes — Major / Minor / Patch
+- **Docker**: Builds and pushes image to `ghcr.io/{repository}` on merge to main
+- **Release**: Creates a GitHub Release tagged with the new version on merge to main
+- **PRs**: Build and test only — no push, no release
