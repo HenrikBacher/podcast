@@ -28,7 +28,7 @@ public sealed class FeedRefreshBackgroundService(
         {
             if (consecutiveFailures >= 3)
             {
-                var backoffMinutes = Math.Min(intervalMinutes * (1 << (consecutiveFailures - 2)), MaxBackoffMinutes);
+                var backoffMinutes = Math.Min(intervalMinutes * (1 << (consecutiveFailures - 3)), MaxBackoffMinutes);
                 logger.LogWarning("Backing off for {Backoff} minutes after {Failures} consecutive failures.", backoffMinutes, consecutiveFailures);
                 await Task.Delay(TimeSpan.FromMinutes(backoffMinutes), stoppingToken);
             }
