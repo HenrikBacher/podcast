@@ -55,10 +55,17 @@ if (config.PreferMp4)
                     QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                     QueueLimit = 0
                 }));
-        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+        options.OnRejected = (context, _) =>
+        {
+            if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+                context.HttpContext.Response.Headers.RetryAfter = ((int)retryAfter.TotalSeconds).ToString();
+            context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+            return ValueTask.CompletedTask;
+        };
     });
 }
 
+builder.Services.AddSingleton(config);
 builder.Services.AddSingleton<FeedGenerationService>();
 builder.Services.AddHostedService<FeedRefreshBackgroundService>();
 builder.Services.AddResponseCompression(options =>

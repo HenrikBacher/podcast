@@ -58,7 +58,7 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
                 return new FeedMetadata(podcast.Slug, cleanTitle, imageUrl);
             }
 
-            var episodes = await FetchAllEpisodesAsync($"{ApiUrl}{podcast.Urn}/episodes?limit=256", httpClient, cancellationToken);
+            var episodes = await FetchAllEpisodesAsync($"{ApiUrl}{podcast.Urn}/episodes?limit=256", httpClient, logger, cancellationToken);
 
             var (rss, metadata) = BuildRssFeed(series, episodes, podcast, baseUrl, config.PreferMp4);
 
@@ -188,13 +188,24 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
 
         try
         {
-            var doc = XDocument.Load(feedPath);
-            var lastBuildDate = doc.Root?.Element("channel")?.Element("lastBuildDate")?.Value;
-            if (lastBuildDate is null || !DateTime.TryParseExact(lastBuildDate, Rfc822Format,
-                    CultureInfo.InvariantCulture, DateTimeStyles.None, out var existing))
-                return true;
+            // Use XmlReader to stop as soon as <lastBuildDate> is found rather than
+            // loading the entire feed (which can contain hundreds of episode elements).
+            var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit };
+            using var reader = XmlReader.Create(feedPath, settings);
+            while (reader.Read())
+            {
+                if (reader.NodeType != XmlNodeType.Element || reader.LocalName != "lastBuildDate")
+                    continue;
 
-            return latestEpisode > existing;
+                var lastBuildDate = reader.ReadElementContentAsString();
+                if (!DateTime.TryParseExact(lastBuildDate, Rfc822Format,
+                        CultureInfo.InvariantCulture, DateTimeStyles.None, out var existing))
+                    return true;
+
+                return latestEpisode > existing;
+            }
+
+            return true; // Element not found, regenerate to be safe
         }
         catch
         {
@@ -323,16 +334,23 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
                "audio/mpeg";
     }
 
-    private static async Task<List<Episode>?> FetchAllEpisodesAsync(string initialUrl, HttpClient httpClient, CancellationToken cancellationToken)
+    private static async Task<List<Episode>?> FetchAllEpisodesAsync(string initialUrl, HttpClient httpClient, ILogger logger, CancellationToken cancellationToken)
     {
         var limitMatch = Regex.Match(initialUrl, @"limit=(\d+)");
         var estimatedCapacity = limitMatch.Success ? int.Parse(limitMatch.Groups[1].Value) : 256;
         List<Episode> allEpisodes = new(estimatedCapacity);
 
         string? nextUrl = initialUrl;
+        var pageCount = 0;
+        const int maxPages = 100;
 
         while (!string.IsNullOrEmpty(nextUrl))
         {
+            if (++pageCount > maxPages)
+            {
+                logger.LogWarning("Reached page limit ({MaxPages}) fetching episodes from {Url}. Truncating.", maxPages, initialUrl);
+                break;
+            }
             var response = await httpClient.GetAsync(nextUrl, cancellationToken);
             response.EnsureSuccessStatusCode();
 

@@ -2,6 +2,7 @@ namespace DrPodcast;
 
 public sealed class FeedRefreshBackgroundService(
     FeedGenerationService feedService,
+    GeneratorConfig config,
     ILogger<FeedRefreshBackgroundService> logger) : BackgroundService
 {
     private const int MaxBackoffMinutes = 60;
@@ -9,7 +10,6 @@ public sealed class FeedRefreshBackgroundService(
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var baseUrl = Environment.GetEnvironmentVariable("BASE_URL") ?? "https://example.com";
-        var config = GeneratorConfig.FromEnvironment();
         var podcastsJsonPath = FindPodcastsJson();
 
         var intervalMinutes = int.TryParse(Environment.GetEnvironmentVariable("REFRESH_INTERVAL_MINUTES"), out var mins) && mins > 0

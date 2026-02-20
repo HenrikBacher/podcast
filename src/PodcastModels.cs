@@ -75,7 +75,7 @@ public record AudioAsset(
     [property: JsonPropertyName("format")] string? Format,
     [property: JsonPropertyName("bitrate")] int? Bitrate,
     [property: JsonPropertyName("url")] string? Url,
-    [property: JsonPropertyName("fileSize")] int? FileSize
+    [property: JsonPropertyName("fileSize")] long? FileSize
 );
 
 public record ImageAsset(
