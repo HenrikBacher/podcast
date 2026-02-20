@@ -1,6 +1,8 @@
+using System.Threading.RateLimiting;
 using DrPodcast;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Net.Http.Headers;
@@ -38,6 +40,23 @@ if (config.PreferMp4)
             retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
             onRetry: (outcome, timespan, retryCount, _) =>
                 Console.WriteLine($"AudioProxy retry {retryCount} after {timespan} seconds")));
+
+    // 20 requests/min per IP with no queuing — burst tolerance via 4 segments
+    builder.Services.AddRateLimiter(options =>
+    {
+        options.AddPolicy("audio-proxy", context =>
+            RateLimitPartition.GetSlidingWindowLimiter(
+                partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                factory: _ => new SlidingWindowRateLimiterOptions
+                {
+                    PermitLimit = 20,
+                    Window = TimeSpan.FromMinutes(1),
+                    SegmentsPerWindow = 4,
+                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                    QueueLimit = 0
+                }));
+        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    });
 }
 
 builder.Services.AddSingleton<FeedGenerationService>();
@@ -58,6 +77,8 @@ app.MapGet("/health", () => Results.Text("healthy"));
 // Audio proxy: streams M4A/MP4 audio from DR with corrected Content-Type (only when PREFER_MP4 is enabled)
 if (config.PreferMp4)
 {
+    app.UseRateLimiter();
+
     app.MapGet("/proxy/audio/{ep}/{asset}", async (string ep, string asset, HttpContext context, IHttpClientFactory clientFactory, ILogger<FeedGenerationService> logger) =>
     {
         if (!RegexCache.HexString().IsMatch(ep) || !RegexCache.HexString().IsMatch(asset))
@@ -102,7 +123,7 @@ if (config.PreferMp4)
             if (!context.Response.HasStarted)
                 context.Response.StatusCode = 502;
         }
-    });
+    }).RequireRateLimiting("audio-proxy");
 }
 
 // Serve static files from the generated site directory
