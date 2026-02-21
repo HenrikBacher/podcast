@@ -5,6 +5,15 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
     private const string ApiUrl = "https://api.dr.dk/radio/v2/series/";
     private const string Rfc822Format = "ddd, dd MMM yyyy HH:mm:ss zzz";
 
+    /// <summary>Format a DateTime as RFC 822 with compact timezone offset (+0000 instead of +00:00).</summary>
+    private static string FormatRfc822(DateTime dt)
+    {
+        var s = dt.ToString(Rfc822Format, CultureInfo.InvariantCulture);
+        // zzz produces "+00:00" — remove the colon to get "+0000" per RFC 822
+        var i = s.LastIndexOf(':');
+        return string.Concat(s.AsSpan(0, i), s.AsSpan(i + 1));
+    }
+
     public async Task GenerateFeedsAsync(string podcastsJsonPath, string baseUrl, GeneratorConfig config, bool forceRegenerate = false, CancellationToken cancellationToken = default)
     {
         var podcastList = JsonSerializer.Deserialize(
@@ -94,7 +103,7 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
         // Use the latest episode start time — avoid DateTime.Now so feed content
         // stays stable across regenerations when nothing has changed (preserves ETags).
         var lastBuildDate = DateTime.TryParse(series?.LatestEpisodeStartTime, out var dt)
-            ? dt.ToString(Rfc822Format, CultureInfo.InvariantCulture)
+            ? FormatRfc822(dt)
             : null;
 
         var itunesType = DetermineItunesType(series);
@@ -198,6 +207,10 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
                     continue;
 
                 var lastBuildDate = reader.ReadElementContentAsString();
+                // Accept both +0000 (RFC 822) and +00:00 (old format) by
+                // normalizing to the colon form that zzz expects.
+                if (lastBuildDate.Length >= 5 && lastBuildDate[^5] is '+' or '-' && lastBuildDate[^3] != ':')
+                    lastBuildDate = lastBuildDate.Insert(lastBuildDate.Length - 2, ":");
                 if (!DateTime.TryParseExact(lastBuildDate, Rfc822Format,
                         CultureInfo.InvariantCulture, DateTimeStyles.None, out var existing))
                     return true;
@@ -252,7 +265,7 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
             : "";
 
         var pubDate = DateTime.TryParse(episode.PublishTime, out var dt)
-            ? dt.ToString(Rfc822Format, CultureInfo.InvariantCulture)
+            ? FormatRfc822(dt)
             : episode.PublishTime ?? "";
 
         var item = new XElement("item",
