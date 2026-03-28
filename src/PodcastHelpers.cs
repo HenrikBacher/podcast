@@ -6,12 +6,23 @@ public static class PodcastHelpers
     {
         if (imageAssets is not { Count: > 0 }) return null;
 
-        // Priority order: podcast 1:1, default 1:1, podcast any ratio, default any ratio
-        var imageId = imageAssets.FirstOrDefault(a => a?.Target?.Equals("podcast", StringComparison.OrdinalIgnoreCase) == true && a.Ratio == "1:1")?.Id
-                      ?? imageAssets.FirstOrDefault(a => a?.Target?.Equals("default", StringComparison.OrdinalIgnoreCase) == true && a.Ratio == "1:1")?.Id
-                      ?? imageAssets.FirstOrDefault(a => a?.Target?.Equals("podcast", StringComparison.OrdinalIgnoreCase) == true)?.Id
-                      ?? imageAssets.FirstOrDefault(a => a?.Target?.Equals("default", StringComparison.OrdinalIgnoreCase) == true)?.Id;
+        // Calculate priority for each asset (single pass):
+        // Priority: Podcast 1:1 (4) > Default 1:1 (3) > Podcast any (2) > Default any (1) > none (0)
+        var bestAsset = imageAssets
+            .Where(a => a != null)
+            .MaxBy(a =>
+            {
+                var isPodcast = a.Target?.Equals("podcast", StringComparison.OrdinalIgnoreCase) ?? false;
+                var isDefault = a.Target?.Equals("default", StringComparison.OrdinalIgnoreCase) ?? false;
+                var isSquare = a.Ratio == "1:1";
 
-        return !string.IsNullOrEmpty(imageId) ? $"https://asset.dr.dk/drlyd/images/{imageId}" : null;
+                return isPodcast && isSquare ? 4
+                     : isDefault && isSquare ? 3
+                     : isPodcast ? 2
+                     : isDefault ? 1
+                     : 0;
+            });
+
+        return !string.IsNullOrEmpty(bestAsset?.Id) ? $"https://asset.dr.dk/drlyd/images/{bestAsset.Id}" : null;
     }
 }
