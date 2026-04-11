@@ -15,14 +15,16 @@ public record GeneratorConfig(
     string OutputDir = "output",
     string SiteDir = "_site",
     string SiteSourceDir = "site",
-    bool PreferMp4 = false
+    bool PreferMp4 = false,
+    string BaseUrl = "https://example.com"
 )
 {
     public string FullSiteDir => Path.Combine(OutputDir, SiteDir);
     public string FeedsDir => Path.Combine(FullSiteDir, "feeds");
 
     public static GeneratorConfig FromEnvironment() => new GeneratorConfig(
-        PreferMp4: Environment.GetEnvironmentVariable("PREFER_MP4")?.ToLower() is "true" or "1"
+        PreferMp4: Environment.GetEnvironmentVariable("PREFER_MP4")?.ToLower() is "true" or "1",
+        BaseUrl: Environment.GetEnvironmentVariable("BASE_URL") ?? "https://example.com"
     );
 }
 

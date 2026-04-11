@@ -2,77 +2,75 @@ namespace DrPodcast;
 
 public static class WebsiteGenerator
 {
-    public static async Task GenerateAsync(IEnumerable<FeedMetadata> feeds, GeneratorConfig? config = null)
+    public static async Task GenerateAsync(IEnumerable<FeedMetadata> feeds, GeneratorConfig? config = null, ILogger? logger = null)
     {
         config ??= new GeneratorConfig();
+        var sortedFeeds = feeds.OrderBy(f => f.Title).ToList();
 
         try
         {
-            Console.WriteLine("Generating website...");
+            logger?.LogInformation("Generating website...");
 
             // Create output directories
             Directory.CreateDirectory(config.FullSiteDir);
             Directory.CreateDirectory(config.FeedsDir);
 
             // Copy static assets
-            await CopyStaticAssetsAsync(config);
+            CopyStaticAssets(config, logger);
 
             // Generate index.html with feed list
-            await GenerateIndexHtmlAsync(feeds, config);
+            await GenerateIndexHtmlAsync(sortedFeeds, config, logger);
 
             // Generate manifest.json
-            await GenerateManifestAsync(feeds, config);
+            await GenerateManifestAsync(sortedFeeds, config, logger);
 
-            Console.WriteLine("Website generation complete!");
+            logger?.LogInformation("Website generation complete!");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Website generation failed: {ex.Message}");
+            logger?.LogError(ex, "Website generation failed");
             throw;
         }
     }
 
-    private static Task CopyStaticAssetsAsync(GeneratorConfig config)
+    private static void CopyStaticAssets(GeneratorConfig config, ILogger? logger)
     {
         if (!Directory.Exists(config.SiteSourceDir))
         {
-            Console.WriteLine($"Warning: Site source directory '{config.SiteSourceDir}' not found. Skipping static assets.");
-            return Task.CompletedTask;
+            logger?.LogWarning("Site source directory '{Dir}' not found. Skipping static assets.", config.SiteSourceDir);
+            return;
         }
 
         foreach (var file in Directory.GetFiles(config.SiteSourceDir))
         {
             var fileName = Path.GetFileName(file);
             File.Copy(file, Path.Combine(config.FullSiteDir, fileName), overwrite: true);
-            Console.WriteLine($"Copied {fileName} to site directory");
+            logger?.LogDebug("Copied {File} to site directory", fileName);
         }
-
-        return Task.CompletedTask;
     }
 
-    private static async Task GenerateIndexHtmlAsync(IEnumerable<FeedMetadata> feeds, GeneratorConfig config)
+    private static async Task GenerateIndexHtmlAsync(List<FeedMetadata> feeds, GeneratorConfig config, ILogger? logger)
     {
         var templatePath = Path.Combine(config.SiteSourceDir, "index.html");
         if (!File.Exists(templatePath))
         {
-            Console.WriteLine($"Warning: Template file '{templatePath}' not found. Skipping index.html generation.");
+            logger?.LogWarning("Template file '{Path}' not found. Skipping index.html generation.", templatePath);
             return;
         }
 
-        var feedsList = feeds.OrderBy(f => f.Title).ToList();
-        var feedsHtml = GenerateFeedsHtml(feedsList);
+        var feedsHtml = GenerateFeedsHtml(feeds);
         var template = await File.ReadAllTextAsync(templatePath);
 
         // Replace template placeholders
         var html = template
             .Replace("{{DEPLOYMENT_TIME}}", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"))
-            .Replace("{{FEED_COUNT}}", feedsList.Count.ToString())
+            .Replace("{{FEED_COUNT}}", feeds.Count.ToString())
             .Replace("<!-- BEGIN_FEEDS -->", feedsHtml)
             .Replace("<!-- END_FEEDS -->", "");
 
         var outputPath = Path.Combine(config.FullSiteDir, "index.html");
         await File.WriteAllTextAsync(outputPath, html);
-        Console.WriteLine($"Generated index.html with {feedsList.Count} feeds");
+        logger?.LogInformation("Generated index.html with {Count} feeds", feeds.Count);
     }
 
     private static string GenerateFeedsHtml(IEnumerable<FeedMetadata> feeds)
@@ -105,7 +103,7 @@ public static class WebsiteGenerator
             e => "        " + e.ToString(SaveOptions.DisableFormatting)));
     }
 
-    private static async Task GenerateManifestAsync(IEnumerable<FeedMetadata> feeds, GeneratorConfig config)
+    private static async Task GenerateManifestAsync(List<FeedMetadata> feeds, GeneratorConfig config, ILogger? logger)
     {
         var feedFiles = new List<FeedFileInfo>();
 
@@ -115,7 +113,7 @@ public static class WebsiteGenerator
 
             if (!File.Exists(feedPath))
             {
-                Console.WriteLine($"Warning: Feed file not found for manifest: {feedPath}");
+                logger?.LogWarning("Feed file not found for manifest: {Path}", feedPath);
                 continue;
             }
 
@@ -133,14 +131,14 @@ public static class WebsiteGenerator
         var manifest = new FeedManifest(
             Timestamp: DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"),
             FeedCount: feedFiles.Count,
-            Feeds: feedFiles.OrderBy(f => f.Title).ToList()
+            Feeds: feedFiles
         );
 
         var manifestPath = Path.Combine(config.FullSiteDir, "manifest.json");
         var json = JsonSerializer.Serialize(manifest, PodcastJsonContext.Default.FeedManifest);
         await File.WriteAllTextAsync(manifestPath, json);
 
-        Console.WriteLine($"Generated manifest.json with {feedFiles.Count} feeds");
+        logger?.LogInformation("Generated manifest.json with {Count} feeds", feedFiles.Count);
     }
 
     private static async Task<string> ComputeFileHashAsync(string filePath)

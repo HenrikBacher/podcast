@@ -14,7 +14,7 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
         return string.Concat(s.AsSpan(0, i), s.AsSpan(i + 1));
     }
 
-    public async Task GenerateFeedsAsync(string podcastsJsonPath, string baseUrl, GeneratorConfig config, bool forceRegenerate = false, CancellationToken cancellationToken = default)
+    public async Task GenerateFeedsAsync(string podcastsJsonPath, GeneratorConfig config, bool forceRegenerate = false, CancellationToken cancellationToken = default)
     {
         var podcastList = JsonSerializer.Deserialize(
             await File.ReadAllTextAsync(podcastsJsonPath, cancellationToken),
@@ -29,17 +29,17 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
         Directory.CreateDirectory(config.FeedsDir);
 
         var tasks = podcastList.Podcasts.Select(podcast =>
-            ProcessPodcastAsync(podcast, baseUrl, config, forceRegenerate, cancellationToken)).ToArray();
+            ProcessPodcastAsync(podcast, config, forceRegenerate, cancellationToken)).ToArray();
 
         var results = await Task.WhenAll(tasks);
         var feedMetadata = results.OfType<FeedMetadata>().ToList();
 
         logger.LogInformation("Generated {Count} podcast feeds.", feedMetadata.Count);
 
-        await WebsiteGenerator.GenerateAsync(feedMetadata, config);
+        await WebsiteGenerator.GenerateAsync(feedMetadata, config, logger);
     }
 
-    private async Task<FeedMetadata?> ProcessPodcastAsync(Podcast podcast, string baseUrl, GeneratorConfig config, bool forceRegenerate, CancellationToken cancellationToken)
+    private async Task<FeedMetadata?> ProcessPodcastAsync(Podcast podcast, GeneratorConfig config, bool forceRegenerate, CancellationToken cancellationToken)
     {
         try
         {
@@ -60,16 +60,12 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
             if (!forceRegenerate && File.Exists(outputPath) && !HasNewerEpisodes(outputPath, series))
             {
                 logger.LogInformation("Skipped {Slug} (unchanged)", podcast.Slug);
-                var imageUrl = PodcastHelpers.GetImageUrlFromAssets(series?.ImageAssets)
-                               ?? PodcastHelpers.GetImageUrlFromAssets(podcast.ImageAssets);
-                var title = series?.Title ?? podcast.Slug.Replace("-", " ");
-                var cleanTitle = RegexCache.FeedTitleCleanup().Replace(title, "").Trim();
-                return new FeedMetadata(podcast.Slug, cleanTitle, imageUrl);
+                return BuildFeedMetadata(podcast, series);
             }
 
             var episodes = await FetchAllEpisodesAsync($"{ApiUrl}{podcast.Urn}/episodes?limit=256", httpClient, logger, cancellationToken);
 
-            var (rss, metadata) = BuildRssFeed(series, episodes, podcast, baseUrl, config.PreferMp4);
+            var (rss, metadata) = BuildRssFeed(series, episodes, podcast, config.BaseUrl, config.PreferMp4);
 
             // Atomic write: write to temp file then rename to avoid serving partial files
             string tempPath = outputPath + ".tmp";
@@ -85,6 +81,7 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
 
             return metadata;
         }
+        catch (OperationCanceledException) { throw; }
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to process {Urn}", podcast.Urn);
@@ -97,8 +94,7 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
         XNamespace atom = "http://www.w3.org/2005/Atom";
         XNamespace itunes = "http://www.itunes.com/dtds/podcast-1.0.dtd";
 
-        var imageUrl = PodcastHelpers.GetImageUrlFromAssets(series?.ImageAssets)
-                       ?? PodcastHelpers.GetImageUrlFromAssets(podcast.ImageAssets);
+        var metadata = BuildFeedMetadata(podcast, series);
 
         // Use the latest episode start time — avoid DateTime.Now so feed content
         // stays stable across regenerations when nothing has changed (preserves ETags).
@@ -107,9 +103,6 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
             : null;
 
         var itunesType = DetermineItunesType(series);
-
-        var title = series?.Title ?? podcast.Slug.Replace("-", " ");
-        var cleanTitle = RegexCache.FeedTitleCleanup().Replace(title, "").Trim();
 
         var channel = new XElement("channel",
             new XElement(atom + "link",
@@ -134,9 +127,9 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
             channel.Add(new XElement("lastBuildDate", lastBuildDate));
         }
 
-        if (!string.IsNullOrEmpty(imageUrl))
+        if (!string.IsNullOrEmpty(metadata.ImageUrl))
         {
-            channel.Add(new XElement(itunes + "image", new XAttribute("href", imageUrl)));
+            channel.Add(new XElement(itunes + "image", new XAttribute("href", metadata.ImageUrl)));
         }
 
         if (!string.IsNullOrEmpty(series?.Punchline))
@@ -175,7 +168,7 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
 
             foreach (var episode in sorted)
             {
-                channel.Add(BuildEpisodeItem(episode, imageUrl, baseUrl, preferMp4, itunes));
+                channel.Add(BuildEpisodeItem(episode, metadata.ImageUrl, baseUrl, preferMp4, itunes));
             }
         }
 
@@ -184,8 +177,6 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
             new XAttribute(XNamespace.Xmlns + "atom", atom),
             new XAttribute(XNamespace.Xmlns + "itunes", itunes),
             channel);
-
-        var metadata = new FeedMetadata(podcast.Slug, cleanTitle, imageUrl);
 
         return (rss, metadata);
     }
@@ -228,6 +219,15 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
 
     private static string DetermineItunesType(Series? series) =>
         series?.PresentationType == "Show" ? "serial" : "episodic";
+
+    private static FeedMetadata BuildFeedMetadata(Podcast podcast, Series? series)
+    {
+        var imageUrl = PodcastHelpers.GetImageUrlFromAssets(series?.ImageAssets)
+                       ?? PodcastHelpers.GetImageUrlFromAssets(podcast.ImageAssets);
+        var title = series?.Title ?? podcast.Slug.Replace("-", " ");
+        var cleanTitle = RegexCache.FeedTitleCleanup().Replace(title, "").Trim();
+        return new FeedMetadata(podcast.Slug, cleanTitle, imageUrl);
+    }
 
     private static void AddCategories(XElement element, List<string>? categories, XNamespace itunes)
     {

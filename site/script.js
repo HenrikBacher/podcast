@@ -18,25 +18,23 @@ function copyToClipboard(text) {
     });
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    document.querySelector('.feeds')?.addEventListener('click', (e) => {
-        const link = e.target.closest('.feed-link');
-        if (!link) return;
+document.querySelector('.feeds')?.addEventListener('click', (e) => {
+    const link = e.target.closest('.feed-link');
+    if (!link) return;
 
-        e.preventDefault();
-        const url = link.href;
-        const now = Date.now();
-        const timeDiff = now - lastTap;
+    e.preventDefault();
+    const url = link.href;
+    const now = Date.now();
+    const timeDiff = now - lastTap;
 
-        if (timeDiff < 300 && timeDiff > 0) {
-            window.open(url, '_blank');
-        } else if (isMobile) {
-            const pocketCastsUrl = 'pktc://subscribe/' + url.replace(/^https?:\/\//, '');
-            window.location.href = pocketCastsUrl;
-            setTimeout(() => copyToClipboard(url), 500);
-        } else {
-            copyToClipboard(url);
-        }
-        lastTap = now;
-    });
+    if (timeDiff < 300 && timeDiff > 0) {
+        window.open(url, '_blank');
+    } else if (isMobile) {
+        const pocketCastsUrl = 'pktc://subscribe/' + url.replace(/^https?:\/\//, '');
+        window.location.href = pocketCastsUrl;
+        setTimeout(() => copyToClipboard(url), 500);
+    } else {
+        copyToClipboard(url);
+    }
+    lastTap = now;
 });

@@ -63,6 +63,20 @@ jobs:
           $isRelease = "false"
           $bumpType = "patch"
 
+          function Get-BumpTypeFromBody($body) {
+            if ($body -match '\[x\]\s+\*\*Major\*\*') { return "major" }
+            if ($body -match '\[x\]\s+\*\*Minor\*\*') { return "minor" }
+            return "patch"
+          }
+
+          function Get-NextVersion($major, $minor, $patch, $bumpType) {
+            switch ($bumpType) {
+              "major" { return "$($major + 1).0.0" }
+              "minor" { return "$major.$($minor + 1).0" }
+              default { return "$major.$minor.$($patch + 1)" }
+            }
+          }
+
           if ("${{ github.event_name }}" -eq "push" -and "${{ github.ref }}" -eq "refs/heads/main") {
             $isRelease = "true"
 
@@ -74,43 +88,25 @@ jobs:
 
               try {
                 $prData = gh pr view $prNumber --json body --jq '.body' 2>$null
-                if ($prData) {
-                  if ($prData -match '\[x\]\s+\*\*Major\*\*') {
-                    $bumpType = "major"
-                  } elseif ($prData -match '\[x\]\s+\*\*Minor\*\*') {
-                    $bumpType = "minor"
-                  }
-                }
+                if ($prData) { $bumpType = Get-BumpTypeFromBody $prData }
               } catch {
                 Write-Host "Could not read PR, using PATCH (default)"
               }
             }
 
-            switch ($bumpType) {
-              "major" { $newVersion = "$($major + 1).0.0" }
-              "minor" { $newVersion = "$major.$($minor + 1).0" }
-              "patch" { $newVersion = "$major.$minor.$($patch + 1)" }
-            }
-            $version = $newVersion
+            $version = Get-NextVersion $major $minor $patch $bumpType
             Write-Host "Release: v$version ($bumpType)"
           } else {
             $prNumber = "${{ github.event.pull_request.number }}"
             if (-not $prNumber) { $prNumber = "0" }
             $shortSha = git rev-parse --short=7 HEAD
 
-            $bumpType = "patch"
             try {
               $prBody = "${{ github.event.pull_request.body }}"
-              if ($prBody -match '\[x\]\s+\*\*Major\*\*') { $bumpType = "major" }
-              elseif ($prBody -match '\[x\]\s+\*\*Minor\*\*') { $bumpType = "minor" }
+              $bumpType = Get-BumpTypeFromBody $prBody
             } catch { }
 
-            switch ($bumpType) {
-              "major" { $nextVersion = "$($major + 1).0.0" }
-              "minor" { $nextVersion = "$major.$($minor + 1).0" }
-              "patch" { $nextVersion = "$major.$minor.$($patch + 1)" }
-            }
-
+            $nextVersion = Get-NextVersion $major $minor $patch $bumpType
             $version = "$nextVersion-pr$prNumber-$shortSha"
             Write-Host "PR #${prNumber}: $version"
           }

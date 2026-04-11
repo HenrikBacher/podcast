@@ -52,7 +52,6 @@ body {
 
 .feeds { 
     list-style: none; 
-    padding: 0;
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); /* Changed from 160px */
     gap: 0.75rem; /* Changed from 1rem */
