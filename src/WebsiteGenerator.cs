@@ -32,26 +32,22 @@ public static class WebsiteGenerator
         }
     }
 
-    private static async Task CopyStaticAssetsAsync(GeneratorConfig config)
+    private static Task CopyStaticAssetsAsync(GeneratorConfig config)
     {
         if (!Directory.Exists(config.SiteSourceDir))
         {
             Console.WriteLine($"Warning: Site source directory '{config.SiteSourceDir}' not found. Skipping static assets.");
-            return;
+            return Task.CompletedTask;
         }
 
-        var files = Directory.GetFiles(config.SiteSourceDir);
-        foreach (var file in files)
+        foreach (var file in Directory.GetFiles(config.SiteSourceDir))
         {
             var fileName = Path.GetFileName(file);
-            var destFile = Path.Combine(config.FullSiteDir, fileName);
-
-            // Use async file copy
-            await using var source = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true);
-            await using var dest = new FileStream(destFile, FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true);
-            await source.CopyToAsync(dest);
+            File.Copy(file, Path.Combine(config.FullSiteDir, fileName), overwrite: true);
             Console.WriteLine($"Copied {fileName} to site directory");
         }
+
+        return Task.CompletedTask;
     }
 
     private static async Task GenerateIndexHtmlAsync(IEnumerable<FeedMetadata> feeds, GeneratorConfig config)
@@ -105,16 +101,8 @@ public static class WebsiteGenerator
             );
         });
 
-        var feedsContainer = new XElement("root", feedElements);
-
-        // Extract inner content (without root wrapper)
-        var sb = new StringBuilder();
-        foreach (var element in feedsContainer.Elements())
-        {
-            sb.AppendLine("        " + element.ToString(SaveOptions.DisableFormatting));
-        }
-
-        return sb.ToString().TrimEnd();
+        return string.Join("\n", feedElements.Select(
+            e => "        " + e.ToString(SaveOptions.DisableFormatting)));
     }
 
     private static async Task GenerateManifestAsync(IEnumerable<FeedMetadata> feeds, GeneratorConfig config)

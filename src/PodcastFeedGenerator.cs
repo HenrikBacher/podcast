@@ -7,6 +7,15 @@ using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Net.Http.Headers;
 
+static IAsyncPolicy<HttpResponseMessage> RetryPolicy(string label) =>
+    HttpPolicyExtensions
+        .HandleTransientHttpError()
+        .OrResult(msg => !msg.IsSuccessStatusCode)
+        .WaitAndRetryAsync(3,
+            retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
+            onRetry: (_, timespan, retryCount, _) =>
+                Console.WriteLine($"{label} retry {retryCount} after {timespan}"));
+
 // Web server mode: serve static feeds + periodic background regeneration
 var builder = WebApplication.CreateBuilder(args);
 builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
@@ -19,13 +28,7 @@ builder.Services.AddHttpClient("DrApi", client =>
     client.DefaultRequestHeaders.Add("X-Apikey", apiKey);
     client.Timeout = TimeSpan.FromSeconds(30);
 })
-.AddPolicyHandler(HttpPolicyExtensions
-    .HandleTransientHttpError()
-    .OrResult(msg => !msg.IsSuccessStatusCode)
-    .WaitAndRetryAsync(3,
-        retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
-        onRetry: (outcome, timespan, retryCount, _) =>
-            Console.WriteLine($"Retry {retryCount} after {timespan} seconds")));
+.AddPolicyHandler(RetryPolicy("DrApi"));
 
 if (config.PreferMp4)
 {
@@ -33,13 +36,7 @@ if (config.PreferMp4)
     {
         client.Timeout = TimeSpan.FromMinutes(5);
     })
-    .AddPolicyHandler(HttpPolicyExtensions
-        .HandleTransientHttpError()
-        .OrResult(msg => !msg.IsSuccessStatusCode)
-        .WaitAndRetryAsync(3,
-            retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
-            onRetry: (outcome, timespan, retryCount, _) =>
-                Console.WriteLine($"AudioProxy retry {retryCount} after {timespan} seconds")));
+    .AddPolicyHandler(RetryPolicy("AudioProxy"));
 
     // 20 requests/min per IP with no queuing — burst tolerance via 4 segments
     builder.Services.AddRateLimiter(options =>

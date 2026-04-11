@@ -59,11 +59,6 @@ public sealed class FeedRefreshBackgroundService(
         }
     }
 
-    private static string FindPodcastsJson()
-    {
-        // Check common locations
-        if (File.Exists("podcasts.json")) return "podcasts.json";
-        if (File.Exists("/app/podcasts.json")) return "/app/podcasts.json";
-        return "podcasts.json";
-    }
+    private static string FindPodcastsJson() =>
+        File.Exists("/app/podcasts.json") ? "/app/podcasts.json" : "podcasts.json";
 }

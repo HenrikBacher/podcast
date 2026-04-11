@@ -333,19 +333,17 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
         return item;
     }
 
-    private static string GetMimeTypeFromFormat(string? format)
-    {
-        if (format is null) return "audio/mpeg";
-
-        return format.Equals("mp3", StringComparison.OrdinalIgnoreCase) ? "audio/mpeg" :
-               format.Equals("mp4", StringComparison.OrdinalIgnoreCase) ? "audio/mp4" :
-               format.Equals("aac", StringComparison.OrdinalIgnoreCase) ? "audio/aac" :
-               format.Equals("m4a", StringComparison.OrdinalIgnoreCase) ? "audio/mp4" :
-               format.Equals("ogg", StringComparison.OrdinalIgnoreCase) ? "audio/ogg" :
-               format.Equals("wav", StringComparison.OrdinalIgnoreCase) ? "audio/wav" :
-               format.Equals("flac", StringComparison.OrdinalIgnoreCase) ? "audio/flac" :
-               "audio/mpeg";
-    }
+    private static string GetMimeTypeFromFormat(string? format) =>
+        format?.ToLowerInvariant() switch
+        {
+            "mp3" => "audio/mpeg",
+            "mp4" or "m4a" => "audio/mp4",
+            "aac" => "audio/aac",
+            "ogg" => "audio/ogg",
+            "wav" => "audio/wav",
+            "flac" => "audio/flac",
+            _ => "audio/mpeg"
+        };
 
     private static async Task<List<Episode>?> FetchAllEpisodesAsync(string initialUrl, HttpClient httpClient, ILogger logger, CancellationToken cancellationToken)
     {
