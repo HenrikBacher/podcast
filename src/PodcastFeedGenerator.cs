@@ -68,7 +68,7 @@ builder.Services.AddHostedService<FeedRefreshBackgroundService>();
 builder.Services.AddResponseCompression(options =>
 {
     options.EnableForHttps = true;
-    options.MimeTypes = ResponseCompressionDefaults.MimeTypes.Concat(["application/xml"]);
+    options.MimeTypes = ResponseCompressionDefaults.MimeTypes.Concat(["application/rss+xml"]);
 });
 
 var app = builder.Build();
@@ -135,7 +135,7 @@ Directory.CreateDirectory(config.FullSiteDir);
 Directory.CreateDirectory(config.FeedsDir);
 
 var contentTypeProvider = new FileExtensionContentTypeProvider();
-contentTypeProvider.Mappings[".xml"] = "text/xml; charset=utf-8";
+contentTypeProvider.Mappings[".xml"] = "application/rss+xml; charset=utf-8";
 
 var fileProvider = new PhysicalFileProvider(Path.GetFullPath(config.FullSiteDir));
 

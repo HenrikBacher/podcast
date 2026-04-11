@@ -72,10 +72,7 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
             await using (var fileStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true))
             using (var writer = new StreamWriter(fileStream, new UTF8Encoding(false)))
             {
-                var xmlDoc = new XDocument(
-                    new XDeclaration("1.0", "utf-8", "yes"),
-                    new XProcessingInstruction("xml-stylesheet", "type=\"text/xsl\" href=\"../feed.xsl\""),
-                    rss);
+                var xmlDoc = new XDocument(new XDeclaration("1.0", "utf-8", "yes"), rss);
                 xmlDoc.Save(writer);
             }
             File.Move(tempPath, outputPath, overwrite: true);
