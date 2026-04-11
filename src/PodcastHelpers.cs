@@ -23,6 +23,11 @@ public static class PodcastHelpers
                      : 0;
             });
 
-        return !string.IsNullOrEmpty(bestAsset?.Id) ? $"https://asset.dr.dk/drlyd/images/{bestAsset.Id}" : null;
+        if (string.IsNullOrEmpty(bestAsset?.Id)
+            || bestAsset.Id.Contains("..")
+            || bestAsset.Id.IndexOfAny(['?', '#', '\\', '\r', '\n']) >= 0)
+            return null;
+
+        return $"https://asset.dr.dk/drlyd/images/{bestAsset.Id}";
     }
 }

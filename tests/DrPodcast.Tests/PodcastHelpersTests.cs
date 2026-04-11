@@ -180,4 +180,56 @@ public class PodcastHelpersTests
         // Should pick podcast with 16:9 since no podcast 1:1 or default 1:1 exists
         result.Should().Be("https://asset.dr.dk/drlyd/images/img3");
     }
+
+    [Fact]
+    public void GetImageUrlFromAssets_ShouldRejectPathTraversal()
+    {
+        var imageAssets = new List<ImageAsset>
+        {
+            new("../../etc/passwd", "podcast", "1:1")
+        };
+
+        var result = PodcastHelpers.GetImageUrlFromAssets(imageAssets);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void GetImageUrlFromAssets_ShouldRejectBackslash()
+    {
+        var imageAssets = new List<ImageAsset>
+        {
+            new("some\\path", "podcast", "1:1")
+        };
+
+        var result = PodcastHelpers.GetImageUrlFromAssets(imageAssets);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void GetImageUrlFromAssets_ShouldRejectQueryString()
+    {
+        var imageAssets = new List<ImageAsset>
+        {
+            new("image?evil=true", "podcast", "1:1")
+        };
+
+        var result = PodcastHelpers.GetImageUrlFromAssets(imageAssets);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void GetImageUrlFromAssets_ShouldRejectFragment()
+    {
+        var imageAssets = new List<ImageAsset>
+        {
+            new("image#fragment", "podcast", "1:1")
+        };
+
+        var result = PodcastHelpers.GetImageUrlFromAssets(imageAssets);
+
+        result.Should().BeNull();
+    }
 }

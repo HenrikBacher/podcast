@@ -4,9 +4,11 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
 {
     private const string ApiUrl = "https://api.dr.dk/radio/v2/series/";
     private const string Rfc822Format = "ddd, dd MMM yyyy HH:mm:ss zzz";
+    private const int EpisodesPerPage = 256;
+    private const int MaxPagesPerSeries = 100;
 
     /// <summary>Format a DateTime as RFC 822 with compact timezone offset (+0000 instead of +00:00).</summary>
-    private static string FormatRfc822(DateTime dt)
+    internal static string FormatRfc822(DateTime dt)
     {
         var s = dt.ToString(Rfc822Format, CultureInfo.InvariantCulture);
         // zzz produces "+00:00" — remove the colon to get "+0000" per RFC 822
@@ -45,7 +47,7 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
         {
             using var httpClient = httpClientFactory.CreateClient("DrApi");
 
-            var seriesResponse = await httpClient.GetAsync($"{ApiUrl}{podcast.Urn}", cancellationToken);
+            using var seriesResponse = await httpClient.GetAsync($"{ApiUrl}{podcast.Urn}", cancellationToken);
             seriesResponse.EnsureSuccessStatusCode();
 
             await using var stream = await seriesResponse.Content.ReadAsStreamAsync(cancellationToken);
@@ -63,7 +65,7 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
                 return BuildFeedMetadata(podcast, series);
             }
 
-            var episodes = await FetchAllEpisodesAsync($"{ApiUrl}{podcast.Urn}/episodes?limit=256", httpClient, logger, cancellationToken);
+            var episodes = await FetchAllEpisodesAsync($"{ApiUrl}{podcast.Urn}/episodes?limit={EpisodesPerPage}", httpClient, logger, cancellationToken);
 
             var (rss, metadata) = BuildRssFeed(series, episodes, podcast, config.BaseUrl, config.PreferMp4);
 
@@ -89,7 +91,7 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
         }
     }
 
-    private static (XElement rss, FeedMetadata metadata) BuildRssFeed(Series? series, List<Episode>? episodes, Podcast podcast, string baseUrl, bool preferMp4 = false)
+    internal static (XElement rss, FeedMetadata metadata) BuildRssFeed(Series? series, List<Episode>? episodes, Podcast podcast, string baseUrl, bool preferMp4 = false)
     {
         XNamespace atom = "http://www.w3.org/2005/Atom";
         XNamespace itunes = "http://www.itunes.com/dtds/podcast-1.0.dtd";
@@ -181,7 +183,7 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
         return (rss, metadata);
     }
 
-    private static bool HasNewerEpisodes(string feedPath, Series? series)
+    internal static bool HasNewerEpisodes(string feedPath, Series? series)
     {
         if (!DateTime.TryParse(series?.LatestEpisodeStartTime, out var latestEpisode))
             return true; // Can't determine, regenerate to be safe
@@ -211,16 +213,16 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
 
             return true; // Element not found, regenerate to be safe
         }
-        catch
+        catch (Exception)
         {
             return true; // Corrupt/unreadable file, regenerate
         }
     }
 
-    private static string DetermineItunesType(Series? series) =>
+    internal static string DetermineItunesType(Series? series) =>
         series?.PresentationType == "Show" ? "serial" : "episodic";
 
-    private static FeedMetadata BuildFeedMetadata(Podcast podcast, Series? series)
+    internal static FeedMetadata BuildFeedMetadata(Podcast podcast, Series? series)
     {
         var imageUrl = PodcastHelpers.GetImageUrlFromAssets(series?.ImageAssets)
                        ?? PodcastHelpers.GetImageUrlFromAssets(podcast.ImageAssets);
@@ -240,7 +242,7 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
         }
     }
 
-    private static XElement BuildEpisodeItem(Episode episode, string? channelImage, string baseUrl, bool preferMp4, XNamespace itunes)
+    internal static XElement BuildEpisodeItem(Episode episode, string? channelImage, string baseUrl, bool preferMp4, XNamespace itunes)
     {
         AudioAsset? audioAsset;
         if (preferMp4)
@@ -347,22 +349,21 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
 
     private static async Task<List<Episode>?> FetchAllEpisodesAsync(string initialUrl, HttpClient httpClient, ILogger logger, CancellationToken cancellationToken)
     {
-        var limitMatch = Regex.Match(initialUrl, @"limit=(\d+)");
-        var estimatedCapacity = limitMatch.Success ? int.Parse(limitMatch.Groups[1].Value) : 256;
+        var limitMatch = RegexCache.LimitParameter().Match(initialUrl);
+        var estimatedCapacity = limitMatch.Success ? int.Parse(limitMatch.Groups[1].Value) : EpisodesPerPage;
         List<Episode> allEpisodes = new(estimatedCapacity);
 
         string? nextUrl = initialUrl;
         var pageCount = 0;
-        const int maxPages = 100;
 
         while (!string.IsNullOrEmpty(nextUrl))
         {
-            if (++pageCount > maxPages)
+            if (++pageCount > MaxPagesPerSeries)
             {
-                logger.LogWarning("Reached page limit ({MaxPages}) fetching episodes from {Url}. Truncating.", maxPages, initialUrl);
+                logger.LogWarning("Reached page limit ({MaxPages}) fetching episodes from {Url}. Truncating.", MaxPagesPerSeries, initialUrl);
                 break;
             }
-            var response = await httpClient.GetAsync(nextUrl, cancellationToken);
+            using var response = await httpClient.GetAsync(nextUrl, cancellationToken);
             response.EnsureSuccessStatusCode();
 
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
@@ -397,4 +398,7 @@ internal static partial class RegexCache
 
     [GeneratedRegex(@"^[0-9a-f]+$")]
     public static partial Regex HexString();
+
+    [GeneratedRegex(@"limit=(\d+)")]
+    public static partial Regex LimitParameter();
 }

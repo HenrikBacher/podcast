@@ -42,13 +42,21 @@ public sealed class FeedRefreshBackgroundService(
         try
         {
             logger.LogInformation("Starting feed generation{Force}...", forceRegenerate ? " (forced)" : "");
-            await feedService.GenerateFeedsAsync(podcastsJsonPath, config, forceRegenerate, cancellationToken);
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromMinutes(10));
+            await feedService.GenerateFeedsAsync(podcastsJsonPath, config, forceRegenerate, timeoutCts.Token);
             logger.LogInformation("Feed generation complete.");
             return 0;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             // Graceful shutdown
+            return consecutiveFailures;
+        }
+        catch (OperationCanceledException)
+        {
+            consecutiveFailures++;
+            logger.LogError("Feed generation timed out after 10 minutes ({Failures} consecutive failures).", consecutiveFailures);
             return consecutiveFailures;
         }
         catch (Exception ex)

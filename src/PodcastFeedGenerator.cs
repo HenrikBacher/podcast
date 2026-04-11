@@ -7,14 +7,14 @@ using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Net.Http.Headers;
 
-static IAsyncPolicy<HttpResponseMessage> RetryPolicy(string label) =>
+static IAsyncPolicy<HttpResponseMessage> RetryPolicy(string label, ILogger logger) =>
     HttpPolicyExtensions
         .HandleTransientHttpError()
         .OrResult(msg => !msg.IsSuccessStatusCode)
         .WaitAndRetryAsync(3,
             retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
             onRetry: (_, timespan, retryCount, _) =>
-                Console.WriteLine($"{label} retry {retryCount} after {timespan}"));
+                logger.LogWarning("{Label} retry {RetryCount} after {Timespan}", label, retryCount, timespan));
 
 // Web server mode: serve static feeds + periodic background regeneration
 var builder = WebApplication.CreateBuilder(args);
@@ -28,7 +28,7 @@ builder.Services.AddHttpClient("DrApi", client =>
     client.DefaultRequestHeaders.Add("X-Apikey", apiKey);
     client.Timeout = TimeSpan.FromSeconds(30);
 })
-.AddPolicyHandler(RetryPolicy("DrApi"));
+.AddPolicyHandler((sp, _) => RetryPolicy("DrApi", sp.GetRequiredService<ILoggerFactory>().CreateLogger("HttpRetry")));
 
 if (config.PreferMp4)
 {
@@ -36,7 +36,7 @@ if (config.PreferMp4)
     {
         client.Timeout = TimeSpan.FromMinutes(5);
     })
-    .AddPolicyHandler(RetryPolicy("AudioProxy"));
+    .AddPolicyHandler((sp, _) => RetryPolicy("AudioProxy", sp.GetRequiredService<ILoggerFactory>().CreateLogger("HttpRetry")));
 
     // 20 requests/min per IP with no queuing — burst tolerance via 4 segments
     builder.Services.AddRateLimiter(options =>
@@ -76,7 +76,22 @@ var app = builder.Build();
 app.UseResponseCompression();
 
 // Health check endpoint
-app.MapGet("/health", () => Results.Text("healthy"));
+app.MapGet("/health", (GeneratorConfig cfg) =>
+{
+    if (!Directory.Exists(cfg.FeedsDir))
+        return Results.Text("degraded: feeds directory missing", statusCode: 503);
+
+    var feedFiles = Directory.GetFiles(cfg.FeedsDir, "*.xml");
+    if (feedFiles.Length == 0)
+        return Results.Text("starting: no feeds generated yet", statusCode: 503);
+
+    var newestWrite = feedFiles.Max(f => File.GetLastWriteTimeUtc(f));
+    var age = DateTime.UtcNow - newestWrite;
+    if (age > TimeSpan.FromHours(24))
+        return Results.Text($"stale: newest feed is {age.TotalMinutes:F0}min old", statusCode: 503);
+
+    return Results.Text("healthy");
+});
 
 // Audio proxy: streams M4A/MP4 audio from DR with corrected Content-Type (only when PREFER_MP4 is enabled)
 if (config.PreferMp4)
@@ -85,7 +100,9 @@ if (config.PreferMp4)
 
     app.MapGet("/proxy/audio/{ep}/{asset}", async (string ep, string asset, HttpContext context, IHttpClientFactory clientFactory, ILogger<FeedGenerationService> logger) =>
     {
-        if (!RegexCache.HexString().IsMatch(ep) || !RegexCache.HexString().IsMatch(asset))
+        const int maxHexLength = 64;
+        if (ep.Length > maxHexLength || asset.Length > maxHexLength
+            || !RegexCache.HexString().IsMatch(ep) || !RegexCache.HexString().IsMatch(asset))
         {
             context.Response.StatusCode = 400;
             return;
@@ -108,6 +125,7 @@ if (config.PreferMp4)
 
             context.Response.StatusCode = (int)upstream.StatusCode;
             context.Response.ContentType = "audio/mp4";
+            context.Response.Headers["X-Content-Type-Options"] = "nosniff";
 
             if (upstream.Content.Headers.ContentLength is { } length)
                 context.Response.ContentLength = length;
