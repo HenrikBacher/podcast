@@ -169,7 +169,7 @@ jobs:
 
       - name: Create GitHub Release
         if: needs.determine-version.outputs.is-release == 'true'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.determine-version.outputs.version-tag }}
           name: Release ${{ needs.determine-version.outputs.version-tag }}
