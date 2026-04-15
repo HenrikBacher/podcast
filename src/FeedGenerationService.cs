@@ -265,10 +265,11 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
         var duration = episode.DurationMilliseconds is not null
             ? TimeSpan.FromMilliseconds(episode.DurationMilliseconds.Value).ToString(@"hh\:mm\:ss")
             : "";
-
-        var pubDate = DateTime.TryParse(episode.PublishTime, out var dt)
+            
+        var rawTime = episode.StartTime ?? episode.PublishTime;
+        var pubDate = DateTime.TryParse(rawTime, out var dt)
             ? FormatRfc822(dt)
-            : episode.PublishTime ?? "";
+            : rawTime ?? "";
 
         var item = new XElement("item",
             new XElement("title", episode.Title ?? ""),

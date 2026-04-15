@@ -131,6 +131,7 @@ public class PodcastModelsTests
                 "title": "Episode 1",
                 "description": "First episode description",
                 "publishTime": "2024-01-01T12:00:00Z",
+                "startTime": "2024-01-01T12:00:00Z",
                 "id": "ep-001",
                 "presentationUrl": "https://www.dr.dk/lyd/episode-1",
                 "durationMilliseconds": 1800000,
@@ -167,6 +168,7 @@ public class PodcastModelsTests
         episode.Title.Should().Be("Episode 1");
         episode.Description.Should().Be("First episode description");
         episode.PublishTime.Should().Be("2024-01-01T12:00:00Z");
+        episode.StartTime.Should().Be("2024-01-01T12:00:00Z");
         episode.Id.Should().Be("ep-001");
         episode.PresentationUrl.Should().Be("https://www.dr.dk/lyd/episode-1");
         episode.DurationMilliseconds.Should().Be(1800000);

@@ -368,6 +368,7 @@ public class FeedGenerationServiceTests
         XNamespace itunes = "http://www.itunes.com/dtds/podcast-1.0.dtd";
         var episode = new Episode(
             Title: "Test", Description: null, PublishTime: "2024-01-01T00:00:00Z",
+            StartTime: null,
             Id: "ep-1", PresentationUrl: null, DurationMilliseconds: 3723000,
             AudioAssets: null, Categories: null, ImageAssets: null,
             EpisodeNumber: null, SeasonNumber: null, ExplicitContent: false, Order: null);
@@ -375,6 +376,42 @@ public class FeedGenerationServiceTests
         var item = FeedGenerationService.BuildEpisodeItem(episode, null, "https://example.com", preferMp4: false, itunes);
 
         item.Element(itunes + "duration")!.Value.Should().Be("01:02:03");
+    }
+
+    [Fact]
+    public void BuildEpisodeItem_PrefersStartTimeOverPublishTime()
+    {
+        // DR re-indexes old content by updating publishTime; startTime is stable.
+        // The feed must use startTime so podcatchers don't treat re-indexed episodes as new.
+        XNamespace itunes = "http://www.itunes.com/dtds/podcast-1.0.dtd";
+        var episode = new Episode(
+            Title: "Old episode", Description: null,
+            PublishTime: "2026-04-13T23:55:00+02:00",
+            StartTime: "2021-11-18T04:00:00+01:00",
+            Id: "ep-old", PresentationUrl: null, DurationMilliseconds: 1000,
+            AudioAssets: null, Categories: null, ImageAssets: null,
+            EpisodeNumber: null, SeasonNumber: null, ExplicitContent: false, Order: null);
+
+        var item = FeedGenerationService.BuildEpisodeItem(episode, null, "https://example.com", preferMp4: false, itunes);
+
+        item.Element("pubDate")!.Value.Should().Contain("2021").And.Contain("Nov");
+    }
+
+    [Fact]
+    public void BuildEpisodeItem_FallsBackToPublishTimeWhenStartTimeMissing()
+    {
+        XNamespace itunes = "http://www.itunes.com/dtds/podcast-1.0.dtd";
+        var episode = new Episode(
+            Title: "Test", Description: null,
+            PublishTime: "2024-01-01T00:00:00Z",
+            StartTime: null,
+            Id: "ep-1", PresentationUrl: null, DurationMilliseconds: 1000,
+            AudioAssets: null, Categories: null, ImageAssets: null,
+            EpisodeNumber: null, SeasonNumber: null, ExplicitContent: false, Order: null);
+
+        var item = FeedGenerationService.BuildEpisodeItem(episode, null, "https://example.com", preferMp4: false, itunes);
+
+        item.Element("pubDate")!.Value.Should().Contain("2024").And.Contain("Jan");
     }
 
     #endregion
@@ -420,6 +457,7 @@ public class FeedGenerationServiceTests
             Title: title,
             Description: null,
             PublishTime: "2024-01-01T00:00:00Z",
+            StartTime: "2024-01-01T00:00:00Z",
             Id: $"ep-{title}",
             PresentationUrl: null,
             DurationMilliseconds: 60000,

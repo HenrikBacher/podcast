@@ -43,6 +43,7 @@ public record Episode(
     string? Title,
     string? Description,
     string? PublishTime,
+    string? StartTime,
     string? Id,
     string? PresentationUrl,
     int? DurationMilliseconds,
