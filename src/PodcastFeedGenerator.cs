@@ -115,11 +115,14 @@ if (config.PreferMp4)
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, upstreamUrl);
 
-            if (context.Request.Headers.TryGetValue("Range", out var rangeHeader))
-                request.Headers.TryAddWithoutValidation("Range", rangeHeader.ToString());
-
-            if (context.Request.Headers.TryGetValue("User-Agent", out var userAgent))
-                request.Headers.TryAddWithoutValidation("User-Agent", userAgent.ToString());
+            // Forward client headers that affect content selection or caching, so the
+            // upstream can answer with a 206 (Range) or 304 (conditional GET) directly.
+            string[] forwardClientHeaders = ["Range", "User-Agent", "If-None-Match", "If-Modified-Since", "If-Range"];
+            foreach (var name in forwardClientHeaders)
+            {
+                if (context.Request.Headers.TryGetValue(name, out var value))
+                    request.Headers.TryAddWithoutValidation(name, value.ToString());
+            }
 
             using var upstream = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, context.RequestAborted);
 
@@ -135,6 +138,27 @@ if (config.PreferMp4)
 
             if (upstream.Content.Headers.ContentRange is { } contentRange)
                 context.Response.Headers["Content-Range"] = contentRange.ToString();
+
+            // Forward caching/validator headers so podcatchers can issue conditional
+            // requests on subsequent fetches and DR returns 304s instead of full bodies.
+            if (upstream.Headers.ETag is { } etag)
+                context.Response.Headers.ETag = etag.ToString();
+
+            if (upstream.Content.Headers.LastModified is { } lastModified)
+                context.Response.Headers.LastModified = lastModified.ToString("R");
+
+            if (upstream.Headers.CacheControl is { } cacheControl)
+                context.Response.Headers.CacheControl = cacheControl.ToString();
+
+            if (upstream.Content.Headers.Expires is { } expires)
+                context.Response.Headers.Expires = expires.ToString("R");
+
+            if (upstream.Headers.Vary.Count > 0)
+                context.Response.Headers.Vary = string.Join(", ", upstream.Headers.Vary);
+
+            // 304 Not Modified must not have a body — skip the copy entirely.
+            if (upstream.StatusCode == System.Net.HttpStatusCode.NotModified)
+                return;
 
             await using var upstreamStream = await upstream.Content.ReadAsStreamAsync(context.RequestAborted);
             await upstreamStream.CopyToAsync(context.Response.Body, context.RequestAborted);

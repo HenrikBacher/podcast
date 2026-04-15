@@ -2,6 +2,8 @@ namespace DrPodcast;
 
 public static class WebsiteGenerator
 {
+    private static readonly ConcurrentDictionary<string, (DateTime Mtime, long Size, string Hash)> HashCache = new();
+
     public static async Task GenerateAsync(IEnumerable<FeedMetadata> feeds, GeneratorConfig? config = null, ILogger? logger = null)
     {
         config ??= new GeneratorConfig();
@@ -105,28 +107,28 @@ public static class WebsiteGenerator
 
     private static async Task GenerateManifestAsync(List<FeedMetadata> feeds, GeneratorConfig config, ILogger? logger)
     {
-        var feedFiles = new List<FeedFileInfo>();
-
-        foreach (var feed in feeds)
+        var feedEntries = await Task.WhenAll(feeds.Select(async feed =>
         {
             var feedPath = Path.Combine(config.FeedsDir, $"{feed.Slug}.xml");
 
             if (!File.Exists(feedPath))
             {
                 logger?.LogWarning("Feed file not found for manifest: {Path}", feedPath);
-                continue;
+                return (FeedFileInfo?)null;
             }
 
             var fileInfo = new FileInfo(feedPath);
-            var hash = await ComputeFileHashAsync(feedPath);
+            var hash = await GetOrComputeHashAsync(feedPath, fileInfo);
 
-            feedFiles.Add(new FeedFileInfo(
+            return new FeedFileInfo(
                 Name: $"{feed.Slug}.xml",
                 Hash: hash,
                 Size: fileInfo.Length,
                 Title: feed.Title
-            ));
-        }
+            );
+        }));
+
+        var feedFiles = feedEntries.OfType<FeedFileInfo>().ToList();
 
         var manifest = new FeedManifest(
             Timestamp: DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"),
@@ -141,12 +143,24 @@ public static class WebsiteGenerator
         logger?.LogInformation("Generated manifest.json with {Count} feeds", feedFiles.Count);
     }
 
+    private static async Task<string> GetOrComputeHashAsync(string filePath, FileInfo fileInfo)
+    {
+        var mtime = fileInfo.LastWriteTimeUtc;
+        var size = fileInfo.Length;
+
+        if (HashCache.TryGetValue(filePath, out var cached) && cached.Mtime == mtime && cached.Size == size)
+            return cached.Hash;
+
+        var hash = await ComputeFileHashAsync(filePath);
+        HashCache[filePath] = (mtime, size, hash);
+        return hash;
+    }
+
     private static async Task<string> ComputeFileHashAsync(string filePath)
     {
         await using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true);
         using var sha256 = System.Security.Cryptography.SHA256.Create();
         var hash = await sha256.ComputeHashAsync(stream);
-        // Use Convert.ToHexString instead of BitConverter.ToString for better performance
         return Convert.ToHexString(hash).ToLowerInvariant();
     }
 }

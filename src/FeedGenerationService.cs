@@ -6,6 +6,7 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
     private const string Rfc822Format = "ddd, dd MMM yyyy HH:mm:ss zzz";
     private const int EpisodesPerPage = 256;
     private const int MaxPagesPerSeries = 100;
+    private const int MaxConcurrentPodcasts = 6;
 
     /// <summary>Format a DateTime as RFC 822 with compact timezone offset (+0000 instead of +00:00).</summary>
     internal static string FormatRfc822(DateTime dt)
@@ -30,19 +31,40 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
 
         Directory.CreateDirectory(config.FeedsDir);
 
-        var tasks = podcastList.Podcasts.Select(podcast =>
-            ProcessPodcastAsync(podcast, config, forceRegenerate, cancellationToken)).ToArray();
+        var results = new ConcurrentBag<ProcessResult>();
+        var parallelOptions = new ParallelOptions
+        {
+            MaxDegreeOfParallelism = MaxConcurrentPodcasts,
+            CancellationToken = cancellationToken
+        };
 
-        var results = await Task.WhenAll(tasks);
-        var feedMetadata = results.OfType<FeedMetadata>().ToList();
+        await Parallel.ForEachAsync(podcastList.Podcasts, parallelOptions, async (podcast, ct) =>
+        {
+            var result = await ProcessPodcastAsync(podcast, config, forceRegenerate, ct);
+            if (result is { } r) results.Add(r);
+        });
 
-        logger.LogInformation("Generated {Count} podcast feeds.", feedMetadata.Count);
+        var feedMetadata = results.Select(r => r.Metadata).ToList();
+        var changedCount = results.Count(r => r.Changed);
 
-        await WebsiteGenerator.GenerateAsync(feedMetadata, config, logger);
+        logger.LogInformation("Generated {Total} podcast feeds ({Changed} changed).", feedMetadata.Count, changedCount);
+
+        if (changedCount > 0 || forceRegenerate)
+        {
+            await WebsiteGenerator.GenerateAsync(feedMetadata, config, logger);
+        }
+        else
+        {
+            logger.LogInformation("No feeds changed; skipped website regeneration.");
+        }
     }
 
-    private async Task<FeedMetadata?> ProcessPodcastAsync(Podcast podcast, GeneratorConfig config, bool forceRegenerate, CancellationToken cancellationToken)
+    private readonly record struct ProcessResult(FeedMetadata Metadata, bool Changed);
+
+    private async Task<ProcessResult?> ProcessPodcastAsync(Podcast podcast, GeneratorConfig config, bool forceRegenerate, CancellationToken cancellationToken)
     {
+        using var scope = logger.BeginScope(new Dictionary<string, object> { ["Slug"] = podcast.Slug });
+
         try
         {
             using var httpClient = httpClientFactory.CreateClient("DrApi");
@@ -61,8 +83,8 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
             string outputPath = Path.Combine(config.FeedsDir, $"{podcast.Slug}.xml");
             if (!forceRegenerate && File.Exists(outputPath) && !HasNewerEpisodes(outputPath, series))
             {
-                logger.LogInformation("Skipped {Slug} (unchanged)", podcast.Slug);
-                return BuildFeedMetadata(podcast, series);
+                logger.LogInformation("Skipped (unchanged)");
+                return new ProcessResult(BuildFeedMetadata(podcast, series), Changed: false);
             }
 
             var episodes = await FetchAllEpisodesAsync($"{ApiUrl}{podcast.Urn}/episodes?limit={EpisodesPerPage}", httpClient, logger, cancellationToken);
@@ -79,9 +101,9 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
             }
             File.Move(tempPath, outputPath, overwrite: true);
 
-            logger.LogInformation("Generated {Slug}", podcast.Slug);
+            logger.LogInformation("Generated");
 
-            return metadata;
+            return new ProcessResult(metadata, Changed: true);
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex)
