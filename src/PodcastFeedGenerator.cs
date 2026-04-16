@@ -102,6 +102,10 @@ if (config.PreferMp4)
 {
     app.UseRateLimiter();
 
+    // Forward client headers that affect content selection or caching, so the
+    // upstream can answer with a 206 (Range) or 304 (conditional GET) directly.
+    string[] forwardClientHeaders = ["Range", "User-Agent", "If-None-Match", "If-Modified-Since", "If-Range"];
+
     app.MapGet("/proxy/audio/{ep}/{asset}", async (string ep, string asset, HttpContext context, IHttpClientFactory clientFactory, ILogger<FeedGenerationService> logger) =>
     {
         const int maxHexLength = 64;
@@ -119,9 +123,6 @@ if (config.PreferMp4)
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, upstreamUrl);
 
-            // Forward client headers that affect content selection or caching, so the
-            // upstream can answer with a 206 (Range) or 304 (conditional GET) directly.
-            string[] forwardClientHeaders = ["Range", "User-Agent", "If-None-Match", "If-Modified-Since", "If-Range"];
             foreach (var name in forwardClientHeaders)
             {
                 if (context.Request.Headers.TryGetValue(name, out var value))

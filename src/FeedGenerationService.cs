@@ -189,20 +189,16 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
 
         if (episodes is not null)
         {
-            IOrderedEnumerable<Episode> sorted;
+            var hasSeasons = series?.NumberOfSeries > 0;
+            var ascending = series?.DefaultOrder == "Asc";
 
-            if (series?.NumberOfSeries > 0)
+            IOrderedEnumerable<Episode> sorted = (hasSeasons, ascending) switch
             {
-                sorted = series?.DefaultOrder == "Asc"
-                    ? episodes.OrderByDescending(e => e.SeasonNumber ?? int.MinValue).ThenBy(e => e.Order ?? long.MaxValue)
-                    : episodes.OrderByDescending(e => e.SeasonNumber ?? int.MinValue).ThenByDescending(e => e.Order ?? long.MinValue);
-            }
-            else
-            {
-                sorted = series?.DefaultOrder == "Asc"
-                    ? episodes.OrderBy(e => e.Order ?? long.MaxValue)
-                    : episodes.OrderByDescending(e => e.Order ?? long.MinValue);
-            }
+                (true,  true)  => episodes.OrderByDescending(e => e.SeasonNumber ?? int.MinValue).ThenBy(e => e.Order ?? long.MaxValue),
+                (true,  false) => episodes.OrderByDescending(e => e.SeasonNumber ?? int.MinValue).ThenByDescending(e => e.Order ?? long.MinValue),
+                (false, true)  => episodes.OrderBy(e => e.Order ?? long.MaxValue),
+                (false, false) => episodes.OrderByDescending(e => e.Order ?? long.MinValue),
+            };
 
             foreach (var episode in sorted)
             {
@@ -423,19 +419,4 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
 
         return allEpisodes;
     }
-}
-
-internal static partial class RegexCache
-{
-    [GeneratedRegex(@"\s*\([^)]*feed[^)]*\)\s*$", RegexOptions.IgnoreCase)]
-    public static partial Regex FeedTitleCleanup();
-
-    [GeneratedRegex(@"^/radio/v\d+/assetlinks/urn:dr:radio:episode:(?<ep>[0-9a-f]+)/(?<asset>[0-9a-f]+)$")]
-    public static partial Regex DrAssetUrl();
-
-    [GeneratedRegex(@"^[0-9a-f]+$")]
-    public static partial Regex HexString();
-
-    [GeneratedRegex(@"limit=(\d+)")]
-    public static partial Regex LimitParameter();
 }

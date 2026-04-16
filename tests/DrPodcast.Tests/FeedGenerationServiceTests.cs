@@ -165,6 +165,111 @@ public class FeedGenerationServiceTests
         FeedGenerationService.HasNewerEpisodes("does-not-exist.xml", series).Should().BeTrue();
     }
 
+    [Fact]
+    public void HasNewerEpisodes_OldColonTimezoneFormat_IsParsed()
+    {
+        // Feeds generated before the +0000 switch contain "+00:00" — the parser
+        // must continue to accept them or every existing feed regenerates on startup.
+        var tempFile = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(tempFile, """
+                <?xml version="1.0" encoding="utf-8"?>
+                <rss version="2.0">
+                  <channel>
+                    <lastBuildDate>Mon, 15 Jan 2024 10:00:00 +00:00</lastBuildDate>
+                  </channel>
+                </rss>
+                """);
+
+            var series = CreateSeries(latestEpisodeStartTime: "2024-01-15T10:00:00+00:00");
+            FeedGenerationService.HasNewerEpisodes(tempFile, series).Should().BeFalse();
+        }
+        finally
+        {
+            File.Delete(tempFile);
+        }
+    }
+
+    [Fact]
+    public void HasNewerEpisodes_MalformedLastBuildDate_ReturnsTrue()
+    {
+        // If the element is present but the date is unparseable, we must regenerate
+        // rather than trusting a value we can't compare against.
+        var tempFile = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(tempFile, """
+                <?xml version="1.0" encoding="utf-8"?>
+                <rss version="2.0">
+                  <channel>
+                    <lastBuildDate>not a date at all</lastBuildDate>
+                  </channel>
+                </rss>
+                """);
+
+            var series = CreateSeries(latestEpisodeStartTime: "2024-01-15T10:00:00Z");
+            FeedGenerationService.HasNewerEpisodes(tempFile, series).Should().BeTrue();
+        }
+        finally
+        {
+            File.Delete(tempFile);
+        }
+    }
+
+    [Fact]
+    public void HasNewerEpisodes_FeedNewerThanApi_ReturnsFalse()
+    {
+        // Defensive case: if the feed on disk is strictly newer than the API's
+        // latest timestamp (clock skew, reverted episode), don't rewrite.
+        var tempFile = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(tempFile, """
+                <?xml version="1.0" encoding="utf-8"?>
+                <rss version="2.0">
+                  <channel>
+                    <lastBuildDate>Sat, 15 Jun 2024 10:00:00 +0000</lastBuildDate>
+                  </channel>
+                </rss>
+                """);
+
+            var series = CreateSeries(latestEpisodeStartTime: "2024-01-15T10:00:00Z");
+            FeedGenerationService.HasNewerEpisodes(tempFile, series).Should().BeFalse();
+        }
+        finally
+        {
+            File.Delete(tempFile);
+        }
+    }
+
+    [Fact]
+    public void HasNewerEpisodes_DtdDeclaration_IsRejected()
+    {
+        // Feed parsing must refuse DTDs to avoid XXE / billion-laughs in case a
+        // malicious file lands in the feeds directory.
+        var tempFile = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(tempFile, """
+                <?xml version="1.0" encoding="utf-8"?>
+                <!DOCTYPE rss [<!ENTITY x "y">]>
+                <rss version="2.0">
+                  <channel>
+                    <lastBuildDate>Mon, 15 Jan 2024 10:00:00 +0000</lastBuildDate>
+                  </channel>
+                </rss>
+                """);
+
+            var series = CreateSeries(latestEpisodeStartTime: "2024-01-15T10:00:00Z");
+            FeedGenerationService.HasNewerEpisodes(tempFile, series).Should().BeTrue();
+        }
+        finally
+        {
+            File.Delete(tempFile);
+        }
+    }
+
     #endregion
 
     #region BuildRssFeed - Episode Sorting

@@ -6,21 +6,16 @@ public static class PodcastHelpers
     {
         if (imageAssets is not { Count: > 0 }) return null;
 
-        // Calculate priority for each asset (single pass):
         // Priority: Podcast 1:1 (4) > Default 1:1 (3) > Podcast any (2) > Default any (1) > none (0)
         var bestAsset = imageAssets
             .Where(a => a != null)
-            .MaxBy(a =>
+            .MaxBy(a => (a.Target?.ToLowerInvariant(), a.Ratio) switch
             {
-                var isPodcast = a.Target?.Equals("podcast", StringComparison.OrdinalIgnoreCase) ?? false;
-                var isDefault = a.Target?.Equals("default", StringComparison.OrdinalIgnoreCase) ?? false;
-                var isSquare = a.Ratio == "1:1";
-
-                return isPodcast && isSquare ? 4
-                     : isDefault && isSquare ? 3
-                     : isPodcast ? 2
-                     : isDefault ? 1
-                     : 0;
+                ("podcast", "1:1") => 4,
+                ("default", "1:1") => 3,
+                ("podcast", _)     => 2,
+                ("default", _)     => 1,
+                _                  => 0,
             });
 
         if (string.IsNullOrEmpty(bestAsset?.Id)
