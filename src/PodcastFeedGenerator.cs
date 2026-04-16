@@ -68,29 +68,33 @@ builder.Services.AddHostedService<FeedRefreshBackgroundService>();
 builder.Services.AddResponseCompression(options =>
 {
     options.EnableForHttps = true;
-    options.MimeTypes = ResponseCompressionDefaults.MimeTypes.Concat(["application/xml"]);
+    options.MimeTypes = [..ResponseCompressionDefaults.MimeTypes, "application/xml"];
 });
 
 var app = builder.Build();
 
 app.UseResponseCompression();
 
-// Health check endpoint
-app.MapGet("/health", (GeneratorConfig cfg) =>
+// Liveness: process is up and serving. Keep this cheap so orchestrators
+// don't restart the container just because DR's API is down.
+app.MapGet("/health", () => Results.Text("ok"));
+
+// Readiness: feeds exist and are fresh. Route orchestrator readiness probes here.
+app.MapGet("/ready", (GeneratorConfig cfg) =>
 {
     if (!Directory.Exists(cfg.FeedsDir))
-        return Results.Text("degraded: feeds directory missing", statusCode: 503);
+        return Results.Text("not ready: feeds directory missing", statusCode: 503);
 
     var feedFiles = Directory.GetFiles(cfg.FeedsDir, "*.xml");
     if (feedFiles.Length == 0)
-        return Results.Text("starting: no feeds generated yet", statusCode: 503);
+        return Results.Text("not ready: no feeds generated yet", statusCode: 503);
 
     var newestWrite = feedFiles.Max(f => File.GetLastWriteTimeUtc(f));
     var age = DateTime.UtcNow - newestWrite;
     if (age > TimeSpan.FromHours(24))
-        return Results.Text($"stale: newest feed is {age.TotalMinutes:F0}min old", statusCode: 503);
+        return Results.Text($"not ready: newest feed is {age.TotalMinutes:F0}min old", statusCode: 503);
 
-    return Results.Text("healthy");
+    return Results.Text("ready");
 });
 
 // Audio proxy: streams M4A/MP4 audio from DR with corrected Content-Type (only when PREFER_MP4 is enabled)

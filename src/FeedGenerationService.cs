@@ -7,6 +7,7 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
     private const int EpisodesPerPage = 256;
     private const int MaxPagesPerSeries = 100;
     private const int MaxConcurrentPodcasts = 6;
+    private static readonly TimeSpan PerPodcastTimeout = TimeSpan.FromMinutes(2);
 
     /// <summary>Format a DateTime as RFC 822 with compact timezone offset (+0000 instead of +00:00).</summary>
     internal static string FormatRfc822(DateTime dt)
@@ -65,18 +66,23 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
     {
         using var scope = logger.BeginScope(new Dictionary<string, object> { ["Slug"] = podcast.Slug });
 
+        // Per-podcast budget so one hung series can't starve the others up to the outer 10-minute cap.
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(PerPodcastTimeout);
+        var ct = timeoutCts.Token;
+
         try
         {
             using var httpClient = httpClientFactory.CreateClient("DrApi");
 
-            using var seriesResponse = await httpClient.GetAsync($"{ApiUrl}{podcast.Urn}", cancellationToken);
+            using var seriesResponse = await httpClient.GetAsync($"{ApiUrl}{podcast.Urn}", ct);
             seriesResponse.EnsureSuccessStatusCode();
 
-            await using var stream = await seriesResponse.Content.ReadAsStreamAsync(cancellationToken);
+            await using var stream = await seriesResponse.Content.ReadAsStreamAsync(ct);
             var series = await JsonSerializer.DeserializeAsync(
                 stream,
                 PodcastJsonContext.Default.Series,
-                cancellationToken);
+                ct);
 
             // Skip regeneration if the feed is already up-to-date, so Last-Modified stays stable.
             // On startup (forceRegenerate=true) this check is bypassed so code changes are applied.
@@ -87,7 +93,7 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
                 return new ProcessResult(BuildFeedMetadata(podcast, series), Changed: false);
             }
 
-            var episodes = await FetchAllEpisodesAsync($"{ApiUrl}{podcast.Urn}/episodes?limit={EpisodesPerPage}", httpClient, logger, cancellationToken);
+            var episodes = await FetchAllEpisodesAsync($"{ApiUrl}{podcast.Urn}/episodes?limit={EpisodesPerPage}", httpClient, logger, ct);
 
             var (rss, metadata) = BuildRssFeed(series, episodes, podcast, config.BaseUrl, config.PreferMp4);
 
@@ -105,7 +111,15 @@ public sealed class FeedGenerationService(IHttpClientFactory httpClientFactory, 
 
             return new ProcessResult(metadata, Changed: true);
         }
-        catch (OperationCanceledException) { throw; }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            logger.LogWarning("Timed out after {Timeout}s processing {Urn}", PerPodcastTimeout.TotalSeconds, podcast.Urn);
+            return null;
+        }
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to process {Urn}", podcast.Urn);
