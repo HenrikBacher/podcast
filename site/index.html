@@ -1,20 +1,41 @@
 <!DOCTYPE html>
-<html>
+<html lang="da">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="deployment-time" content="{{DEPLOYMENT_TIME}}">
-    <title>DR Podcasts ({{FEED_COUNT}} feeds)</title>
+    <meta name="description" content="{{FEED_COUNT}} DR podcast-feeds til din podcast-app">
+    <title>DR Podcasts</title>
     <link rel="stylesheet" href="styles.css">
     <script src="script.js" defer></script>
 </head>
 <body>
     <header class="header">
         <h1>DR Podcasts</h1>
+        <p class="subtitle"><span class="feed-count">{{FEED_COUNT}}</span> feeds til din podcast-app</p>
+        <div class="search-wrapper">
+            <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input
+                id="search"
+                class="search-input"
+                type="search"
+                placeholder="Søg efter podcast…"
+                aria-label="Søg efter podcast"
+                autocomplete="off"
+                spellcheck="false"
+            >
+        </div>
     </header>
-    <ul class="feeds">
-        <!-- BEGIN_FEEDS -->
-        <!-- END_FEEDS -->
-    </ul>
+    <main>
+        <ul class="feeds" aria-label="Podcast feeds">
+            <!-- BEGIN_FEEDS -->
+            <!-- END_FEEDS -->
+        </ul>
+        <p class="no-results" aria-live="polite" hidden>Ingen podcasts matcher din søgning.</p>
+    </main>
+    <footer class="footer">
+        <p>Sidst opdateret <time class="deploy-time" datetime="{{DEPLOYMENT_TIME}}">{{DEPLOYMENT_TIME}}</time></p>
+        <p>Enkelt-klik kopierer feed-URL · Dobbeltklik åbner feed</p>
+    </footer>
 </body>
 </html>
