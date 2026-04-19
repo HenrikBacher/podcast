@@ -2,9 +2,7 @@ namespace DrPodcast;
 
 public static class WebsiteGenerator
 {
-    private static readonly ConcurrentDictionary<string, (DateTime Mtime, long Size, string Hash)> HashCache = new();
-
-    public static async Task GenerateAsync(IEnumerable<FeedMetadata> feeds, GeneratorConfig? config = null, ILogger? logger = null)
+public static async Task GenerateAsync(IEnumerable<FeedMetadata> feeds, GeneratorConfig? config = null, ILogger? logger = null)
     {
         config ??= new GeneratorConfig();
         var sortedFeeds = feeds.OrderBy(f => f.Title).ToList();
@@ -23,10 +21,7 @@ public static class WebsiteGenerator
             // Generate index.html with feed list
             await GenerateIndexHtmlAsync(sortedFeeds, config, logger);
 
-            // Generate manifest.json
-            await GenerateManifestAsync(sortedFeeds, config, logger);
-
-            logger?.LogInformation("Website generation complete!");
+logger?.LogInformation("Website generation complete!");
         }
         catch (Exception ex)
         {
@@ -105,56 +100,5 @@ public static class WebsiteGenerator
             e => "        " + e.ToString(SaveOptions.DisableFormatting)));
     }
 
-    private static async Task GenerateManifestAsync(List<FeedMetadata> feeds, GeneratorConfig config, ILogger? logger)
-    {
-        var feedEntries = await Task.WhenAll(feeds.Select(async feed =>
-        {
-            var feedPath = Path.Combine(config.FeedsDir, $"{feed.Slug}.xml");
 
-            if (!File.Exists(feedPath))
-            {
-                logger?.LogWarning("Feed file not found for manifest: {Path}", feedPath);
-                return (FeedFileInfo?)null;
-            }
-
-            var fileInfo = new FileInfo(feedPath);
-            var hash = await GetOrComputeHashAsync(feedPath, fileInfo);
-
-            return new FeedFileInfo(
-                Name: $"{feed.Slug}.xml",
-                Hash: hash,
-                Size: fileInfo.Length,
-                Title: feed.Title
-            );
-        }));
-
-        var feedFiles = feedEntries.OfType<FeedFileInfo>().ToList();
-
-        var manifest = new FeedManifest(
-            Timestamp: DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"),
-            FeedCount: feedFiles.Count,
-            Feeds: feedFiles
-        );
-
-        var manifestPath = Path.Combine(config.FullSiteDir, "manifest.json");
-        var json = JsonSerializer.Serialize(manifest, PodcastJsonContext.Default.FeedManifest);
-        await File.WriteAllTextAsync(manifestPath, json);
-
-        logger?.LogInformation("Generated manifest.json with {Count} feeds", feedFiles.Count);
-    }
-
-    private static async Task<string> GetOrComputeHashAsync(string filePath, FileInfo fileInfo)
-    {
-        var mtime = fileInfo.LastWriteTimeUtc;
-        var size = fileInfo.Length;
-
-        if (HashCache.TryGetValue(filePath, out var cached) && cached.Mtime == mtime && cached.Size == size)
-            return cached.Hash;
-
-        await using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true);
-        using var sha256 = SHA256.Create();
-        var hash = Convert.ToHexString(await sha256.ComputeHashAsync(stream)).ToLowerInvariant();
-        HashCache[filePath] = (mtime, size, hash);
-        return hash;
-    }
 }
