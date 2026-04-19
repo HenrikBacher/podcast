@@ -2,9 +2,8 @@ namespace DrPodcast;
 
 public static class WebsiteGenerator
 {
-    public static async Task GenerateAsync(IEnumerable<FeedMetadata> feeds, GeneratorConfig? config = null, ILogger? logger = null)
+    public static async Task GenerateAsync(IEnumerable<FeedMetadata> feeds, GeneratorConfig config, ILogger? logger = null)
     {
-        config ??= new GeneratorConfig();
         var sortedFeeds = feeds.OrderBy(f => f.Title).ToList();
 
         try

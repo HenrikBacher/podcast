@@ -8,7 +8,7 @@ public sealed class DrApiClient(IHttpClientFactory httpClientFactory, ILogger<Dr
 
     public async Task<Series?> FetchSeriesAsync(string urn, CancellationToken cancellationToken)
     {
-        using var client = httpClientFactory.CreateClient("DrApi");
+        var client = httpClientFactory.CreateClient("DrApi");
         using var response = await client.GetAsync($"{ApiUrl}{urn}", cancellationToken);
         response.EnsureSuccessStatusCode();
 
@@ -21,7 +21,7 @@ public sealed class DrApiClient(IHttpClientFactory httpClientFactory, ILogger<Dr
 
     public async Task<List<Episode>?> FetchAllEpisodesAsync(string urn, CancellationToken cancellationToken)
     {
-        using var client = httpClientFactory.CreateClient("DrApi");
+        var client = httpClientFactory.CreateClient("DrApi");
         var initialUrl = $"{ApiUrl}{urn}/episodes?limit={EpisodesPerPage}";
         List<Episode> allEpisodes = new(EpisodesPerPage);
 

@@ -81,7 +81,7 @@ app.MapGet("/ready", (GeneratorConfig cfg) =>
     if (feedFiles.Length == 0)
         return Results.Text("not ready: no feeds generated yet", statusCode: 503);
 
-    var newestWrite = feedFiles.Max(f => File.GetLastWriteTimeUtc(f));
+    var newestWrite = feedFiles.Max(File.GetLastWriteTimeUtc);
     var age = DateTime.UtcNow - newestWrite;
     if (age > TimeSpan.FromHours(24))
         return Results.Text($"not ready: newest feed is {age.TotalMinutes:F0}min old", statusCode: 503);

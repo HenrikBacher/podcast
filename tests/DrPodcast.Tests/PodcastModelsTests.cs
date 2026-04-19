@@ -5,7 +5,6 @@ public class PodcastModelsTests
     [Fact]
     public void PodcastList_ShouldDeserializeFromJson()
     {
-        // Arrange
         var json = """
         {
             "podcasts": [
@@ -17,10 +16,8 @@ public class PodcastModelsTests
         }
         """;
 
-        // Act
         var result = JsonSerializer.Deserialize(json, PodcastJsonContext.Default.PodcastList);
 
-        // Assert
         result.Should().NotBeNull();
         result!.Podcasts.Should().HaveCount(1);
         result.Podcasts[0].Slug.Should().Be("test-podcast");
@@ -30,7 +27,6 @@ public class PodcastModelsTests
     [Fact]
     public void Podcast_ShouldDeserializeWithImageAssets()
     {
-        // Arrange
         var json = """
         {
             "podcasts": [
@@ -49,10 +45,8 @@ public class PodcastModelsTests
         }
         """;
 
-        // Act
         var result = JsonSerializer.Deserialize(json, PodcastJsonContext.Default.PodcastList);
 
-        // Assert
         result.Should().NotBeNull();
         result!.Podcasts[0].ImageAssets.Should().NotBeNull();
         result.Podcasts[0].ImageAssets!.Should().HaveCount(1);
@@ -64,7 +58,6 @@ public class PodcastModelsTests
     [Fact]
     public void Series_ShouldDeserializeCompleteObject()
     {
-        // Arrange
         var json = """
         {
             "type": "podcast",
@@ -93,10 +86,8 @@ public class PodcastModelsTests
         }
         """;
 
-        // Act
         var result = JsonSerializer.Deserialize(json, PodcastJsonContext.Default.Series);
 
-        // Assert
         result.Should().NotBeNull();
         result!.Categories.Should().BeEquivalentTo(new[] { "Dokumentar", "Historie" });
         result.NumberOfSeries.Should().Be(3);
@@ -114,7 +105,6 @@ public class PodcastModelsTests
     [Fact]
     public void Episode_ShouldDeserializeWithAllProperties()
     {
-        // Arrange
         var json = """
         [
             {
@@ -148,10 +138,8 @@ public class PodcastModelsTests
         ]
         """;
 
-        // Act
         var result = JsonSerializer.Deserialize(json, PodcastJsonContext.Default.ListEpisode);
 
-        // Assert
         result.Should().NotBeNull();
         result.Should().HaveCount(1);
         var episode = result![0];
@@ -177,7 +165,6 @@ public class PodcastModelsTests
     [Fact]
     public void Episode_ShouldHandleExplicitContent()
     {
-        // Arrange
         var json = """
         [
             {
@@ -187,10 +174,8 @@ public class PodcastModelsTests
         ]
         """;
 
-        // Act
         var result = JsonSerializer.Deserialize(json, PodcastJsonContext.Default.ListEpisode);
 
-        // Assert
         result.Should().NotBeNull();
         result![0].ExplicitContent.Should().BeTrue();
     }
@@ -198,7 +183,6 @@ public class PodcastModelsTests
     [Fact]
     public void Episode_ShouldHandleNullableProperties()
     {
-        // Arrange
         var json = """
         [
             {
@@ -208,10 +192,8 @@ public class PodcastModelsTests
         ]
         """;
 
-        // Act
         var result = JsonSerializer.Deserialize(json, PodcastJsonContext.Default.ListEpisode);
 
-        // Assert
         result.Should().NotBeNull();
         result![0].Title.Should().Be("Minimal Episode");
         result[0].Description.Should().BeNull();
@@ -223,7 +205,6 @@ public class PodcastModelsTests
     [Fact]
     public void AudioAsset_ShouldDeserializeCorrectly()
     {
-        // Arrange
         var json = """
         [
             {
@@ -247,10 +228,8 @@ public class PodcastModelsTests
         ]
         """;
 
-        // Act
         var result = JsonSerializer.Deserialize(json, PodcastJsonContext.Default.ListEpisode);
 
-        // Assert
         result.Should().NotBeNull();
         result![0].AudioAssets.Should().HaveCount(2);
         result[0].AudioAssets![0].Bitrate.Should().Be(128);
@@ -260,10 +239,8 @@ public class PodcastModelsTests
     [Fact]
     public void ImageAsset_ShouldHandleAllProperties()
     {
-        // Arrange
         var imageAsset = new ImageAsset("img-123", "podcast", "1:1");
 
-        // Assert
         imageAsset.Id.Should().Be("img-123");
         imageAsset.Target.Should().Be("podcast");
         imageAsset.Ratio.Should().Be("1:1");
@@ -272,7 +249,6 @@ public class PodcastModelsTests
     [Fact]
     public void Series_ShouldHandleEmptyCategories()
     {
-        // Arrange
         var json = """
         {
             "numberOfEpisodes": 0,
@@ -283,10 +259,8 @@ public class PodcastModelsTests
         }
         """;
 
-        // Act
         var result = JsonSerializer.Deserialize(json, PodcastJsonContext.Default.Series);
 
-        // Assert
         result.Should().NotBeNull();
         result!.Categories.Should().NotBeNull();
         result.Categories.Should().BeEmpty();
