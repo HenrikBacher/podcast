@@ -10,7 +10,4 @@ internal static partial class RegexCache
 
     [GeneratedRegex(@"^[0-9a-f]+$")]
     public static partial Regex HexString();
-
-    [GeneratedRegex(@"limit=(\d+)")]
-    public static partial Regex LimitParameter();
 }

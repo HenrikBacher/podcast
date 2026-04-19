@@ -1,12 +1,3 @@
-using System.Threading.RateLimiting;
-using DrPodcast;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.RateLimiting;
-using Microsoft.AspNetCore.ResponseCompression;
-using Microsoft.AspNetCore.StaticFiles;
-using Microsoft.Net.Http.Headers;
-
 static IAsyncPolicy<HttpResponseMessage> RetryPolicy(string label, ILogger logger) =>
     HttpPolicyExtensions
         .HandleTransientHttpError()

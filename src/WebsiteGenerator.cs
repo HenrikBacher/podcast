@@ -151,16 +151,10 @@ public static class WebsiteGenerator
         if (HashCache.TryGetValue(filePath, out var cached) && cached.Mtime == mtime && cached.Size == size)
             return cached.Hash;
 
-        var hash = await ComputeFileHashAsync(filePath);
+        await using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true);
+        using var sha256 = SHA256.Create();
+        var hash = Convert.ToHexString(await sha256.ComputeHashAsync(stream)).ToLowerInvariant();
         HashCache[filePath] = (mtime, size, hash);
         return hash;
-    }
-
-    private static async Task<string> ComputeFileHashAsync(string filePath)
-    {
-        await using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true);
-        using var sha256 = System.Security.Cryptography.SHA256.Create();
-        var hash = await sha256.ComputeHashAsync(stream);
-        return Convert.ToHexString(hash).ToLowerInvariant();
     }
 }
