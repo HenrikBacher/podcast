@@ -1,6 +1,3 @@
-using DrPodcast;
-using FluentAssertions;
-
 namespace DrPodcast.Tests;
 
 public class FeedGenerationServiceTests
@@ -222,33 +219,19 @@ public class FeedGenerationServiceTests
 
     #region Helpers
 
-    private static Series CreateSeries(
-        string? presentationType = null,
-        int numberOfSeries = 0,
-        string? defaultOrder = null,
-        string? latestEpisodeStartTime = null,
-        string? title = "Test Series")
-    {
-        return new Series(
-            Type: "podcast",
-            Categories: null,
-            NumberOfEpisodes: 0,
-            NumberOfSeries: numberOfSeries,
-            NumberOfSeasons: 0,
-            PresentationType: presentationType,
-            GroupingType: null,
-            LatestEpisodeStartTime: latestEpisodeStartTime,
-            PresentationUrl: null,
-            ExplicitContent: false,
-            DefaultOrder: defaultOrder,
-            Id: "test-id",
-            Slug: "test-slug",
-            Title: title,
-            Punchline: null,
-            Description: "Test description",
-            ImageAssets: null
-        );
-    }
+    private static Series CreateSeries(string? latestEpisodeStartTime = null) => new(
+        Categories: null,
+        NumberOfSeries: 0,
+        PresentationType: null,
+        LatestEpisodeStartTime: latestEpisodeStartTime,
+        PresentationUrl: null,
+        ExplicitContent: false,
+        DefaultOrder: null,
+        Title: "Test Series",
+        Punchline: null,
+        Description: "Test description",
+        ImageAssets: null
+    );
 
     #endregion
 }

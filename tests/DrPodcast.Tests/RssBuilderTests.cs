@@ -1,7 +1,3 @@
-using System.Xml.Linq;
-using DrPodcast;
-using FluentAssertions;
-
 namespace DrPodcast.Tests;
 
 public class RssBuilderTests
@@ -312,29 +308,19 @@ public class RssBuilderTests
         string? presentationType = null,
         int numberOfSeries = 0,
         string? defaultOrder = null,
-        string? latestEpisodeStartTime = null,
-        string? title = "Test Series")
-    {
-        return new Series(
-            Type: "podcast",
-            Categories: null,
-            NumberOfEpisodes: 0,
-            NumberOfSeries: numberOfSeries,
-            NumberOfSeasons: 0,
-            PresentationType: presentationType,
-            GroupingType: null,
-            LatestEpisodeStartTime: latestEpisodeStartTime,
-            PresentationUrl: null,
-            ExplicitContent: false,
-            DefaultOrder: defaultOrder,
-            Id: "test-id",
-            Slug: "test-slug",
-            Title: title,
-            Punchline: null,
-            Description: "Test description",
-            ImageAssets: null
-        );
-    }
+        string? title = "Test Series") => new(
+        Categories: null,
+        NumberOfSeries: numberOfSeries,
+        PresentationType: presentationType,
+        LatestEpisodeStartTime: null,
+        PresentationUrl: null,
+        ExplicitContent: false,
+        DefaultOrder: defaultOrder,
+        Title: title,
+        Punchline: null,
+        Description: "Test description",
+        ImageAssets: null
+    );
 
     private static Episode CreateEpisode(
         string title,

@@ -2,7 +2,7 @@ namespace DrPodcast;
 
 public static class WebsiteGenerator
 {
-public static async Task GenerateAsync(IEnumerable<FeedMetadata> feeds, GeneratorConfig? config = null, ILogger? logger = null)
+    public static async Task GenerateAsync(IEnumerable<FeedMetadata> feeds, GeneratorConfig? config = null, ILogger? logger = null)
     {
         config ??= new GeneratorConfig();
         var sortedFeeds = feeds.OrderBy(f => f.Title).ToList();
@@ -11,17 +11,14 @@ public static async Task GenerateAsync(IEnumerable<FeedMetadata> feeds, Generato
         {
             logger?.LogInformation("Generating website...");
 
-            // Create output directories
             Directory.CreateDirectory(config.FullSiteDir);
             Directory.CreateDirectory(config.FeedsDir);
 
-            // Copy static assets
             CopyStaticAssets(config, logger);
 
-            // Generate index.html with feed list
             await GenerateIndexHtmlAsync(sortedFeeds, config, logger);
 
-logger?.LogInformation("Website generation complete!");
+            logger?.LogInformation("Website generation complete!");
         }
         catch (Exception ex)
         {
@@ -58,7 +55,6 @@ logger?.LogInformation("Website generation complete!");
         var feedsHtml = GenerateFeedsHtml(feeds);
         var template = await File.ReadAllTextAsync(templatePath);
 
-        // Replace template placeholders
         var html = template
             .Replace("{{DEPLOYMENT_TIME}}", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"))
             .Replace("{{FEED_COUNT}}", feeds.Count.ToString())
@@ -99,6 +95,4 @@ logger?.LogInformation("Website generation complete!");
         return string.Join("\n", feedElements.Select(
             e => "        " + e.ToString(SaveOptions.DisableFormatting)));
     }
-
-
 }

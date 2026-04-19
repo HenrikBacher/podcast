@@ -56,19 +56,13 @@ public record AudioAsset(string? Format, int? Bitrate, string? Url, long? FileSi
 public record ImageAsset(string? Id, string? Target, string? Ratio);
 
 public record Series(
-    string? Type,
     List<string>? Categories,
-    int NumberOfEpisodes,
     int NumberOfSeries,
-    int NumberOfSeasons,
     string? PresentationType,
-    string? GroupingType,
     string? LatestEpisodeStartTime,
     string? PresentationUrl,
     bool ExplicitContent,
     string? DefaultOrder,
-    string? Id,
-    string? Slug,
     string? Title,
     string? Punchline,
     string? Description,

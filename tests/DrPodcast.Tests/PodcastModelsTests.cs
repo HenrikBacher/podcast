@@ -1,7 +1,3 @@
-using System.Text.Json;
-using DrPodcast;
-using FluentAssertions;
-
 namespace DrPodcast.Tests;
 
 public class PodcastModelsTests
@@ -102,19 +98,13 @@ public class PodcastModelsTests
 
         // Assert
         result.Should().NotBeNull();
-        result!.Type.Should().Be("podcast");
-        result.Categories.Should().BeEquivalentTo(new[] { "Dokumentar", "Historie" });
-        result.NumberOfEpisodes.Should().Be(42);
+        result!.Categories.Should().BeEquivalentTo(new[] { "Dokumentar", "Historie" });
         result.NumberOfSeries.Should().Be(3);
-        result.NumberOfSeasons.Should().Be(2);
         result.PresentationType.Should().Be("ongoing");
-        result.GroupingType.Should().Be("Seasons");
         result.LatestEpisodeStartTime.Should().Be("2024-01-15T10:00:00Z");
         result.PresentationUrl.Should().Be("https://www.dr.dk/lyd/special-radio/test-podcast");
         result.ExplicitContent.Should().BeFalse();
         result.DefaultOrder.Should().Be("desc");
-        result.Id.Should().Be("12345");
-        result.Slug.Should().Be("test-podcast");
         result.Title.Should().Be("Test Podcast");
         result.Punchline.Should().Be("A great test podcast");
         result.Description.Should().Be("This is a detailed description of the test podcast.");

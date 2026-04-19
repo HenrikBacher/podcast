@@ -1,6 +1,3 @@
-using DrPodcast;
-using FluentAssertions;
-
 namespace DrPodcast.Tests;
 
 public class PodcastHelpersTests
