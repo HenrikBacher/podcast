@@ -12,7 +12,6 @@ RUN dotnet publish src/DrPodcast.csproj -c Release -r linux-musl-x64 \
 
 # Runtime stage
 FROM alpine:3
-RUN apk add --no-cache libstdc++
 WORKDIR /app
 COPY --from=build /out/DrPodcast ./
 COPY --from=build /out/podcasts.json ./
