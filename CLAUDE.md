@@ -57,8 +57,10 @@ The test suite includes:
 ## Architecture Overview
 
 ### Core Components
-- **PodcastFeedGenerator.cs**: Main application entry point — ASP.NET Core host setup, audio proxy endpoint with rate limiting, static file serving
-- **FeedGenerationService.cs**: RSS feed generation logic — fetches from DR API, sorts episodes, builds XML, writes atomically to disk
+- **Program.cs**: Main application entry point — ASP.NET Core host setup, audio proxy endpoint with rate limiting, static file serving
+- **FeedGenerationService.cs**: Orchestrator — iterates podcasts in parallel, decides when to skip via `HasNewerEpisodes`, and writes the RSS XML atomically
+- **DrApiClient.cs**: HTTP access to the DR API — fetches series metadata and paginates episode lists
+- **RssBuilder.cs**: Pure XML construction — builds RSS feeds and episode `<item>` elements, including episode sorting and audio asset selection
 - **FeedRefreshBackgroundService.cs**: Background service — runs feed generation on startup and on a periodic timer with exponential backoff on failure
 - **PodcastModels.cs**: Data models with JSON source generation for NativeAOT compatibility
 - **PodcastHelpers.cs**: Helper functions for image URL extraction with priority-based selection

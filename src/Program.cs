@@ -63,6 +63,7 @@ if (config.PreferMp4)
 }
 
 builder.Services.AddSingleton(config);
+builder.Services.AddSingleton<DrApiClient>();
 builder.Services.AddSingleton<FeedGenerationService>();
 builder.Services.AddHostedService<FeedRefreshBackgroundService>();
 builder.Services.AddResponseCompression(options =>
