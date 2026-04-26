@@ -34,11 +34,14 @@ public static class WebsiteGenerator
             return;
         }
 
-        foreach (var file in Directory.GetFiles(config.SiteSourceDir))
+        var sourceFull = Path.GetFullPath(config.SiteSourceDir);
+        foreach (var file in Directory.EnumerateFiles(sourceFull, "*", SearchOption.AllDirectories))
         {
-            var fileName = Path.GetFileName(file);
-            File.Copy(file, Path.Combine(config.FullSiteDir, fileName), overwrite: true);
-            logger?.LogDebug("Copied {File} to site directory", fileName);
+            var relative = Path.GetRelativePath(sourceFull, file);
+            var destination = Path.Combine(config.FullSiteDir, relative);
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            File.Copy(file, destination, overwrite: true);
+            logger?.LogDebug("Copied {File} to site directory", relative);
         }
     }
 

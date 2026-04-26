@@ -22,15 +22,28 @@ public sealed class FeedRefreshBackgroundService(
         // Force regeneration on startup so code changes are always applied when the container restarts
         consecutiveFailures = await RunGenerationAsync(podcastsJsonPath, config, consecutiveFailures, forceRegenerate: true, stoppingToken);
 
-        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(intervalMinutes));
-        while (await timer.WaitForNextTickAsync(stoppingToken))
+        while (!stoppingToken.IsCancellationRequested)
         {
+            TimeSpan delay;
             if (consecutiveFailures >= 3)
             {
                 var shift = Math.Min(consecutiveFailures - 3, 20);
                 var backoffMinutes = Math.Min(intervalMinutes * (1 << shift), MaxBackoffMinutes);
                 logger.LogWarning("Backing off for {Backoff} minutes after {Failures} consecutive failures.", backoffMinutes, consecutiveFailures);
-                await Task.Delay(TimeSpan.FromMinutes(backoffMinutes), stoppingToken);
+                delay = TimeSpan.FromMinutes(backoffMinutes);
+            }
+            else
+            {
+                delay = TimeSpan.FromMinutes(intervalMinutes);
+            }
+
+            try
+            {
+                await Task.Delay(delay, stoppingToken);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
             }
 
             consecutiveFailures = await RunGenerationAsync(podcastsJsonPath, config, consecutiveFailures, forceRegenerate: false, stoppingToken);

@@ -5,6 +5,16 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
     private const int MaxConcurrentPodcasts = 6;
     private static readonly TimeSpan PerPodcastTimeout = TimeSpan.FromMinutes(2);
 
+    private long _lastSuccessfulRunUtcTicks;
+    public DateTime? LastSuccessfulRunUtc
+    {
+        get
+        {
+            var ticks = Interlocked.Read(ref _lastSuccessfulRunUtcTicks);
+            return ticks == 0 ? null : new DateTime(ticks, DateTimeKind.Utc);
+        }
+    }
+
     public async Task GenerateFeedsAsync(string podcastsJsonPath, GeneratorConfig config, bool forceRegenerate = false, CancellationToken cancellationToken = default)
     {
         var podcastList = JsonSerializer.Deserialize(
@@ -45,6 +55,8 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
         {
             logger.LogInformation("No feeds changed; skipped website regeneration.");
         }
+
+        Interlocked.Exchange(ref _lastSuccessfulRunUtcTicks, DateTime.UtcNow.Ticks);
     }
 
     private readonly record struct ProcessResult(FeedMetadata Metadata, bool Changed);

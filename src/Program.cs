@@ -1,7 +1,6 @@
 static IAsyncPolicy<HttpResponseMessage> RetryPolicy(string label, ILogger logger) =>
     HttpPolicyExtensions
         .HandleTransientHttpError()
-        .OrResult(msg => !msg.IsSuccessStatusCode)
         .WaitAndRetryAsync(3,
             retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
             onRetry: (_, timespan, retryCount, _) =>
@@ -72,19 +71,14 @@ app.UseResponseCompression();
 app.MapGet("/health", () => Results.Text("ok"));
 
 // Readiness: feeds exist and are fresh. Route orchestrator readiness probes here.
-app.MapGet("/ready", (GeneratorConfig cfg) =>
+app.MapGet("/ready", (FeedGenerationService feedService) =>
 {
-    if (!Directory.Exists(cfg.FeedsDir))
-        return Results.Text("not ready: feeds directory missing", statusCode: 503);
+    if (feedService.LastSuccessfulRunUtc is not { } lastRun)
+        return Results.Text("not ready: no successful generation yet", statusCode: 503);
 
-    var feedFiles = Directory.GetFiles(cfg.FeedsDir, "*.xml");
-    if (feedFiles.Length == 0)
-        return Results.Text("not ready: no feeds generated yet", statusCode: 503);
-
-    var newestWrite = feedFiles.Max(File.GetLastWriteTimeUtc);
-    var age = DateTime.UtcNow - newestWrite;
+    var age = DateTime.UtcNow - lastRun;
     if (age > TimeSpan.FromHours(24))
-        return Results.Text($"not ready: newest feed is {age.TotalMinutes:F0}min old", statusCode: 503);
+        return Results.Text($"not ready: last successful run was {age.TotalMinutes:F0}min ago", statusCode: 503);
 
     return Results.Text("ready");
 });
