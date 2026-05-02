@@ -217,7 +217,90 @@ public class FeedGenerationServiceTests
 
     #endregion
 
+    #region FeedReferencesLatestAsset
+
+    [Fact]
+    public void FeedReferencesLatestAsset_FeedContainsCurrentAssetHash_ReturnsTrue()
+    {
+        var tempFile = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(tempFile, """
+                <?xml version="1.0" encoding="utf-8"?>
+                <rss version="2.0">
+                  <channel>
+                    <item>
+                      <enclosure url="https://example.com/proxy/audio/abc123/aabbccddeeff112233445566778899aabbccddeeff112233445566778899aabb" type="audio/mp4" />
+                    </item>
+                  </channel>
+                </rss>
+                """);
+
+            var ep = CreateEpisodeWithAudio("https://api.dr.dk/radio/v1/assetlinks/urn:dr:radio:episode:abc123/aabbccddeeff112233445566778899aabbccddeeff112233445566778899aabb", "mp3", 192);
+            FeedGenerationService.FeedReferencesLatestAsset(tempFile, ep, preferMp4: false).Should().BeTrue();
+        }
+        finally
+        {
+            File.Delete(tempFile);
+        }
+    }
+
+    [Fact]
+    public void FeedReferencesLatestAsset_FeedHasStaleAssetHash_ReturnsFalse()
+    {
+        // The recurring failure mode: DR rotated the asset hash on a published episode.
+        // The feed still references the old hash, so the proxy 404s. We must regenerate.
+        var tempFile = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(tempFile, """
+                <?xml version="1.0" encoding="utf-8"?>
+                <rss version="2.0">
+                  <channel>
+                    <item>
+                      <enclosure url="https://example.com/proxy/audio/abc123/deadbeef00112233445566778899aabbccddeeff00112233445566778899aabb" type="audio/mp4" />
+                    </item>
+                  </channel>
+                </rss>
+                """);
+
+            var ep = CreateEpisodeWithAudio("https://api.dr.dk/radio/v1/assetlinks/urn:dr:radio:episode:abc123/cafef00d00112233445566778899aabbccddeeff00112233445566778899aabb", "mp3", 192);
+            FeedGenerationService.FeedReferencesLatestAsset(tempFile, ep, preferMp4: false).Should().BeFalse();
+        }
+        finally
+        {
+            File.Delete(tempFile);
+        }
+    }
+
+    [Fact]
+    public void FeedReferencesLatestAsset_EpisodeHasNoAudio_ReturnsTrue()
+    {
+        // Nothing to verify against — don't trigger a regenerate just because the API
+        // happens to return an episode entry with no audio yet.
+        var tempFile = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(tempFile, "<rss><channel></channel></rss>");
+            var ep = new Episode("t", "d", null, null, "id", null, null, null, null, null, null, null, false, null);
+            FeedGenerationService.FeedReferencesLatestAsset(tempFile, ep, preferMp4: false).Should().BeTrue();
+        }
+        finally
+        {
+            File.Delete(tempFile);
+        }
+    }
+
+    #endregion
+
     #region Helpers
+
+    private static Episode CreateEpisodeWithAudio(string url, string format, int bitrate) => new(
+        Title: "Test", Description: "d", PublishTime: null, StartTime: null,
+        Id: "urn:dr:radio:episode:abc123", PresentationUrl: null, DurationMilliseconds: null,
+        AudioAssets: [new AudioAsset(format, bitrate, url, 100)],
+        Categories: null, ImageAssets: null, EpisodeNumber: null, SeasonNumber: null,
+        ExplicitContent: false, Order: null);
 
     private static Series CreateSeries(string? latestEpisodeStartTime = null) => new(
         Categories: null,

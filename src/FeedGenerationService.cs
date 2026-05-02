@@ -79,8 +79,17 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
             string outputPath = Path.Combine(config.FeedsDir, $"{podcast.Slug}.xml");
             if (!forceRegenerate && File.Exists(outputPath) && !HasNewerEpisodes(outputPath, series))
             {
-                logger.LogInformation("Skipped (unchanged)");
-                return new ProcessResult(RssBuilder.BuildFeedMetadata(podcast, series), Changed: false);
+                // The date check passed, but DR rotates audio asset hashes for already-published
+                // episodes (re-encodes etc.) without bumping LatestEpisodeStartTime — leaving feeds
+                // pointing at 404'd URLs. Verify the latest episode's current asset hash is in the
+                // file before skipping.
+                var latestEpisode = await apiClient.FetchLatestEpisodeAsync(podcast.Urn, ct);
+                if (latestEpisode is null || FeedReferencesLatestAsset(outputPath, latestEpisode, config.PreferMp4))
+                {
+                    logger.LogInformation("Skipped (unchanged)");
+                    return new ProcessResult(RssBuilder.BuildFeedMetadata(podcast, series), Changed: false);
+                }
+                logger.LogInformation("Regenerating: latest episode's audio asset hash has rotated");
             }
 
             var episodes = await apiClient.FetchAllEpisodesAsync(podcast.Urn, ct);
@@ -114,6 +123,32 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
         {
             logger.LogError(ex, "Failed to process {Urn}", podcast.Urn);
             return null;
+        }
+    }
+
+    internal static bool FeedReferencesLatestAsset(string feedPath, Episode latestEpisode, bool preferMp4)
+    {
+        var asset = RssBuilder.SelectAudioAsset(latestEpisode, preferMp4);
+        if (asset?.Url is not { } url || string.IsNullOrEmpty(url))
+            return true; // No audio to verify; nothing to regenerate against.
+
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+            return true;
+
+        var match = RegexCache.DrAssetUrl().Match(uri.PathAndQuery);
+        if (!match.Success)
+            return true;
+
+        var assetHash = match.Groups["asset"].Value;
+        try
+        {
+            // Asset hashes are 64-char hex; substring search across the file is sufficient
+            // and avoids parsing the whole feed. Files are <1 MB.
+            return File.ReadAllText(feedPath).Contains(assetHash, StringComparison.Ordinal);
+        }
+        catch (Exception)
+        {
+            return false; // Can't read — let the caller regenerate.
         }
     }
 

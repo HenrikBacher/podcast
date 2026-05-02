@@ -19,6 +19,22 @@ public sealed class DrApiClient(IHttpClientFactory httpClientFactory, ILogger<Dr
             cancellationToken);
     }
 
+    public async Task<Episode?> FetchLatestEpisodeAsync(string urn, CancellationToken cancellationToken)
+    {
+        var client = httpClientFactory.CreateClient("DrApi");
+        using var response = await client.GetAsync($"{ApiUrl}{urn}/episodes?limit=1", cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+
+        if (!doc.RootElement.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array)
+            return null;
+
+        var episodes = items.Deserialize(PodcastJsonContext.Default.ListEpisode);
+        return episodes is { Count: > 0 } ? episodes[0] : null;
+    }
+
     public async Task<List<Episode>?> FetchAllEpisodesAsync(string urn, CancellationToken cancellationToken)
     {
         var client = httpClientFactory.CreateClient("DrApi");

@@ -112,24 +112,26 @@ public static class RssBuilder
         return (rss, metadata);
     }
 
-    public static XElement BuildEpisodeItem(Episode episode, string? channelImage, string baseUrl, bool preferMp4, XNamespace itunes)
+    public static AudioAsset? SelectAudioAsset(Episode episode, bool preferMp4)
     {
-        AudioAsset? audioAsset;
         if (preferMp4)
         {
-            audioAsset = episode.AudioAssets?
-                             .Where(a => a?.Format is "mp4" or "m4a")
-                             .MaxBy(a => a?.Bitrate ?? 0)
-                         ?? episode.AudioAssets?
-                             .Where(a => a?.Format == "mp3")
-                             .MaxBy(a => a?.Bitrate ?? 0);
+            return episode.AudioAssets?
+                       .Where(a => a?.Format is "mp4" or "m4a")
+                       .MaxBy(a => a?.Bitrate ?? 0)
+                   ?? episode.AudioAssets?
+                       .Where(a => a?.Format == "mp3")
+                       .MaxBy(a => a?.Bitrate ?? 0);
         }
-        else
-        {
-            audioAsset = episode.AudioAssets?
-                .Where(a => a?.Format == "mp3")
-                .MaxBy(a => a?.Bitrate ?? 0);
-        }
+
+        return episode.AudioAssets?
+            .Where(a => a?.Format == "mp3")
+            .MaxBy(a => a?.Bitrate ?? 0);
+    }
+
+    public static XElement BuildEpisodeItem(Episode episode, string? channelImage, string baseUrl, bool preferMp4, XNamespace itunes)
+    {
+        var audioAsset = SelectAudioAsset(episode, preferMp4);
 
         var imageUrl = PodcastHelpers.GetImageUrlFromAssets(episode.ImageAssets) ?? channelImage;
         var duration = episode.DurationMilliseconds is not null
