@@ -210,6 +210,26 @@ public class RssBuilderTests
     }
 
     [Fact]
+    public void BuildEpisodeItem_PreferMp4_DrAsset_RewritesToProxyUrlWithM4aSuffix()
+    {
+        // The proxy URL must end in .m4a so older podcatchers that infer codec from the
+        // URL extension (AntennaPod < 2.x, Podkicker, etc.) accept the enclosure.
+        XNamespace itunes = "http://www.itunes.com/dtds/podcast-1.0.dtd";
+        const string upstream = "https://api.dr.dk/radio/v1/assetlinks/urn:dr:radio:episode:abc123/aabbccddeeff112233445566778899aabbccddeeff112233445566778899aabb";
+        var episode = CreateEpisode("Test", audioAssets:
+        [
+            new AudioAsset("m4a", 128, upstream, 15000),
+        ]);
+
+        var item = RssBuilder.BuildEpisodeItem(episode, null, "https://example.com", preferMp4: true, itunes);
+
+        var enclosure = item.Element("enclosure")!;
+        enclosure.Attribute("url")!.Value.Should().Be(
+            "https://example.com/proxy/audio/abc123/aabbccddeeff112233445566778899aabbccddeeff112233445566778899aabb.m4a");
+        enclosure.Attribute("type")!.Value.Should().Be("audio/mp4");
+    }
+
+    [Fact]
     public void BuildEpisodeItem_NoAudioAssets_NoEnclosure()
     {
         XNamespace itunes = "http://www.itunes.com/dtds/podcast-1.0.dtd";

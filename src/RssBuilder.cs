@@ -187,8 +187,10 @@ public static class RssBuilder
                 && audioUri is { Scheme: "https" }
                 && audioUri.Host.EndsWith(".dr.dk", StringComparison.OrdinalIgnoreCase)
                 && assetMatch.Success;
+            // Append .m4a so older podcatchers that infer codec from the URL extension
+            // accept the enclosure (AntennaPod < 2.x, Podkicker, some stream sniffers).
             var enclosureUrl = canProxy
-                ? $"{baseUrl.TrimEnd('/')}/proxy/audio/{assetMatch.Groups["ep"].Value}/{assetMatch.Groups["asset"].Value}"
+                ? $"{baseUrl.TrimEnd('/')}/proxy/audio/{assetMatch.Groups["ep"].Value}/{assetMatch.Groups["asset"].Value}.m4a"
                 : url;
             var mimeType = needsProxy ? "audio/mp4" : GetMimeTypeFromFormat(audioAsset.Format);
             var enclosure = new XElement("enclosure",

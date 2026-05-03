@@ -94,6 +94,10 @@ if (config.PreferMp4)
 
     app.MapMethods("/proxy/audio/{ep}/{asset}", ["GET", "HEAD"], async (string ep, string asset, HttpContext context, IHttpClientFactory clientFactory, ILogger<FeedGenerationService> logger) =>
     {
+        // Strip optional .m4a suffix added to enclosure URLs for podcatcher compatibility.
+        if (asset.EndsWith(".m4a", StringComparison.OrdinalIgnoreCase))
+            asset = asset[..^4];
+
         const int maxHexLength = 64;
         if (ep.Length > maxHexLength || asset.Length > maxHexLength
             || !RegexCache.HexString().IsMatch(ep) || !RegexCache.HexString().IsMatch(asset))
@@ -120,7 +124,18 @@ if (config.PreferMp4)
             using var upstream = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, context.RequestAborted);
 
             context.Response.StatusCode = (int)upstream.StatusCode;
-            context.Response.ContentType = "audio/mp4";
+            var isSuccess = (int)upstream.StatusCode is >= 200 and < 300;
+
+            // Only override Content-Type to audio/mp4 on success — error bodies (404 JSON,
+            // 502 HTML) must keep their actual type so clients/proxies don't misread them.
+            if (isSuccess)
+            {
+                context.Response.ContentType = "audio/mp4";
+            }
+            else if (upstream.Content.Headers.ContentType is { } upstreamCt)
+            {
+                context.Response.ContentType = upstreamCt.ToString();
+            }
             context.Response.Headers["X-Content-Type-Options"] = "nosniff";
 
             if (upstream.Content.Headers.ContentLength is { } length)
@@ -141,13 +156,25 @@ if (config.PreferMp4)
                 context.Response.Headers.LastModified = lastModified.ToString("R");
 
             if (upstream.Headers.CacheControl is { } cacheControl)
+            {
                 context.Response.Headers.CacheControl = cacheControl.ToString();
+            }
+            else if (isSuccess)
+            {
+                // Audio assets are content-addressable by their hash and effectively immutable.
+                // When DR is silent, give intermediary CDNs and clients a sensible cacheable default.
+                context.Response.Headers.CacheControl = "public, max-age=3600, immutable";
+            }
 
             if (upstream.Content.Headers.Expires is { } expires)
                 context.Response.Headers.Expires = expires.ToString("R");
 
-            if (upstream.Headers.Vary.Count > 0)
-                context.Response.Headers.Vary = string.Join(", ", upstream.Headers.Vary);
+            // Always advertise that responses vary by Range/If-None-Match so downstream caches
+            // don't merge bodies across conditional or partial requests, even if upstream is silent.
+            var varyHeaders = upstream.Headers.Vary.Count > 0
+                ? string.Join(", ", upstream.Headers.Vary.Concat(new[] { "Range", "If-None-Match" }).Distinct(StringComparer.OrdinalIgnoreCase))
+                : "Range, If-None-Match";
+            context.Response.Headers.Vary = varyHeaders;
 
             // HEAD must not have a body; 304 Not Modified must not have a body either.
             if (isHead || upstream.StatusCode == System.Net.HttpStatusCode.NotModified)
