@@ -92,7 +92,7 @@ if (config.PreferMp4)
     // upstream can answer with a 206 (Range) or 304 (conditional GET) directly.
     string[] forwardClientHeaders = ["Range", "User-Agent", "If-None-Match", "If-Modified-Since", "If-Range"];
 
-    app.MapGet("/proxy/audio/{ep}/{asset}", async (string ep, string asset, HttpContext context, IHttpClientFactory clientFactory, ILogger<FeedGenerationService> logger) =>
+    app.MapMethods("/proxy/audio/{ep}/{asset}", ["GET", "HEAD"], async (string ep, string asset, HttpContext context, IHttpClientFactory clientFactory, ILogger<FeedGenerationService> logger) =>
     {
         const int maxHexLength = 64;
         if (ep.Length > maxHexLength || asset.Length > maxHexLength
@@ -104,10 +104,12 @@ if (config.PreferMp4)
 
         var upstreamUrl = new Uri($"https://api.dr.dk/radio/v1/assetlinks/urn:dr:radio:episode:{ep}/{asset}");
         var client = clientFactory.CreateClient("AudioProxy");
+        var isHead = HttpMethods.IsHead(context.Request.Method);
 
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, upstreamUrl);
+            // Mirror the client's verb upstream so HEAD probes don't pull whole audio bodies from DR.
+            using var request = new HttpRequestMessage(isHead ? HttpMethod.Head : HttpMethod.Get, upstreamUrl);
 
             foreach (var name in forwardClientHeaders)
             {
@@ -147,8 +149,8 @@ if (config.PreferMp4)
             if (upstream.Headers.Vary.Count > 0)
                 context.Response.Headers.Vary = string.Join(", ", upstream.Headers.Vary);
 
-            // 304 Not Modified must not have a body — skip the copy entirely.
-            if (upstream.StatusCode == System.Net.HttpStatusCode.NotModified)
+            // HEAD must not have a body; 304 Not Modified must not have a body either.
+            if (isHead || upstream.StatusCode == System.Net.HttpStatusCode.NotModified)
                 return;
 
             await using var upstreamStream = await upstream.Content.ReadAsStreamAsync(context.RequestAborted);
