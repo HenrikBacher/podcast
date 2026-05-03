@@ -5,6 +5,11 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
     private const int MaxConcurrentPodcasts = 6;
     private static readonly TimeSpan PerPodcastTimeout = TimeSpan.FromMinutes(2);
 
+    // A run with too many failed podcasts must not flip readiness to "ok" — otherwise the
+    // probe lies while the site serves stale or incomplete content. Require at least this
+    // fraction of configured podcasts to succeed before recording a successful run.
+    private const double MinSuccessFraction = 0.5;
+
     private long _lastSuccessfulRunUtcTicks;
     public DateTime? LastSuccessfulRunUtc
     {
@@ -44,8 +49,10 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
 
         var feedMetadata = results.Select(r => r.Metadata).ToList();
         var changedCount = results.Count(r => r.Changed);
+        var configuredCount = podcastList.Podcasts.Count;
+        var successCount = feedMetadata.Count;
 
-        logger.LogInformation("Generated {Total} podcast feeds ({Changed} changed).", feedMetadata.Count, changedCount);
+        logger.LogInformation("Generated {Success}/{Total} podcast feeds ({Changed} changed).", successCount, configuredCount, changedCount);
 
         if (changedCount > 0 || forceRegenerate)
         {
@@ -56,10 +63,28 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
             logger.LogInformation("No feeds changed; skipped website regeneration.");
         }
 
-        Interlocked.Exchange(ref _lastSuccessfulRunUtcTicks, DateTime.UtcNow.Ticks);
+        var minRequired = (int)Math.Ceiling(configuredCount * MinSuccessFraction);
+        if (successCount >= minRequired)
+        {
+            Interlocked.Exchange(ref _lastSuccessfulRunUtcTicks, DateTime.UtcNow.Ticks);
+        }
+        else
+        {
+            logger.LogError("Run did not meet success threshold: {Success}/{Total} (required {Required}). Readiness will not advance.",
+                successCount, configuredCount, minRequired);
+            throw new FeedGenerationFailedException(successCount, configuredCount, minRequired);
+        }
     }
 
     private readonly record struct ProcessResult(FeedMetadata Metadata, bool Changed);
+
+    public sealed class FeedGenerationFailedException(int successCount, int configuredCount, int requiredCount)
+        : Exception($"Only {successCount}/{configuredCount} podcasts succeeded; required at least {requiredCount}.")
+    {
+        public int SuccessCount { get; } = successCount;
+        public int ConfiguredCount { get; } = configuredCount;
+        public int RequiredCount { get; } = requiredCount;
+    }
 
     private async Task<ProcessResult?> ProcessPodcastAsync(Podcast podcast, GeneratorConfig config, bool forceRegenerate, CancellationToken cancellationToken)
     {
@@ -77,14 +102,14 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
             // Skip regeneration if the feed is already up-to-date, so Last-Modified stays stable.
             // On startup (forceRegenerate=true) this check is bypassed so code changes are applied.
             string outputPath = Path.Combine(config.FeedsDir, $"{podcast.Slug}.xml");
-            if (!forceRegenerate && File.Exists(outputPath) && !HasNewerEpisodes(outputPath, series))
+            if (!forceRegenerate && File.Exists(outputPath) && !await HasNewerEpisodesAsync(outputPath, series, ct))
             {
                 // The date check passed, but DR rotates audio asset hashes for already-published
                 // episodes (re-encodes etc.) without bumping LatestEpisodeStartTime — leaving feeds
                 // pointing at 404'd URLs. Verify the latest episode's current asset hash is in the
                 // file before skipping.
                 var latestEpisode = await apiClient.FetchLatestEpisodeAsync(podcast.Urn, ct);
-                if (latestEpisode is null || FeedReferencesLatestAsset(outputPath, latestEpisode, config.PreferMp4))
+                if (latestEpisode is null || await FeedReferencesLatestAssetAsync(outputPath, latestEpisode, config.PreferMp4, ct))
                 {
                     logger.LogInformation("Skipped (unchanged)");
                     return new ProcessResult(RssBuilder.BuildFeedMetadata(podcast, series), Changed: false);
@@ -99,10 +124,11 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
             // Atomic write: write to temp file then rename to avoid serving partial files
             string tempPath = outputPath + ".tmp";
             await using (var fileStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true))
-            using (var writer = new StreamWriter(fileStream, new UTF8Encoding(false)))
             {
                 var xmlDoc = new XDocument(new XDeclaration("1.0", "utf-8", "yes"), rss);
-                xmlDoc.Save(writer);
+                var xmlSettings = new XmlWriterSettings { Async = true, Encoding = new UTF8Encoding(false) };
+                await using var xmlWriter = XmlWriter.Create(fileStream, xmlSettings);
+                await xmlDoc.SaveAsync(xmlWriter, ct);
             }
             File.Move(tempPath, outputPath, overwrite: true);
 
@@ -126,7 +152,7 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
         }
     }
 
-    internal static bool FeedReferencesLatestAsset(string feedPath, Episode latestEpisode, bool preferMp4)
+    internal static async Task<bool> FeedReferencesLatestAssetAsync(string feedPath, Episode latestEpisode, bool preferMp4, CancellationToken cancellationToken = default)
     {
         var asset = RssBuilder.SelectAudioAsset(latestEpisode, preferMp4);
         if (asset?.Url is not { } url || string.IsNullOrEmpty(url))
@@ -144,7 +170,8 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
         {
             // Asset hashes are 64-char hex; substring search across the file is sufficient
             // and avoids parsing the whole feed. Files are <1 MB.
-            return File.ReadAllText(feedPath).Contains(assetHash, StringComparison.Ordinal);
+            var content = await File.ReadAllTextAsync(feedPath, cancellationToken);
+            return content.Contains(assetHash, StringComparison.Ordinal);
         }
         catch (Exception)
         {
@@ -152,7 +179,7 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
         }
     }
 
-    internal static bool HasNewerEpisodes(string feedPath, Series? series)
+    internal static async Task<bool> HasNewerEpisodesAsync(string feedPath, Series? series, CancellationToken cancellationToken = default)
     {
         if (!DateTime.TryParse(series?.LatestEpisodeStartTime, out var latestEpisode))
             return true; // Can't determine, regenerate to be safe
@@ -161,14 +188,15 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
         {
             // Use XmlReader to stop as soon as <lastBuildDate> is found rather than
             // loading the entire feed (which can contain hundreds of episode elements).
-            var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit };
-            using var reader = XmlReader.Create(feedPath, settings);
-            while (reader.Read())
+            var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, Async = true };
+            await using var fileStream = new FileStream(feedPath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true);
+            using var reader = XmlReader.Create(fileStream, settings);
+            while (await reader.ReadAsync())
             {
                 if (reader.NodeType != XmlNodeType.Element || reader.LocalName != "lastBuildDate")
                     continue;
 
-                var lastBuildDate = reader.ReadElementContentAsString();
+                var lastBuildDate = await reader.ReadElementContentAsStringAsync();
                 // Accept both +0000 (RFC 822) and +00:00 (old format) by
                 // normalizing to the colon form that zzz expects.
                 if (lastBuildDate.Length >= 5 && lastBuildDate[^5] is '+' or '-' && lastBuildDate[^3] != ':')

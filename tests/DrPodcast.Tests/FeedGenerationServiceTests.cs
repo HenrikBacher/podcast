@@ -5,14 +5,14 @@ public class FeedGenerationServiceTests
     #region HasNewerEpisodes
 
     [Fact]
-    public void HasNewerEpisodes_NullLatestEpisodeStartTime_ReturnsTrue()
+    public async Task HasNewerEpisodes_NullLatestEpisodeStartTime_ReturnsTrue()
     {
         var series = CreateSeries(latestEpisodeStartTime: null);
-        FeedGenerationService.HasNewerEpisodes("nonexistent.xml", series).Should().BeTrue();
+        (await FeedGenerationService.HasNewerEpisodesAsync("nonexistent.xml", series)).Should().BeTrue();
     }
 
     [Fact]
-    public void HasNewerEpisodes_FeedWithOlderDate_ReturnsTrue()
+    public async Task HasNewerEpisodes_FeedWithOlderDate_ReturnsTrue()
     {
         var tempFile = Path.GetTempFileName();
         try
@@ -27,7 +27,7 @@ public class FeedGenerationServiceTests
                 """);
 
             var series = CreateSeries(latestEpisodeStartTime: "2024-06-15T10:00:00Z");
-            FeedGenerationService.HasNewerEpisodes(tempFile, series).Should().BeTrue();
+            (await FeedGenerationService.HasNewerEpisodesAsync(tempFile, series)).Should().BeTrue();
         }
         finally
         {
@@ -36,7 +36,7 @@ public class FeedGenerationServiceTests
     }
 
     [Fact]
-    public void HasNewerEpisodes_FeedWithSameDate_ReturnsFalse()
+    public async Task HasNewerEpisodes_FeedWithSameDate_ReturnsFalse()
     {
         var tempFile = Path.GetTempFileName();
         try
@@ -54,7 +54,7 @@ public class FeedGenerationServiceTests
                 """);
 
             var series = CreateSeries(latestEpisodeStartTime: "2024-01-15T10:00:00+00:00");
-            FeedGenerationService.HasNewerEpisodes(tempFile, series).Should().BeFalse();
+            (await FeedGenerationService.HasNewerEpisodesAsync(tempFile, series)).Should().BeFalse();
         }
         finally
         {
@@ -63,7 +63,7 @@ public class FeedGenerationServiceTests
     }
 
     [Fact]
-    public void HasNewerEpisodes_CorruptFile_ReturnsTrue()
+    public async Task HasNewerEpisodes_CorruptFile_ReturnsTrue()
     {
         var tempFile = Path.GetTempFileName();
         try
@@ -71,7 +71,7 @@ public class FeedGenerationServiceTests
             File.WriteAllText(tempFile, "not valid xml");
 
             var series = CreateSeries(latestEpisodeStartTime: "2024-01-15T10:00:00Z");
-            FeedGenerationService.HasNewerEpisodes(tempFile, series).Should().BeTrue();
+            (await FeedGenerationService.HasNewerEpisodesAsync(tempFile, series)).Should().BeTrue();
         }
         finally
         {
@@ -80,7 +80,7 @@ public class FeedGenerationServiceTests
     }
 
     [Fact]
-    public void HasNewerEpisodes_MissingLastBuildDate_ReturnsTrue()
+    public async Task HasNewerEpisodes_MissingLastBuildDate_ReturnsTrue()
     {
         var tempFile = Path.GetTempFileName();
         try
@@ -95,7 +95,7 @@ public class FeedGenerationServiceTests
                 """);
 
             var series = CreateSeries(latestEpisodeStartTime: "2024-01-15T10:00:00Z");
-            FeedGenerationService.HasNewerEpisodes(tempFile, series).Should().BeTrue();
+            (await FeedGenerationService.HasNewerEpisodesAsync(tempFile, series)).Should().BeTrue();
         }
         finally
         {
@@ -104,14 +104,14 @@ public class FeedGenerationServiceTests
     }
 
     [Fact]
-    public void HasNewerEpisodes_NonexistentFile_ReturnsTrue()
+    public async Task HasNewerEpisodes_NonexistentFile_ReturnsTrue()
     {
         var series = CreateSeries(latestEpisodeStartTime: "2024-01-15T10:00:00Z");
-        FeedGenerationService.HasNewerEpisodes("does-not-exist.xml", series).Should().BeTrue();
+        (await FeedGenerationService.HasNewerEpisodesAsync("does-not-exist.xml", series)).Should().BeTrue();
     }
 
     [Fact]
-    public void HasNewerEpisodes_OldColonTimezoneFormat_IsParsed()
+    public async Task HasNewerEpisodes_OldColonTimezoneFormat_IsParsed()
     {
         // Feeds generated before the +0000 switch contain "+00:00" — the parser
         // must continue to accept them or every existing feed regenerates on startup.
@@ -128,7 +128,7 @@ public class FeedGenerationServiceTests
                 """);
 
             var series = CreateSeries(latestEpisodeStartTime: "2024-01-15T10:00:00+00:00");
-            FeedGenerationService.HasNewerEpisodes(tempFile, series).Should().BeFalse();
+            (await FeedGenerationService.HasNewerEpisodesAsync(tempFile, series)).Should().BeFalse();
         }
         finally
         {
@@ -137,7 +137,7 @@ public class FeedGenerationServiceTests
     }
 
     [Fact]
-    public void HasNewerEpisodes_MalformedLastBuildDate_ReturnsTrue()
+    public async Task HasNewerEpisodes_MalformedLastBuildDate_ReturnsTrue()
     {
         // If the element is present but the date is unparseable, we must regenerate
         // rather than trusting a value we can't compare against.
@@ -154,7 +154,7 @@ public class FeedGenerationServiceTests
                 """);
 
             var series = CreateSeries(latestEpisodeStartTime: "2024-01-15T10:00:00Z");
-            FeedGenerationService.HasNewerEpisodes(tempFile, series).Should().BeTrue();
+            (await FeedGenerationService.HasNewerEpisodesAsync(tempFile, series)).Should().BeTrue();
         }
         finally
         {
@@ -163,7 +163,7 @@ public class FeedGenerationServiceTests
     }
 
     [Fact]
-    public void HasNewerEpisodes_FeedNewerThanApi_ReturnsFalse()
+    public async Task HasNewerEpisodes_FeedNewerThanApi_ReturnsFalse()
     {
         // Defensive case: if the feed on disk is strictly newer than the API's
         // latest timestamp (clock skew, reverted episode), don't rewrite.
@@ -180,7 +180,7 @@ public class FeedGenerationServiceTests
                 """);
 
             var series = CreateSeries(latestEpisodeStartTime: "2024-01-15T10:00:00Z");
-            FeedGenerationService.HasNewerEpisodes(tempFile, series).Should().BeFalse();
+            (await FeedGenerationService.HasNewerEpisodesAsync(tempFile, series)).Should().BeFalse();
         }
         finally
         {
@@ -189,7 +189,7 @@ public class FeedGenerationServiceTests
     }
 
     [Fact]
-    public void HasNewerEpisodes_DtdDeclaration_IsRejected()
+    public async Task HasNewerEpisodes_DtdDeclaration_IsRejected()
     {
         // Feed parsing must refuse DTDs to avoid XXE / billion-laughs in case a
         // malicious file lands in the feeds directory.
@@ -207,7 +207,7 @@ public class FeedGenerationServiceTests
                 """);
 
             var series = CreateSeries(latestEpisodeStartTime: "2024-01-15T10:00:00Z");
-            FeedGenerationService.HasNewerEpisodes(tempFile, series).Should().BeTrue();
+            (await FeedGenerationService.HasNewerEpisodesAsync(tempFile, series)).Should().BeTrue();
         }
         finally
         {
@@ -220,7 +220,7 @@ public class FeedGenerationServiceTests
     #region FeedReferencesLatestAsset
 
     [Fact]
-    public void FeedReferencesLatestAsset_FeedContainsCurrentAssetHash_ReturnsTrue()
+    public async Task FeedReferencesLatestAsset_FeedContainsCurrentAssetHash_ReturnsTrue()
     {
         var tempFile = Path.GetTempFileName();
         try
@@ -237,7 +237,7 @@ public class FeedGenerationServiceTests
                 """);
 
             var ep = CreateEpisodeWithAudio("https://api.dr.dk/radio/v1/assetlinks/urn:dr:radio:episode:abc123/aabbccddeeff112233445566778899aabbccddeeff112233445566778899aabb", "mp3", 192);
-            FeedGenerationService.FeedReferencesLatestAsset(tempFile, ep, preferMp4: false).Should().BeTrue();
+            (await FeedGenerationService.FeedReferencesLatestAssetAsync(tempFile, ep, preferMp4: false)).Should().BeTrue();
         }
         finally
         {
@@ -246,7 +246,7 @@ public class FeedGenerationServiceTests
     }
 
     [Fact]
-    public void FeedReferencesLatestAsset_FeedHasStaleAssetHash_ReturnsFalse()
+    public async Task FeedReferencesLatestAsset_FeedHasStaleAssetHash_ReturnsFalse()
     {
         // The recurring failure mode: DR rotated the asset hash on a published episode.
         // The feed still references the old hash, so the proxy 404s. We must regenerate.
@@ -265,7 +265,7 @@ public class FeedGenerationServiceTests
                 """);
 
             var ep = CreateEpisodeWithAudio("https://api.dr.dk/radio/v1/assetlinks/urn:dr:radio:episode:abc123/cafef00d00112233445566778899aabbccddeeff00112233445566778899aabb", "mp3", 192);
-            FeedGenerationService.FeedReferencesLatestAsset(tempFile, ep, preferMp4: false).Should().BeFalse();
+            (await FeedGenerationService.FeedReferencesLatestAssetAsync(tempFile, ep, preferMp4: false)).Should().BeFalse();
         }
         finally
         {
@@ -274,7 +274,7 @@ public class FeedGenerationServiceTests
     }
 
     [Fact]
-    public void FeedReferencesLatestAsset_EpisodeHasNoAudio_ReturnsTrue()
+    public async Task FeedReferencesLatestAsset_EpisodeHasNoAudio_ReturnsTrue()
     {
         // Nothing to verify against — don't trigger a regenerate just because the API
         // happens to return an episode entry with no audio yet.
@@ -283,7 +283,7 @@ public class FeedGenerationServiceTests
         {
             File.WriteAllText(tempFile, "<rss><channel></channel></rss>");
             var ep = new Episode("t", "d", null, null, "id", null, null, null, null, null, null, null, false, null);
-            FeedGenerationService.FeedReferencesLatestAsset(tempFile, ep, preferMp4: false).Should().BeTrue();
+            (await FeedGenerationService.FeedReferencesLatestAssetAsync(tempFile, ep, preferMp4: false)).Should().BeTrue();
         }
         finally
         {
