@@ -14,4 +14,5 @@ global using Microsoft.AspNetCore.StaticFiles;
 global using Microsoft.Extensions.FileProviders;
 global using Microsoft.Net.Http.Headers;
 global using Polly;
-global using Polly.Extensions.Http;
+global using Polly.Retry;
+global using Microsoft.Extensions.Http.Resilience;

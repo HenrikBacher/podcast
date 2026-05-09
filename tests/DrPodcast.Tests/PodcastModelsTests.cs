@@ -18,10 +18,10 @@ public class PodcastModelsTests
 
         var result = JsonSerializer.Deserialize(json, PodcastJsonContext.Default.PodcastList);
 
-        result.Should().NotBeNull();
-        result!.Podcasts.Should().HaveCount(1);
-        result.Podcasts[0].Slug.Should().Be("test-podcast");
-        result.Podcasts[0].Urn.Should().Be("urn:dr:radio:series:12345");
+        result.Should().BeEquivalentTo(new PodcastList
+        {
+            Podcasts = [new Podcast("test-podcast", "urn:dr:radio:series:12345", null)]
+        });
     }
 
     [Fact]
@@ -47,12 +47,11 @@ public class PodcastModelsTests
 
         var result = JsonSerializer.Deserialize(json, PodcastJsonContext.Default.PodcastList);
 
-        result.Should().NotBeNull();
-        result!.Podcasts[0].ImageAssets.Should().NotBeNull();
-        result.Podcasts[0].ImageAssets!.Should().HaveCount(1);
-        result.Podcasts[0].ImageAssets![0].Id.Should().Be("img-123");
-        result.Podcasts[0].ImageAssets![0].Target.Should().Be("podcast");
-        result.Podcasts[0].ImageAssets![0].Ratio.Should().Be("1:1");
+        result.Should().BeEquivalentTo(new PodcastList
+        {
+            Podcasts = [new Podcast("test-podcast", "urn:dr:radio:series:12345",
+                [new ImageAsset("img-123", "podcast", "1:1")])]
+        });
     }
 
     [Fact]
@@ -88,18 +87,19 @@ public class PodcastModelsTests
 
         var result = JsonSerializer.Deserialize(json, PodcastJsonContext.Default.Series);
 
-        result.Should().NotBeNull();
-        result!.Categories.Should().BeEquivalentTo(new[] { "Dokumentar", "Historie" });
-        result.NumberOfSeries.Should().Be(3);
-        result.PresentationType.Should().Be("ongoing");
-        result.LatestEpisodeStartTime.Should().Be("2024-01-15T10:00:00Z");
-        result.PresentationUrl.Should().Be("https://www.dr.dk/lyd/special-radio/test-podcast");
-        result.ExplicitContent.Should().BeFalse();
-        result.DefaultOrder.Should().Be("desc");
-        result.Title.Should().Be("Test Podcast");
-        result.Punchline.Should().Be("A great test podcast");
-        result.Description.Should().Be("This is a detailed description of the test podcast.");
-        result.ImageAssets.Should().HaveCount(1);
+        result.Should().BeEquivalentTo(new Series(
+            Categories: ["Dokumentar", "Historie"],
+            NumberOfSeries: 3,
+            PresentationType: "ongoing",
+            LatestEpisodeStartTime: "2024-01-15T10:00:00Z",
+            PresentationUrl: "https://www.dr.dk/lyd/special-radio/test-podcast",
+            ExplicitContent: false,
+            DefaultOrder: "desc",
+            Title: "Test Podcast",
+            Punchline: "A great test podcast",
+            Description: "This is a detailed description of the test podcast.",
+            ImageAssets: [new ImageAsset("img-456", "default", "16:9")]
+        ));
     }
 
     [Fact]
@@ -140,26 +140,25 @@ public class PodcastModelsTests
 
         var result = JsonSerializer.Deserialize(json, PodcastJsonContext.Default.ListEpisode);
 
-        result.Should().NotBeNull();
-        result.Should().HaveCount(1);
-        var episode = result![0];
-        episode.Title.Should().Be("Episode 1");
-        episode.Description.Should().Be("First episode description");
-        episode.PublishTime.Should().Be("2024-01-01T12:00:00Z");
-        episode.StartTime.Should().Be("2024-01-01T12:00:00Z");
-        episode.Id.Should().Be("ep-001");
-        episode.PresentationUrl.Should().Be("https://www.dr.dk/lyd/episode-1");
-        episode.DurationMilliseconds.Should().Be(1800000);
-        episode.AudioAssets.Should().HaveCount(1);
-        episode.AudioAssets![0].Format.Should().Be("mp3");
-        episode.AudioAssets[0].Bitrate.Should().Be(192);
-        episode.AudioAssets[0].Url.Should().Be("https://example.com/audio.mp3");
-        episode.AudioAssets[0].FileSize.Should().Be(41472000);
-        episode.Categories.Should().BeEquivalentTo(new[] { "Dokumentar" });
-        episode.ImageAssets.Should().HaveCount(1);
-        episode.EpisodeNumber.Should().Be(1);
-        episode.SeasonNumber.Should().Be(1);
-        episode.ExplicitContent.Should().BeFalse();
+        result.Should().BeEquivalentTo(new[]
+        {
+            new Episode(
+                Title: "Episode 1",
+                Description: "First episode description",
+                PublishTime: "2024-01-01T12:00:00Z",
+                StartTime: "2024-01-01T12:00:00Z",
+                Id: "ep-001",
+                PresentationUrl: "https://www.dr.dk/lyd/episode-1",
+                DurationMilliseconds: 1800000,
+                AudioAssets: [new AudioAsset("mp3", 192, "https://example.com/audio.mp3", 41472000)],
+                Categories: ["Dokumentar"],
+                ImageAssets: [new ImageAsset("ep-img-001", "podcast", "1:1")],
+                EpisodeNumber: 1,
+                SeasonNumber: 1,
+                ExplicitContent: false,
+                Order: null
+            )
+        });
     }
 
     [Fact]
@@ -194,12 +193,25 @@ public class PodcastModelsTests
 
         var result = JsonSerializer.Deserialize(json, PodcastJsonContext.Default.ListEpisode);
 
-        result.Should().NotBeNull();
-        result![0].Title.Should().Be("Minimal Episode");
-        result[0].Description.Should().BeNull();
-        result[0].AudioAssets.Should().BeNull();
-        result[0].EpisodeNumber.Should().BeNull();
-        result[0].SeasonNumber.Should().BeNull();
+        result.Should().BeEquivalentTo(new[]
+        {
+            new Episode(
+                Title: "Minimal Episode",
+                Description: null,
+                PublishTime: null,
+                StartTime: null,
+                Id: null,
+                PresentationUrl: null,
+                DurationMilliseconds: null,
+                AudioAssets: null,
+                Categories: null,
+                ImageAssets: null,
+                EpisodeNumber: null,
+                SeasonNumber: null,
+                ExplicitContent: false,
+                Order: null
+            )
+        });
     }
 
     [Fact]
@@ -231,9 +243,11 @@ public class PodcastModelsTests
         var result = JsonSerializer.Deserialize(json, PodcastJsonContext.Default.ListEpisode);
 
         result.Should().NotBeNull();
-        result![0].AudioAssets.Should().HaveCount(2);
-        result[0].AudioAssets![0].Bitrate.Should().Be(128);
-        result[0].AudioAssets![1].Bitrate.Should().Be(256);
+        result![0].AudioAssets.Should().BeEquivalentTo(new[]
+        {
+            new AudioAsset("mp3", 128, "https://example.com/low.mp3", 10000000),
+            new AudioAsset("mp3", 256, "https://example.com/high.mp3", 20000000),
+        }, o => o.WithStrictOrdering());
     }
 
     [Fact]
@@ -241,9 +255,7 @@ public class PodcastModelsTests
     {
         var imageAsset = new ImageAsset("img-123", "podcast", "1:1");
 
-        imageAsset.Id.Should().Be("img-123");
-        imageAsset.Target.Should().Be("podcast");
-        imageAsset.Ratio.Should().Be("1:1");
+        imageAsset.Should().BeEquivalentTo(new ImageAsset("img-123", "podcast", "1:1"));
     }
 
     [Fact]
@@ -262,7 +274,6 @@ public class PodcastModelsTests
         var result = JsonSerializer.Deserialize(json, PodcastJsonContext.Default.Series);
 
         result.Should().NotBeNull();
-        result!.Categories.Should().NotBeNull();
-        result.Categories.Should().BeEmpty();
+        result!.Categories.Should().BeEmpty();
     }
 }
