@@ -41,11 +41,11 @@
       "urn": "urn:dr:radio:series:63bc0839d2052f8a01353d1c"
     },
     {
-      "slug": "ubegribeligt", 
+      "slug": "ubegribeligt",
       "urn": "urn:dr:radio:series:626931758679fdf8af8a0e26"
     },
     {
-      "slug": "sorte-tal", 
+      "slug": "sorte-tal",
       "urn": "urn:dr:radio:series:5fa160a9da351264f87b7df0"
     },
     {
@@ -53,29 +53,29 @@
       "urn": "urn:dr:radio:series:5fa26a12330eac2f135b9c24"
     },
     {
-      "slug": "bakspejl", 
+      "slug": "bakspejl",
       "urn": "urn:dr:radio:series:5fa2623a330eac2f135b751f"
     },
     {
-      "slug": "fonk-det-er-podcast", 
+      "slug": "fonk-det-er-podcast",
       "urn": "urn:dr:radio:series:5fa15b12da351264f87b5ca2"
     },
     {
-      "slug": "korfix-og-kaffe", 
+      "slug": "korfix-og-kaffe",
       "urn": "urn:dr:radio:series:5fa25b1e330eac2f135b4d2b"
-    }, 
+    },
     {
       "slug": "vildt-naturligt",
       "urn": "urn:dr:radio:series:5fa2605b330eac2f135b6a3f"
-    }, 
+    },
     {
       "slug": "flyvende-tallerken",
       "urn": "urn:dr:radio:series:600173276c12863ced19ea7e"
-    }, 
+    },
     {
       "slug": "tabloid",
       "urn": "urn:dr:radio:series:618c5172c928eef30f91d62d"
-    }, 
+    },
     {
       "slug": "ugens-gaest",
       "urn": "urn:dr:radio:series:5fa2699c330eac2f135b9988"
@@ -91,10 +91,6 @@
     {
       "slug": "akkurat-med-clement",
       "urn": "urn:dr:radio:series:63a395b29c2c142ce1880fcb"
-    },
-    {
-      "slug": "genvej",
-      "urn": "urn:dr:radio:series:66d8390ccf35b6a44add2e78"
     },
     {
       "slug": "verdens-bedste-lov",
@@ -159,10 +155,6 @@
     {
       "slug": "bravo-med-lotte-heise",
       "urn": "urn:dr:radio:series:5fa26536330eac2f135b8368"
-    },
-    {
-      "slug": "forkant",
-      "urn": "urn:dr:radio:series:696f81e31f59a35d49d06530"
     }
   ]
 }
