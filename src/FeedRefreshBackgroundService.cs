@@ -11,16 +11,31 @@ public sealed class FeedRefreshBackgroundService(
     {
         var podcastsJsonPath = FindPodcastsJson();
 
+        // Parse the podcast list once at startup — it's bundled in the image and never changes
+        // at runtime, so re-reading it every tick is wasted I/O and an extra failure mode.
+        PodcastList podcastList;
+        try
+        {
+            var json = await File.ReadAllTextAsync(podcastsJsonPath, stoppingToken);
+            podcastList = JsonSerializer.Deserialize(json, PodcastJsonContext.Default.PodcastList)
+                ?? throw new InvalidOperationException($"Parsed null PodcastList from {podcastsJsonPath}");
+        }
+        catch (Exception ex)
+        {
+            logger.LogCritical(ex, "Failed to load podcast configuration from {Path}. Service will not start.", podcastsJsonPath);
+            throw;
+        }
+
         var intervalMinutes = int.TryParse(Environment.GetEnvironmentVariable("REFRESH_INTERVAL_MINUTES"), out var mins) && mins > 0
             ? mins
             : 15;
 
-        logger.LogInformation("Feed refresh service started. Interval: {Interval} minutes.", intervalMinutes);
+        logger.LogInformation("Feed refresh service started with {Count} podcasts. Interval: {Interval} minutes.", podcastList.Podcasts.Count, intervalMinutes);
 
         int consecutiveFailures = 0;
 
         // Force regeneration on startup so code changes are always applied when the container restarts
-        consecutiveFailures = await RunGenerationAsync(podcastsJsonPath, config, consecutiveFailures, forceRegenerate: true, stoppingToken);
+        consecutiveFailures = await RunGenerationAsync(podcastList, config, consecutiveFailures, forceRegenerate: true, stoppingToken);
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -46,18 +61,18 @@ public sealed class FeedRefreshBackgroundService(
                 return;
             }
 
-            consecutiveFailures = await RunGenerationAsync(podcastsJsonPath, config, consecutiveFailures, forceRegenerate: false, stoppingToken);
+            consecutiveFailures = await RunGenerationAsync(podcastList, config, consecutiveFailures, forceRegenerate: false, stoppingToken);
         }
     }
 
-    private async Task<int> RunGenerationAsync(string podcastsJsonPath, GeneratorConfig config, int consecutiveFailures, bool forceRegenerate, CancellationToken cancellationToken)
+    private async Task<int> RunGenerationAsync(PodcastList podcastList, GeneratorConfig config, int consecutiveFailures, bool forceRegenerate, CancellationToken cancellationToken)
     {
         try
         {
             logger.LogInformation("Starting feed generation{Force}...", forceRegenerate ? " (forced)" : "");
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutCts.CancelAfter(TimeSpan.FromMinutes(10));
-            await feedService.GenerateFeedsAsync(podcastsJsonPath, config, forceRegenerate, timeoutCts.Token);
+            await feedService.GenerateFeedsAsync(podcastList, config, forceRegenerate, timeoutCts.Token);
             logger.LogInformation("Feed generation complete.");
             return 0;
         }

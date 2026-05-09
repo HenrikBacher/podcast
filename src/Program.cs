@@ -33,7 +33,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
 
 var config = GeneratorConfig.FromEnvironment();
-var apiKey = Environment.GetEnvironmentVariable("API_KEY") ?? "";
+var apiKey = Environment.GetEnvironmentVariable("API_KEY");
+if (string.IsNullOrWhiteSpace(apiKey))
+    throw new InvalidOperationException("API_KEY environment variable is not set.");
 
 AddRetryHandler(builder.Services.AddHttpClient("DrApi", client =>
 {

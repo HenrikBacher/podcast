@@ -20,15 +20,11 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
         }
     }
 
-    public async Task GenerateFeedsAsync(string podcastsJsonPath, GeneratorConfig config, bool forceRegenerate = false, CancellationToken cancellationToken = default)
+    public async Task GenerateFeedsAsync(PodcastList podcastList, GeneratorConfig config, bool forceRegenerate = false, CancellationToken cancellationToken = default)
     {
-        var podcastList = JsonSerializer.Deserialize(
-            await File.ReadAllTextAsync(podcastsJsonPath, cancellationToken),
-            PodcastJsonContext.Default.PodcastList);
-
-        if (podcastList is null || podcastList.Podcasts.Count == 0)
+        if (podcastList.Podcasts.Count == 0)
         {
-            logger.LogWarning("No podcasts found in {Path}", podcastsJsonPath);
+            logger.LogWarning("No podcasts to process.");
             return;
         }
 
@@ -56,7 +52,7 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
 
         if (changedCount > 0 || forceRegenerate)
         {
-            await WebsiteGenerator.GenerateAsync(feedMetadata, config, logger);
+            await WebsiteGenerator.GenerateAsync(feedMetadata, config, logger, cancellationToken);
         }
         else
         {
@@ -181,7 +177,10 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
 
     internal static async Task<bool> HasNewerEpisodesAsync(string feedPath, Series? series, CancellationToken cancellationToken = default)
     {
-        if (!DateTime.TryParse(series?.LatestEpisodeStartTime, out var latestEpisode))
+        // Use DateTimeOffset throughout so timezone-naive API timestamps don't silently compare
+        // wrong against feed timestamps that always carry an offset.
+        const DateTimeStyles parseStyles = DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal;
+        if (!DateTimeOffset.TryParse(series?.LatestEpisodeStartTime, CultureInfo.InvariantCulture, parseStyles, out var latestEpisode))
             return true; // Can't determine, regenerate to be safe
 
         try
@@ -201,8 +200,8 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
                 // normalizing to the colon form that zzz expects.
                 if (lastBuildDate.Length >= 5 && lastBuildDate[^5] is '+' or '-' && lastBuildDate[^3] != ':')
                     lastBuildDate = lastBuildDate.Insert(lastBuildDate.Length - 2, ":");
-                if (!DateTime.TryParseExact(lastBuildDate, RssBuilder.Rfc822Format,
-                        CultureInfo.InvariantCulture, DateTimeStyles.None, out var existing))
+                if (!DateTimeOffset.TryParseExact(lastBuildDate, RssBuilder.Rfc822Format,
+                        CultureInfo.InvariantCulture, parseStyles, out var existing))
                     return true;
 
                 return latestEpisode > existing;

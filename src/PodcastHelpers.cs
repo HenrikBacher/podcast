@@ -20,7 +20,7 @@ public static class PodcastHelpers
 
         if (string.IsNullOrEmpty(bestAsset?.Id)
             || bestAsset.Id.Contains("..")
-            || bestAsset.Id.IndexOfAny(['?', '#', '\\', '\r', '\n']) >= 0)
+            || bestAsset.Id.IndexOfAny(['/', '?', '#', '\\', '\r', '\n']) >= 0)
             return null;
 
         return $"https://asset.dr.dk/drlyd/images/{bestAsset.Id}";

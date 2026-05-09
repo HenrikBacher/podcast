@@ -2,7 +2,7 @@ namespace DrPodcast;
 
 public static class WebsiteGenerator
 {
-    public static async Task GenerateAsync(IEnumerable<FeedMetadata> feeds, GeneratorConfig config, ILogger? logger = null)
+    public static async Task GenerateAsync(IEnumerable<FeedMetadata> feeds, GeneratorConfig config, ILogger? logger = null, CancellationToken cancellationToken = default)
     {
         var sortedFeeds = feeds.OrderBy(f => f.Title).ToList();
 
@@ -10,12 +10,9 @@ public static class WebsiteGenerator
         {
             logger?.LogInformation("Generating website...");
 
-            Directory.CreateDirectory(config.FullSiteDir);
-            Directory.CreateDirectory(config.FeedsDir);
+            CopyStaticAssets(config, logger, cancellationToken);
 
-            CopyStaticAssets(config, logger);
-
-            await GenerateIndexHtmlAsync(sortedFeeds, config, logger);
+            await GenerateIndexHtmlAsync(sortedFeeds, config, logger, cancellationToken);
 
             logger?.LogInformation("Website generation complete!");
         }
@@ -26,7 +23,7 @@ public static class WebsiteGenerator
         }
     }
 
-    private static void CopyStaticAssets(GeneratorConfig config, ILogger? logger)
+    private static void CopyStaticAssets(GeneratorConfig config, ILogger? logger, CancellationToken cancellationToken)
     {
         if (!Directory.Exists(config.SiteSourceDir))
         {
@@ -39,6 +36,8 @@ public static class WebsiteGenerator
         var skipped = 0;
         foreach (var file in Directory.EnumerateFiles(sourceFull, "*", SearchOption.AllDirectories))
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             var relative = Path.GetRelativePath(sourceFull, file);
             var destination = Path.Combine(config.FullSiteDir, relative);
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
@@ -61,7 +60,7 @@ public static class WebsiteGenerator
         logger?.LogInformation("Static assets: {Copied} copied, {Skipped} unchanged", copied, skipped);
     }
 
-    private static async Task GenerateIndexHtmlAsync(List<FeedMetadata> feeds, GeneratorConfig config, ILogger? logger)
+    private static async Task GenerateIndexHtmlAsync(List<FeedMetadata> feeds, GeneratorConfig config, ILogger? logger, CancellationToken cancellationToken)
     {
         var templatePath = Path.Combine(config.SiteSourceDir, "index.html");
         if (!File.Exists(templatePath))
@@ -71,7 +70,7 @@ public static class WebsiteGenerator
         }
 
         var feedsHtml = GenerateFeedsHtml(feeds);
-        var template = await File.ReadAllTextAsync(templatePath);
+        var template = await File.ReadAllTextAsync(templatePath, cancellationToken);
 
         var html = template
             .Replace("{{DEPLOYMENT_TIME}}", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"))
@@ -79,8 +78,11 @@ public static class WebsiteGenerator
             .Replace("<!-- BEGIN_FEEDS -->", feedsHtml)
             .Replace("<!-- END_FEEDS -->", "");
 
+        // Atomic write: temp file then rename so a crash mid-write can't leave a corrupt index served.
         var outputPath = Path.Combine(config.FullSiteDir, "index.html");
-        await File.WriteAllTextAsync(outputPath, html);
+        var tempPath = outputPath + ".tmp";
+        await File.WriteAllTextAsync(tempPath, html, cancellationToken);
+        File.Move(tempPath, outputPath, overwrite: true);
         logger?.LogInformation("Generated index.html with {Count} feeds", feeds.Count);
     }
 

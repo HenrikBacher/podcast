@@ -161,6 +161,19 @@ public class PodcastHelpersTests
     }
 
     [Fact]
+    public void GetImageUrlFromAssets_ShouldRejectForwardSlash()
+    {
+        var imageAssets = new List<ImageAsset>
+        {
+            new("subpath/image.svg", "podcast", "1:1")
+        };
+
+        var result = PodcastHelpers.GetImageUrlFromAssets(imageAssets);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public void GetImageUrlFromAssets_ShouldRejectBackslash()
     {
         var imageAssets = new List<ImageAsset>
