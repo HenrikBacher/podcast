@@ -3,6 +3,7 @@ namespace DrPodcast;
 public static class RssBuilder
 {
     internal const string Rfc822Format = "ddd, dd MMM yyyy HH:mm:ss zzz";
+    internal const DateTimeStyles UtcParseStyles = DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal;
 
     /// <summary>Format a DateTime as RFC 822 with compact timezone offset (+0000 instead of +00:00).</summary>
     public static string FormatRfc822(DateTime dt)
@@ -48,7 +49,7 @@ public static class RssBuilder
 
         // Use the latest episode start time — avoid DateTime.Now so feed content
         // stays stable across regenerations when nothing has changed (preserves ETags).
-        var lastBuildDate = DateTime.TryParse(series?.LatestEpisodeStartTime, out var dt)
+        var lastBuildDate = DateTime.TryParse(series?.LatestEpisodeStartTime, CultureInfo.InvariantCulture, UtcParseStyles, out var dt)
             ? FormatRfc822(dt)
             : null;
 
@@ -154,7 +155,7 @@ public static class RssBuilder
             : "";
 
         var rawTime = episode.StartTime ?? episode.PublishTime;
-        var pubDate = DateTime.TryParse(rawTime, out var dt)
+        var pubDate = DateTime.TryParse(rawTime, CultureInfo.InvariantCulture, UtcParseStyles, out var dt)
             ? FormatRfc822(dt)
             : rawTime ?? "";
 

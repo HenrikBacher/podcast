@@ -1,5 +1,3 @@
-using Microsoft.AspNetCore.StaticFiles;
-
 namespace DrPodcast;
 
 internal sealed class MinimalContentTypeProvider : IContentTypeProvider

@@ -84,7 +84,6 @@ The test suite includes:
 5. Sort episodes and generate RSS XML with full iTunes metadata
 6. Atomically write feed to `output/_site/feeds/{slug}.xml`
 7. Generate static website with feed listing in `output/_site/`
-8. Create `manifest.json` with feed metadata and SHA256 hashes
 
 ### Environment Variables
 | Variable | Required | Default | Description |

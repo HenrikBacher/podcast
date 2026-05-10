@@ -26,13 +26,8 @@ public sealed class DrApiClient(IHttpClientFactory httpClientFactory, ILogger<Dr
         response.EnsureSuccessStatusCode();
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
-
-        if (!doc.RootElement.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array)
-            return null;
-
-        var episodes = items.Deserialize(PodcastJsonContext.Default.ListEpisode);
-        return episodes is { Count: > 0 } ? episodes[0] : null;
+        var page = await JsonSerializer.DeserializeAsync(stream, PodcastJsonContext.Default.EpisodesPage, cancellationToken);
+        return page?.Items is { Count: > 0 } items ? items[0] : null;
     }
 
     public async Task<List<Episode>?> FetchAllEpisodesAsync(string urn, CancellationToken cancellationToken)
@@ -55,21 +50,12 @@ public sealed class DrApiClient(IHttpClientFactory httpClientFactory, ILogger<Dr
             response.EnsureSuccessStatusCode();
 
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-            using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
-            var root = doc.RootElement;
+            var page = await JsonSerializer.DeserializeAsync(stream, PodcastJsonContext.Default.EpisodesPage, cancellationToken);
 
-            if (root.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array)
-            {
-                var episodes = items.Deserialize(PodcastJsonContext.Default.ListEpisode);
-                if (episodes != null)
-                {
-                    allEpisodes.AddRange(episodes);
-                }
-            }
+            if (page?.Items is { } episodes)
+                allEpisodes.AddRange(episodes);
 
-            nextUrl = root.TryGetProperty("next", out var next) && next.ValueKind == JsonValueKind.String
-                ? next.GetString()
-                : null;
+            nextUrl = page?.Next;
         }
 
         return allEpisodes;

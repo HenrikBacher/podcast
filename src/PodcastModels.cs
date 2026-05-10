@@ -3,10 +3,13 @@ namespace DrPodcast;
 [JsonSerializable(typeof(PodcastList))]
 [JsonSerializable(typeof(Series))]
 [JsonSerializable(typeof(List<Episode>))]
+[JsonSerializable(typeof(EpisodesPage))]
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 public partial class PodcastJsonContext : JsonSerializerContext
 {
 }
+
+public record EpisodesPage(List<Episode>? Items, string? Next);
 
 public record FeedMetadata(string Slug, string Title, string? ImageUrl);
 
