@@ -20,8 +20,23 @@ public static class RssBuilder
         var imageUrl = PodcastHelpers.GetImageUrlFromAssets(series?.ImageAssets)
                        ?? PodcastHelpers.GetImageUrlFromAssets(podcast.ImageAssets);
         var title = series?.Title ?? podcast.Slug.Replace("-", " ");
-        var cleanTitle = RegexCache.FeedTitleCleanup().Replace(title, "").Trim();
-        return new FeedMetadata(podcast.Slug, cleanTitle, imageUrl);
+        return new FeedMetadata(podcast.Slug, StripTrailingFeedParenthetical(title), imageUrl);
+    }
+
+    // Strips a trailing parenthetical that mentions "feed", e.g. "Show name (RSS feed)" → "Show name".
+    internal static string StripTrailingFeedParenthetical(string title)
+    {
+        var trimmed = title.AsSpan().TrimEnd();
+        if (trimmed.Length == 0 || trimmed[^1] != ')') return title.Trim();
+
+        var open = trimmed.LastIndexOf('(');
+        if (open < 0) return title.Trim();
+
+        var inside = trimmed[(open + 1)..^1];
+        if (inside.Contains("feed", StringComparison.OrdinalIgnoreCase))
+            return trimmed[..open].TrimEnd().ToString();
+
+        return title.Trim();
     }
 
     public static (XElement rss, FeedMetadata metadata) BuildRssFeed(Series? series, List<Episode>? episodes, Podcast podcast, string baseUrl, bool preferMp4 = false)

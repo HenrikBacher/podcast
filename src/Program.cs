@@ -51,15 +51,8 @@ builder.Services.AddSingleton(config);
 builder.Services.AddSingleton<DrApiClient>();
 builder.Services.AddSingleton<FeedGenerationService>();
 builder.Services.AddHostedService<FeedRefreshBackgroundService>();
-builder.Services.AddResponseCompression(options =>
-{
-    options.EnableForHttps = true;
-    options.MimeTypes = [..ResponseCompressionDefaults.MimeTypes, "application/xml"];
-});
 
 var app = builder.Build();
-
-app.UseResponseCompression();
 
 // Liveness: process is up and serving. Keep this cheap so orchestrators
 // don't restart the container just because DR's API is down.
@@ -191,8 +184,7 @@ if (config.PreferMp4)
 Directory.CreateDirectory(config.FullSiteDir);
 Directory.CreateDirectory(config.FeedsDir);
 
-var contentTypeProvider = new FileExtensionContentTypeProvider();
-contentTypeProvider.Mappings[".xml"] = "application/xml; charset=utf-8";
+var contentTypeProvider = new MinimalContentTypeProvider();
 
 var fileProvider = new PhysicalFileProvider(Path.GetFullPath(config.FullSiteDir));
 

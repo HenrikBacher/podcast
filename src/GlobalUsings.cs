@@ -8,7 +8,6 @@ global using System.Threading.RateLimiting;
 global using System.Xml;
 global using System.Xml.Linq;
 global using DrPodcast;
-global using Microsoft.AspNetCore.ResponseCompression;
 global using Microsoft.AspNetCore.StaticFiles;
 global using Microsoft.Extensions.FileProviders;
 global using Microsoft.Extensions.DependencyInjection;
