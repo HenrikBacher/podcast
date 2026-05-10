@@ -13,6 +13,9 @@ public static class RssBuilder
         return string.Concat(s.AsSpan(0, i), s.AsSpan(i + 1));
     }
 
+    internal static bool TryParseFeedDate(string? raw, out DateTime utc) =>
+        DateTime.TryParse(raw, CultureInfo.InvariantCulture, UtcParseStyles, out utc);
+
     public static string DetermineItunesType(Series? series) =>
         series?.PresentationType == "Show" ? "serial" : "episodic";
 
@@ -49,7 +52,7 @@ public static class RssBuilder
 
         // Use the latest episode start time — avoid DateTime.Now so feed content
         // stays stable across regenerations when nothing has changed (preserves ETags).
-        var lastBuildDate = DateTime.TryParse(series?.LatestEpisodeStartTime, CultureInfo.InvariantCulture, UtcParseStyles, out var dt)
+        var lastBuildDate = TryParseFeedDate(series?.LatestEpisodeStartTime, out var dt)
             ? FormatRfc822(dt)
             : null;
 
@@ -155,7 +158,7 @@ public static class RssBuilder
             : "";
 
         var rawTime = episode.StartTime ?? episode.PublishTime;
-        var pubDate = DateTime.TryParse(rawTime, CultureInfo.InvariantCulture, UtcParseStyles, out var dt)
+        var pubDate = TryParseFeedDate(rawTime, out var dt)
             ? FormatRfc822(dt)
             : rawTime ?? "";
 

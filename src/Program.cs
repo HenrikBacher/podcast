@@ -40,7 +40,7 @@ if (config.PreferMp4)
         options.OnRejected = (context, _) =>
         {
             if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
-                context.HttpContext.Response.Headers.RetryAfter = ((int)retryAfter.TotalSeconds).ToString(CultureInfo.InvariantCulture);
+                context.HttpContext.Response.Headers.RetryAfter = Math.Max(1, (int)Math.Ceiling(retryAfter.TotalSeconds)).ToString(CultureInfo.InvariantCulture);
             context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
             return ValueTask.CompletedTask;
         };
@@ -80,6 +80,7 @@ if (config.PreferMp4)
     // upstream can answer with a 206 (Range) or 304 (conditional GET) directly.
     string[] forwardClientHeaders = ["Range", "User-Agent", "If-None-Match", "If-Modified-Since", "If-Range"];
     string[] extraVaryHeaders = ["Range", "If-None-Match"];
+    var defaultVary = string.Join(", ", extraVaryHeaders);
 
     app.MapMethods("/proxy/audio/{ep}/{asset}", ["GET", "HEAD"], async (string ep, string asset, HttpContext context, IHttpClientFactory clientFactory, ILogger<FeedGenerationService> logger) =>
     {
@@ -162,7 +163,7 @@ if (config.PreferMp4)
             // don't merge bodies across conditional or partial requests, even if upstream is silent.
             var varyHeaders = upstream.Headers.Vary.Count > 0
                 ? string.Join(", ", upstream.Headers.Vary.Concat(extraVaryHeaders).Distinct(StringComparer.OrdinalIgnoreCase))
-                : "Range, If-None-Match";
+                : defaultVary;
             context.Response.Headers.Vary = varyHeaders;
 
             // HEAD must not have a body; 304 Not Modified must not have a body either.

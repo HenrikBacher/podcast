@@ -179,8 +179,7 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
     {
         // Use DateTimeOffset throughout so timezone-naive API timestamps don't silently compare
         // wrong against feed timestamps that always carry an offset.
-        const DateTimeStyles parseStyles = DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal;
-        if (!DateTimeOffset.TryParse(series?.LatestEpisodeStartTime, CultureInfo.InvariantCulture, parseStyles, out var latestEpisode))
+        if (!DateTimeOffset.TryParse(series?.LatestEpisodeStartTime, CultureInfo.InvariantCulture, RssBuilder.UtcParseStyles, out var latestEpisode))
             return true; // Can't determine, regenerate to be safe
 
         try
@@ -201,7 +200,7 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
                 if (lastBuildDate.Length >= 5 && lastBuildDate[^5] is '+' or '-' && lastBuildDate[^3] != ':')
                     lastBuildDate = lastBuildDate.Insert(lastBuildDate.Length - 2, ":");
                 if (!DateTimeOffset.TryParseExact(lastBuildDate, RssBuilder.Rfc822Format,
-                        CultureInfo.InvariantCulture, parseStyles, out var existing))
+                        CultureInfo.InvariantCulture, RssBuilder.UtcParseStyles, out var existing))
                     return true;
 
                 return latestEpisode > existing;
