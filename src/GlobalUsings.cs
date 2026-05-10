@@ -11,5 +11,4 @@ global using DrPodcast;
 global using Microsoft.AspNetCore.ResponseCompression;
 global using Microsoft.AspNetCore.StaticFiles;
 global using Microsoft.Extensions.FileProviders;
-global using Polly;
-global using Microsoft.Extensions.Http.Resilience;
+global using Microsoft.Extensions.DependencyInjection;

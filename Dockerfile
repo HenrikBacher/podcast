@@ -13,10 +13,10 @@ RUN dotnet publish src/DrPodcast.csproj -c Release -r linux-musl-x64 \
 # Runtime stage
 FROM alpine:3
 WORKDIR /app
-COPY --from=build /out/DrPodcast ./
-COPY --from=build /out/podcasts.json ./
-COPY --from=build /src/site/ site/
-RUN mkdir -p output && chown -R 99:100 /app
+COPY --from=build --chown=99:100 /out/DrPodcast ./
+COPY --from=build --chown=99:100 /out/podcasts.json ./
+COPY --from=build --chown=99:100 /src/site/ site/
+RUN mkdir -p output && chown 99:100 /app/output
 USER 99:100
 
 EXPOSE 8080

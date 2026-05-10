@@ -1,32 +1,5 @@
-static void AddRetryHandler(IHttpClientBuilder httpBuilder, string label) =>
-    httpBuilder.AddResilienceHandler($"{label}-retry", (pipeline, ctx) =>
-    {
-        var logger = ctx.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("HttpRetry");
-        pipeline.AddRetry(new HttpRetryStrategyOptions
-        {
-            MaxRetryAttempts = 3,
-            BackoffType = DelayBackoffType.Exponential,
-            Delay = TimeSpan.FromSeconds(2),
-            UseJitter = true,
-            ShouldHandle = args => ValueTask.FromResult(
-                HttpClientResiliencePredicates.IsTransient(args.Outcome)
-                || args.Outcome.Result?.StatusCode == System.Net.HttpStatusCode.TooManyRequests),
-            DelayGenerator = args =>
-            {
-                if (args.Outcome.Result?.Headers.RetryAfter is { } ra)
-                {
-                    if (ra.Delta is { } delta) return ValueTask.FromResult<TimeSpan?>(delta);
-                    if (ra.Date is { } date) return ValueTask.FromResult<TimeSpan?>(date - DateTimeOffset.UtcNow);
-                }
-                return ValueTask.FromResult<TimeSpan?>(null);
-            },
-            OnRetry = args =>
-            {
-                logger.LogWarning("{Label} retry {RetryCount} after {Delay}", label, args.AttemptNumber + 1, args.RetryDelay);
-                return default;
-            }
-        });
-    });
+static void AddRetryHandler(IHttpClientBuilder httpBuilder) =>
+    httpBuilder.AddStandardResilienceHandler();
 
 // Web server mode: serve static feeds + periodic background regeneration
 var builder = WebApplication.CreateBuilder(args);
@@ -41,14 +14,14 @@ AddRetryHandler(builder.Services.AddHttpClient("DrApi", client =>
 {
     client.DefaultRequestHeaders.Add("X-Apikey", apiKey);
     client.Timeout = TimeSpan.FromSeconds(30);
-}), "DrApi");
+}));
 
 if (config.PreferMp4)
 {
     AddRetryHandler(builder.Services.AddHttpClient("AudioProxy", client =>
     {
         client.Timeout = TimeSpan.FromMinutes(5);
-    }), "AudioProxy");
+    }));
 
     // 20 requests/min per IP with no queuing — burst tolerance via 4 segments
     builder.Services.AddRateLimiter(options =>

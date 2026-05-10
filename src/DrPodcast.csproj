@@ -23,6 +23,10 @@
     <IlcTrimMetadata>true</IlcTrimMetadata>
     <UseSystemResourceKeys>true</UseSystemResourceKeys>
     <EventSourceSupport>false</EventSourceSupport>
+    <MetricsSupport>false</MetricsSupport>
+    <HttpActivityPropagationSupport>false</HttpActivityPropagationSupport>
+    <XmlResolverIsNetworkingEnabledByDefault>false</XmlResolverIsNetworkingEnabledByDefault>
+    <NullabilityInfoContextSupport>false</NullabilityInfoContextSupport>
 
     <!-- Optional flag to toggle OpenTelemetry packages usage -->
     <EnableOpenTelemetry>false</EnableOpenTelemetry>
