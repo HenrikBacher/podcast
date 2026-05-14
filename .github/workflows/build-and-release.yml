@@ -134,6 +134,8 @@ jobs:
     permissions:
       contents: write
       packages: write
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@v6
 
@@ -158,6 +160,7 @@ jobs:
             type=raw,value=${{ needs.determine-version.outputs.version-tag }},enable=${{ needs.determine-version.outputs.is-release == 'true' }}
 
       - name: Build and push Docker image
+        id: build
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -166,6 +169,16 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          sbom: true
+          provenance: mode=max
+
+      - name: Generate signed build provenance attestation
+        if: needs.determine-version.outputs.is-release == 'true'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
 
       - name: Create GitHub Release
         if: needs.determine-version.outputs.is-release == 'true'
