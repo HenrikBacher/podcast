@@ -174,7 +174,7 @@ jobs:
 
       - name: Generate signed build provenance attestation
         if: needs.determine-version.outputs.is-release == 'true'
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-name: ${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.build.outputs.digest }}
