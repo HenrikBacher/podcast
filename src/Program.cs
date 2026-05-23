@@ -23,7 +23,9 @@ if (config.PreferMp4)
         client.Timeout = TimeSpan.FromMinutes(5);
     }));
 
-    // 20 requests/min per IP with no queuing — burst tolerance via 4 segments
+    // 120 requests/min per IP with no queuing — podcatchers seeking with HTTP Range
+    // requests can fire many calls per second on a single episode, so the limit has
+    // to accommodate normal playback, not just metadata fetches.
     builder.Services.AddRateLimiter(options =>
     {
         options.AddPolicy("audio-proxy", context =>
@@ -31,7 +33,7 @@ if (config.PreferMp4)
                 partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                 factory: _ => new SlidingWindowRateLimiterOptions
                 {
-                    PermitLimit = 20,
+                    PermitLimit = 120,
                     Window = TimeSpan.FromMinutes(1),
                     SegmentsPerWindow = 4,
                     QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
