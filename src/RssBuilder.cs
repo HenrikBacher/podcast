@@ -133,20 +133,21 @@ public static class RssBuilder
 
     public static AudioAsset? SelectAudioAsset(Episode episode, bool preferMp4)
     {
+        if (episode.AudioAssets is not { } assets)
+            return null;
+
+        // Match formats case-insensitively so an upstream "MP3"/"MP4" doesn't silently
+        // drop an episode's audio while GetMimeTypeFromFormat (which lowercases) still maps it.
         if (preferMp4)
         {
-            return episode.AudioAssets?
-                       .Where(a => a?.Format is "mp4" or "m4a")
-                       .MaxBy(a => a?.Bitrate ?? 0)
-                   ?? episode.AudioAssets?
-                       .Where(a => a?.Format == "mp3")
-                       .MaxBy(a => a?.Bitrate ?? 0);
+            return assets.Where(a => NormalizeFormat(a?.Format) is "mp4" or "m4a").MaxBy(a => a?.Bitrate ?? 0)
+                   ?? assets.Where(a => NormalizeFormat(a?.Format) == "mp3").MaxBy(a => a?.Bitrate ?? 0);
         }
 
-        return episode.AudioAssets?
-            .Where(a => a?.Format == "mp3")
-            .MaxBy(a => a?.Bitrate ?? 0);
+        return assets.Where(a => NormalizeFormat(a?.Format) == "mp3").MaxBy(a => a?.Bitrate ?? 0);
     }
+
+    private static string? NormalizeFormat(string? format) => format?.ToLowerInvariant();
 
     public static XElement BuildEpisodeItem(Episode episode, string? channelImage, string baseUrl, bool preferMp4, XNamespace itunes)
     {
@@ -198,7 +199,7 @@ public static class RssBuilder
 
         if (audioAsset?.Url is { } url && !string.IsNullOrEmpty(url))
         {
-            var needsProxy = preferMp4 && audioAsset.Format is "mp4" or "m4a";
+            var needsProxy = preferMp4 && NormalizeFormat(audioAsset.Format) is "mp4" or "m4a";
             Uri.TryCreate(url, UriKind.Absolute, out var audioUri);
             var assetMatch = audioUri is not null ? RegexCache.DrAssetUrl().Match(audioUri.PathAndQuery) : Match.Empty;
             var canProxy = needsProxy
@@ -241,7 +242,7 @@ public static class RssBuilder
     }
 
     private static string GetMimeTypeFromFormat(string? format) =>
-        format?.ToLowerInvariant() switch
+        NormalizeFormat(format) switch
         {
             "mp3" => "audio/mpeg",
             "mp4" or "m4a" => "audio/mp4",

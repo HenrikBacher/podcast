@@ -10,6 +10,11 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
     // fraction of configured podcasts to succeed before recording a successful run.
     private const double MinSuccessFraction = 0.5;
 
+    // Last-known metadata per slug, surviving across runs (this service is a singleton). Lets the
+    // website listing keep showing a podcast whose fetch failed this tick — its previously generated
+    // feed file is still on disk and served, so dropping it from index.html would be a lie.
+    private readonly ConcurrentDictionary<string, FeedMetadata> _lastKnownMetadata = new();
+
     private long _lastSuccessfulRunUtcTicks;
     public DateTime? LastSuccessfulRunUtc
     {
@@ -43,10 +48,21 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
             if (result is { } r) results.Add(r);
         });
 
-        var feedMetadata = results.Select(r => r.Metadata).ToList();
+        foreach (var r in results)
+            _lastKnownMetadata[r.Metadata.Slug] = r.Metadata;
+
         var changedCount = results.Count(r => r.Changed);
         var configuredCount = podcastList.Podcasts.Count;
-        var successCount = feedMetadata.Count;
+        var successCount = results.Count;
+
+        // Build the listing from every configured podcast (using last-known metadata for any that
+        // failed this run), not just this run's successes — otherwise a transient DR error removes
+        // a still-served feed from index.html. Podcasts never successfully fetched have no file and
+        // are correctly absent.
+        var feedMetadata = podcastList.Podcasts
+            .Select(p => _lastKnownMetadata.GetValueOrDefault(p.Slug))
+            .OfType<FeedMetadata>()
+            .ToList();
 
         logger.LogInformation("Generated {Success}/{Total} podcast feeds ({Changed} changed).", successCount, configuredCount, changedCount);
 
