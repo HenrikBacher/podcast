@@ -44,6 +44,12 @@ jobs:
         id: version
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Untrusted/context values are passed via env (never interpolated into the
+          # script body) so an attacker-controlled PR body can't inject PowerShell.
+          EVENT_NAME: ${{ github.event_name }}
+          GIT_REF: ${{ github.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BODY: ${{ github.event.pull_request.body }}
         shell: pwsh
         run: |
           $latestTag = git describe --tags --abbrev=0 2>$null
@@ -77,7 +83,7 @@ jobs:
             }
           }
 
-          if ("${{ github.event_name }}" -eq "push" -and "${{ github.ref }}" -eq "refs/heads/main") {
+          if ($env:EVENT_NAME -eq "push" -and $env:GIT_REF -eq "refs/heads/main") {
             $isRelease = "true"
 
             $commitMsg = git log -1 --pretty=%B
@@ -97,13 +103,12 @@ jobs:
             $version = Get-NextVersion $major $minor $patch $bumpType
             Write-Host "Release: v$version ($bumpType)"
           } else {
-            $prNumber = "${{ github.event.pull_request.number }}"
+            $prNumber = $env:PR_NUMBER
             if (-not $prNumber) { $prNumber = "0" }
             $shortSha = git rev-parse --short=7 HEAD
 
             try {
-              $prBody = "${{ github.event.pull_request.body }}"
-              $bumpType = Get-BumpTypeFromBody $prBody
+              $bumpType = Get-BumpTypeFromBody $env:PR_BODY
             } catch { }
 
             $nextVersion = Get-NextVersion $major $minor $patch $bumpType
