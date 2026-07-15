@@ -8,13 +8,11 @@ public static class WebsiteGenerator
 
         try
         {
-            logger?.LogInformation("Generating website...");
-
             CopyStaticAssets(config, logger, cancellationToken);
 
             await GenerateIndexHtmlAsync(sortedFeeds, config, logger, cancellationToken);
 
-            logger?.LogInformation("Website generation complete!");
+            logger?.LogInformation("Website regenerated ({Count} feeds listed).", sortedFeeds.Count);
         }
         catch (Exception ex)
         {
@@ -57,7 +55,7 @@ public static class WebsiteGenerator
             copied++;
             logger?.LogDebug("Copied {File} to site directory", relative);
         }
-        logger?.LogInformation("Static assets: {Copied} copied, {Skipped} unchanged", copied, skipped);
+        logger?.LogDebug("Static assets: {Copied} copied, {Skipped} unchanged", copied, skipped);
     }
 
     private static async Task GenerateIndexHtmlAsync(List<FeedMetadata> feeds, GeneratorConfig config, ILogger? logger, CancellationToken cancellationToken)
@@ -83,7 +81,7 @@ public static class WebsiteGenerator
         var tempPath = outputPath + ".tmp";
         await File.WriteAllTextAsync(tempPath, html, cancellationToken);
         File.Move(tempPath, outputPath, overwrite: true);
-        logger?.LogInformation("Generated index.html with {Count} feeds", feeds.Count);
+        logger?.LogDebug("Generated index.html with {Count} feeds", feeds.Count);
     }
 
     private static string GenerateFeedsHtml(IEnumerable<FeedMetadata> feeds)

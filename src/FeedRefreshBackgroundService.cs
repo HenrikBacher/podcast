@@ -69,11 +69,11 @@ public sealed class FeedRefreshBackgroundService(
     {
         try
         {
-            logger.LogInformation("Starting feed generation{Force}...", forceRegenerate ? " (forced)" : "");
+            logger.LogDebug("Starting feed generation{Force}...", forceRegenerate ? " (forced)" : "");
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutCts.CancelAfter(TimeSpan.FromMinutes(10));
             await feedService.GenerateFeedsAsync(podcastList, config, forceRegenerate, timeoutCts.Token);
-            logger.LogInformation("Feed generation complete.");
+            logger.LogDebug("Feed generation complete.");
             return 0;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

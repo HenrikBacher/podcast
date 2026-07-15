@@ -51,7 +51,8 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
         foreach (var r in results)
             _lastKnownMetadata[r.Metadata.Slug] = r.Metadata;
 
-        var changedCount = results.Count(r => r.Changed);
+        var changedSlugs = results.Where(r => r.Changed).Select(r => r.Metadata.Slug).Order(StringComparer.Ordinal).ToList();
+        var changedCount = changedSlugs.Count;
         var configuredCount = podcastList.Podcasts.Count;
         var successCount = results.Count;
 
@@ -64,15 +65,25 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
             .OfType<FeedMetadata>()
             .ToList();
 
-        logger.LogInformation("Generated {Success}/{Total} podcast feeds ({Changed} changed).", successCount, configuredCount, changedCount);
+        if (changedCount > 0)
+        {
+            logger.LogInformation("Updated {Changed}/{Total} feeds: {Slugs}", changedCount, configuredCount, string.Join(", ", changedSlugs));
+        }
+        else
+        {
+            logger.LogInformation("No feed updates ({Success}/{Total} checked).", successCount, configuredCount);
+        }
+
+        if (successCount < configuredCount)
+        {
+            var successSlugs = results.Select(r => r.Metadata.Slug).ToHashSet(StringComparer.Ordinal);
+            var failedSlugs = podcastList.Podcasts.Select(p => p.Slug).Where(s => !successSlugs.Contains(s));
+            logger.LogWarning("{Failed} feeds failed to refresh: {Slugs}", configuredCount - successCount, string.Join(", ", failedSlugs));
+        }
 
         if (changedCount > 0 || forceRegenerate)
         {
             await WebsiteGenerator.GenerateAsync(feedMetadata, config, logger, cancellationToken);
-        }
-        else
-        {
-            logger.LogInformation("No feeds changed; skipped website regeneration.");
         }
 
         var minRequired = (int)Math.Ceiling(configuredCount * MinSuccessFraction);
@@ -123,10 +134,10 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
                 var latestEpisode = await apiClient.FetchLatestEpisodeAsync(podcast.Urn, ct);
                 if (latestEpisode is null || await FeedReferencesLatestAssetAsync(outputPath, latestEpisode, config.PreferMp4, ct))
                 {
-                    logger.LogInformation("Skipped (unchanged)");
+                    logger.LogDebug("Skipped (unchanged)");
                     return new ProcessResult(RssBuilder.BuildFeedMetadata(podcast, series), Changed: false);
                 }
-                logger.LogInformation("Regenerating: latest episode's audio asset hash has rotated");
+                logger.LogDebug("Regenerating: latest episode's audio asset hash has rotated");
             }
 
             var episodes = await apiClient.FetchAllEpisodesAsync(podcast.Urn, ct);
@@ -144,7 +155,7 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
             }
             File.Move(tempPath, outputPath, overwrite: true);
 
-            logger.LogInformation("Generated");
+            logger.LogDebug("Generated");
 
             return new ProcessResult(metadata, Changed: true);
         }
