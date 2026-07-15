@@ -4,6 +4,8 @@ static void AddRetryHandler(IHttpClientBuilder httpBuilder) =>
 // Web server mode: serve static feeds + periodic background regeneration
 var builder = WebApplication.CreateBuilder(args);
 builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
+builder.Logging.AddFilter("System.Net.Http.HttpClient", LogLevel.Warning);
+builder.Logging.AddFilter("Polly", LogLevel.Warning);
 builder.Logging.AddSimpleConsole(options =>
 {
     options.SingleLine = true;
