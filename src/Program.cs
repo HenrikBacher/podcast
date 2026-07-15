@@ -1,10 +1,15 @@
-z
 static void AddRetryHandler(IHttpClientBuilder httpBuilder) =>
     httpBuilder.AddStandardResilienceHandler();
 
 // Web server mode: serve static feeds + periodic background regeneration
 var builder = WebApplication.CreateBuilder(args);
 builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
+builder.Logging.AddSimpleConsole(options =>
+{
+    options.SingleLine = true;
+    options.TimestampFormat = "yyyy-MM-dd HH:mm:ss ";
+    options.UseUtcTimestamp = true;
+});
 
 var config = GeneratorConfig.FromEnvironment();
 var apiKey = Environment.GetEnvironmentVariable("API_KEY");
