@@ -230,14 +230,14 @@ public class FeedGenerationServiceTests
                 <rss version="2.0">
                   <channel>
                     <item>
-                      <enclosure url="https://example.com/proxy/audio/abc123/aabbccddeeff112233445566778899aabbccddeeff112233445566778899aabb" type="audio/mp4" />
+                      <enclosure url="https://api.dr.dk/radio/v1/assetlinks/urn:dr:radio:episode:abc123/aabbccddeeff112233445566778899aabbccddeeff112233445566778899aabb" type="audio/mpeg" />
                     </item>
                   </channel>
                 </rss>
                 """);
 
             var ep = CreateEpisodeWithAudio("https://api.dr.dk/radio/v1/assetlinks/urn:dr:radio:episode:abc123/aabbccddeeff112233445566778899aabbccddeeff112233445566778899aabb", "mp3", 192);
-            (await FeedGenerationService.FeedReferencesLatestAssetAsync(tempFile, ep, preferMp4: false)).Should().BeTrue();
+            (await FeedGenerationService.FeedReferencesLatestAssetAsync(tempFile, ep)).Should().BeTrue();
         }
         finally
         {
@@ -249,7 +249,7 @@ public class FeedGenerationServiceTests
     public async Task FeedReferencesLatestAsset_FeedHasStaleAssetHash_ReturnsFalse()
     {
         // The recurring failure mode: DR rotated the asset hash on a published episode.
-        // The feed still references the old hash, so the proxy 404s. We must regenerate.
+        // The feed still references the old hash, so the enclosure URL 404s. We must regenerate.
         var tempFile = Path.GetTempFileName();
         try
         {
@@ -258,14 +258,14 @@ public class FeedGenerationServiceTests
                 <rss version="2.0">
                   <channel>
                     <item>
-                      <enclosure url="https://example.com/proxy/audio/abc123/deadbeef00112233445566778899aabbccddeeff00112233445566778899aabb" type="audio/mp4" />
+                      <enclosure url="https://api.dr.dk/radio/v1/assetlinks/urn:dr:radio:episode:abc123/deadbeef00112233445566778899aabbccddeeff00112233445566778899aabb" type="audio/mpeg" />
                     </item>
                   </channel>
                 </rss>
                 """);
 
             var ep = CreateEpisodeWithAudio("https://api.dr.dk/radio/v1/assetlinks/urn:dr:radio:episode:abc123/cafef00d00112233445566778899aabbccddeeff00112233445566778899aabb", "mp3", 192);
-            (await FeedGenerationService.FeedReferencesLatestAssetAsync(tempFile, ep, preferMp4: false)).Should().BeFalse();
+            (await FeedGenerationService.FeedReferencesLatestAssetAsync(tempFile, ep)).Should().BeFalse();
         }
         finally
         {
@@ -283,7 +283,7 @@ public class FeedGenerationServiceTests
         {
             File.WriteAllText(tempFile, "<rss><channel></channel></rss>");
             var ep = new Episode("t", "d", null, null, "id", null, null, null, null, null, null, null, false, null);
-            (await FeedGenerationService.FeedReferencesLatestAssetAsync(tempFile, ep, preferMp4: false)).Should().BeTrue();
+            (await FeedGenerationService.FeedReferencesLatestAssetAsync(tempFile, ep)).Should().BeTrue();
         }
         finally
         {

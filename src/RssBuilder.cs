@@ -43,7 +43,7 @@ public static class RssBuilder
         return title.Trim();
     }
 
-    public static (XElement rss, FeedMetadata metadata) BuildRssFeed(Series? series, List<Episode>? episodes, Podcast podcast, string baseUrl, bool preferMp4 = false)
+    public static (XElement rss, FeedMetadata metadata) BuildRssFeed(Series? series, List<Episode>? episodes, Podcast podcast, string baseUrl)
     {
         XNamespace atom = "http://www.w3.org/2005/Atom";
         XNamespace itunes = "http://www.itunes.com/dtds/podcast-1.0.dtd";
@@ -118,7 +118,7 @@ public static class RssBuilder
 
             foreach (var episode in sorted)
             {
-                channel.Add(BuildEpisodeItem(episode, metadata.ImageUrl, baseUrl, preferMp4, itunes));
+                channel.Add(BuildEpisodeItem(episode, metadata.ImageUrl, itunes));
             }
         }
 
@@ -131,27 +131,19 @@ public static class RssBuilder
         return (rss, metadata);
     }
 
-    public static AudioAsset? SelectAudioAsset(Episode episode, bool preferMp4)
+    public static AudioAsset? SelectAudioAsset(Episode episode)
     {
         if (episode.AudioAssets is not { } assets)
             return null;
 
-        // Match formats case-insensitively so an upstream "MP3"/"MP4" doesn't silently
-        // drop an episode's audio while GetMimeTypeFromFormat (which lowercases) still maps it.
-        if (preferMp4)
-        {
-            return assets.Where(a => NormalizeFormat(a?.Format) is "mp4" or "m4a").MaxBy(a => a?.Bitrate ?? 0)
-                   ?? assets.Where(a => NormalizeFormat(a?.Format) == "mp3").MaxBy(a => a?.Bitrate ?? 0);
-        }
-
-        return assets.Where(a => NormalizeFormat(a?.Format) == "mp3").MaxBy(a => a?.Bitrate ?? 0);
+        // Match the format case-insensitively so an upstream "MP3" doesn't silently
+        // drop an episode's audio.
+        return assets.Where(a => a?.Format?.ToLowerInvariant() == "mp3").MaxBy(a => a?.Bitrate ?? 0);
     }
 
-    private static string? NormalizeFormat(string? format) => format?.ToLowerInvariant();
-
-    public static XElement BuildEpisodeItem(Episode episode, string? channelImage, string baseUrl, bool preferMp4, XNamespace itunes)
+    public static XElement BuildEpisodeItem(Episode episode, string? channelImage, XNamespace itunes)
     {
-        var audioAsset = SelectAudioAsset(episode, preferMp4);
+        var audioAsset = SelectAudioAsset(episode);
 
         var imageUrl = PodcastHelpers.GetImageUrlFromAssets(episode.ImageAssets) ?? channelImage;
         var duration = episode.DurationMilliseconds is not null
@@ -199,23 +191,9 @@ public static class RssBuilder
 
         if (audioAsset?.Url is { } url && !string.IsNullOrEmpty(url))
         {
-            var needsProxy = preferMp4 && NormalizeFormat(audioAsset.Format) is "mp4" or "m4a";
-            Uri.TryCreate(url, UriKind.Absolute, out var audioUri);
-            var assetMatch = audioUri is not null ? RegexCache.DrAssetUrl().Match(audioUri.PathAndQuery) : Match.Empty;
-            var canProxy = needsProxy
-                && !string.IsNullOrEmpty(baseUrl)
-                && audioUri is { Scheme: "https" }
-                && audioUri.Host.EndsWith(".dr.dk", StringComparison.OrdinalIgnoreCase)
-                && assetMatch.Success;
-            // Append .m4a so older podcatchers that infer codec from the URL extension
-            // accept the enclosure (AntennaPod < 2.x, Podkicker, some stream sniffers).
-            var enclosureUrl = canProxy
-                ? $"{baseUrl.TrimEnd('/')}/proxy/audio/{assetMatch.Groups["ep"].Value}/{assetMatch.Groups["asset"].Value}.m4a"
-                : url;
-            var mimeType = needsProxy ? "audio/mp4" : GetMimeTypeFromFormat(audioAsset.Format);
             var enclosure = new XElement("enclosure",
-                new XAttribute("url", enclosureUrl),
-                new XAttribute("type", mimeType));
+                new XAttribute("url", url),
+                new XAttribute("type", "audio/mpeg"));
 
             if (audioAsset.FileSize is not null)
             {
@@ -241,15 +219,4 @@ public static class RssBuilder
         }
     }
 
-    private static string GetMimeTypeFromFormat(string? format) =>
-        NormalizeFormat(format) switch
-        {
-            "mp3" => "audio/mpeg",
-            "mp4" or "m4a" => "audio/mp4",
-            "aac" => "audio/aac",
-            "ogg" => "audio/ogg",
-            "wav" => "audio/wav",
-            "flac" => "audio/flac",
-            _ => "audio/mpeg"
-        };
 }

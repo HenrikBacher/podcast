@@ -62,7 +62,7 @@ The test suite includes:
 ## Architecture Overview
 
 ### Core Components
-- **Program.cs**: Application entry point — ASP.NET Core host setup, health/readiness endpoints, audio proxy endpoint with rate limiting, static file serving
+- **Program.cs**: Application entry point — ASP.NET Core host setup, health/readiness endpoints, static file serving
 - **FeedGenerationService.cs**: Orchestrator — iterates podcasts in parallel, decides when to skip via `HasNewerEpisodesAsync`/`FeedReferencesLatestAssetAsync`, writes RSS XML atomically, tracks readiness and last-known metadata
 - **DrApiClient.cs**: HTTP access to the DR API — fetches series metadata, the latest episode, and paginates full episode lists
 - **RssBuilder.cs**: Pure XML construction — builds RSS feeds and episode `<item>` elements, including episode sorting and audio asset selection
@@ -71,7 +71,7 @@ The test suite includes:
 - **PodcastHelpers.cs**: Image URL extraction with priority-based selection
 - **WebsiteGenerator.cs**: Generates the static website — copies static assets from `site/` and renders `index.html` from a template with the feed listing
 - **MinimalContentTypeProvider.cs**: Small explicit MIME-type map for static file serving (trim-friendly)
-- **RegexCache.cs**: Source-generated regexes for hex validation and DR asset-URL parsing
+- **RegexCache.cs**: Source-generated regex for DR asset-URL parsing
 - **podcasts.json**: Configuration file containing podcast slugs and URNs to process (Danish podcasts)
 
 ### Key Design Patterns
@@ -80,7 +80,6 @@ The test suite includes:
 - **RSS Standards Compliance**: Generates feeds with iTunes and Atom namespaces
 - **Pagination Handling**: Fetches all episodes across multiple API pages (256 per page, capped at 100 pages per series)
 - **Atomic Writes**: Feeds and `index.html` are written to a `.tmp` file then renamed to avoid serving partial content
-- **Rate Limiting**: Audio proxy endpoint uses ASP.NET Core's built-in sliding window rate limiter (120 req/min per IP), returns a `Retry-After` header on rejection
 - **Change Detection**: Skips regenerating feeds whose `<lastBuildDate>` already matches the API's `LatestEpisodeStartTime`, using `XmlReader` to read only the first few elements; additionally verifies the latest episode's audio asset hash is still referenced (DR rotates hashes without bumping the timestamp)
 - **Resilient Website Listing**: `index.html` is built from the full configured podcast set using last-known metadata, so a transient fetch failure for one podcast doesn't drop its still-served feed from the listing
 
@@ -99,7 +98,6 @@ The test suite includes:
 |----------|----------|---------|-------------|
 | `API_KEY` | Yes | — | DR API key |
 | `BASE_URL` | No | `https://example.com` | Base URL for deployed feeds |
-| `PREFER_MP4` | No | `false` | Prefer MP4/M4A audio over MP3; enables the audio proxy endpoint |
 | `REFRESH_INTERVAL_MINUTES` | No | `15` | How often the background service regenerates feeds |
 
 ### Project Configuration
@@ -127,18 +125,7 @@ When extracting image URLs from `ImageAssets` (`PodcastHelpers.cs`):
 5. Falls back to the channel image if an episode has no suitable image
 
 ### Audio Asset Selection
-`RssBuilder.SelectAudioAsset` picks the enclosure audio (formats are matched **case-insensitively**):
-- `PREFER_MP4=true`: highest-bitrate `mp4`/`m4a`, falling back to highest-bitrate `mp3`
-- Otherwise: highest-bitrate `mp3`
-
-### Audio Proxy
-When `PREFER_MP4=true`, the application serves a `/proxy/audio/{ep}/{asset}` endpoint that:
-- Validates `ep` and `asset` are hex strings (max 64 chars), stripping an optional `.m4a` suffix
-- Mirrors the client verb (GET/HEAD) upstream to `https://api.dr.dk/radio/v1/assetlinks/...`
-- Rewrites `Content-Type` to `audio/mp4` on success (correcting the upstream header)
-- Forwards `Range`, `User-Agent`, and conditional headers (`If-None-Match`, `If-Modified-Since`, `If-Range`) for seek and revalidation support
-- Forwards caching/validator response headers and advertises `Vary: Range, If-None-Match`
-- Rate limits to 120 requests/minute per IP with a `Retry-After` response header on rejection
+`RssBuilder.SelectAudioAsset` picks the highest-bitrate `mp3` asset as the enclosure audio (the format is matched **case-insensitively**).
 
 ### CI/CD Workflows
 

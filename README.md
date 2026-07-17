@@ -31,7 +31,6 @@ docker run -e API_KEY=<key> -e BASE_URL=<url> -p 8080:8080 ghcr.io/YOUR_ORG/drpo
 |----------|----------|---------|-------------|
 | `API_KEY` | Yes | — | DR API key |
 | `BASE_URL` | No | `https://example.com` | Base URL for feed URLs in RSS output |
-| `PREFER_MP4` | No | `false` | Prefer MP4/M4A audio over MP3; enables `/proxy/audio` endpoint |
 | `REFRESH_INTERVAL_MINUTES` | No | `15` | How often feeds are regenerated in the background |
 
 ### Adding Podcasts
@@ -53,7 +52,7 @@ dotnet test tests/DrPodcast.Tests/DrPodcast.Tests.csproj
 
 ```
 src/
-  PodcastFeedGenerator.cs      # Entry point: HTTP server, audio proxy, rate limiting
+  PodcastFeedGenerator.cs      # Entry point: HTTP server
   FeedGenerationService.cs     # RSS feed generation and DR API integration
   FeedRefreshBackgroundService.cs  # Periodic background refresh with backoff
   PodcastModels.cs             # Data models with source-generated JSON serialization
@@ -73,7 +72,6 @@ site/                          # Static website assets for feed browsing
 - RSS 2.0 with iTunes and Atom namespaces
 - Source-generated JSON serialization
 - Atomic feed writes (temp file → rename) to avoid serving partial content
-- Sliding window rate limiter on the audio proxy (20 req/min per IP)
 - Change detection via `<lastBuildDate>` comparison to skip unnecessary regenerations
 
 ## License

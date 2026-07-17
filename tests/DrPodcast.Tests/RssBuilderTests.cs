@@ -168,7 +168,7 @@ public class RssBuilderTests
             new AudioAsset("mp3", 256, "https://example.com/high.mp3", 20000),
         ]);
 
-        var item = RssBuilder.BuildEpisodeItem(episode, null, "https://example.com", preferMp4: false, itunes);
+        var item = RssBuilder.BuildEpisodeItem(episode, null, itunes);
 
         var enclosure = item.Element("enclosure");
         enclosure.Should().NotBeNull();
@@ -177,65 +177,12 @@ public class RssBuilderTests
     }
 
     [Fact]
-    public void BuildEpisodeItem_PreferMp4_SelectsMp4OverMp3()
-    {
-        XNamespace itunes = "http://www.itunes.com/dtds/podcast-1.0.dtd";
-        var episode = CreateEpisode("Test", audioAssets:
-        [
-            new AudioAsset("mp3", 256, "https://example.com/high.mp3", 20000),
-            new AudioAsset("mp4", 128, "https://example.com/audio.mp4", 15000),
-        ]);
-
-        var item = RssBuilder.BuildEpisodeItem(episode, null, "https://example.com", preferMp4: true, itunes);
-
-        var enclosure = item.Element("enclosure");
-        enclosure.Should().NotBeNull();
-        enclosure!.Attribute("type")!.Value.Should().Be("audio/mp4");
-    }
-
-    [Fact]
-    public void BuildEpisodeItem_PreferMp4_FallsBackToMp3WhenNoMp4()
-    {
-        XNamespace itunes = "http://www.itunes.com/dtds/podcast-1.0.dtd";
-        var episode = CreateEpisode("Test", audioAssets:
-        [
-            new AudioAsset("mp3", 192, "https://example.com/audio.mp3", 15000),
-        ]);
-
-        var item = RssBuilder.BuildEpisodeItem(episode, null, "https://example.com", preferMp4: true, itunes);
-
-        var enclosure = item.Element("enclosure");
-        enclosure.Should().NotBeNull();
-        enclosure!.Attribute("url")!.Value.Should().Be("https://example.com/audio.mp3");
-    }
-
-    [Fact]
-    public void BuildEpisodeItem_PreferMp4_DrAsset_RewritesToProxyUrlWithM4aSuffix()
-    {
-        // The proxy URL must end in .m4a so older podcatchers that infer codec from the
-        // URL extension (AntennaPod < 2.x, Podkicker, etc.) accept the enclosure.
-        XNamespace itunes = "http://www.itunes.com/dtds/podcast-1.0.dtd";
-        const string upstream = "https://api.dr.dk/radio/v1/assetlinks/urn:dr:radio:episode:abc123/aabbccddeeff112233445566778899aabbccddeeff112233445566778899aabb";
-        var episode = CreateEpisode("Test", audioAssets:
-        [
-            new AudioAsset("m4a", 128, upstream, 15000),
-        ]);
-
-        var item = RssBuilder.BuildEpisodeItem(episode, null, "https://example.com", preferMp4: true, itunes);
-
-        var enclosure = item.Element("enclosure")!;
-        enclosure.Attribute("url")!.Value.Should().Be(
-            "https://example.com/proxy/audio/abc123/aabbccddeeff112233445566778899aabbccddeeff112233445566778899aabb.m4a");
-        enclosure.Attribute("type")!.Value.Should().Be("audio/mp4");
-    }
-
-    [Fact]
     public void BuildEpisodeItem_NoAudioAssets_NoEnclosure()
     {
         XNamespace itunes = "http://www.itunes.com/dtds/podcast-1.0.dtd";
         var episode = CreateEpisode("Test", audioAssets: null);
 
-        var item = RssBuilder.BuildEpisodeItem(episode, null, "https://example.com", preferMp4: false, itunes);
+        var item = RssBuilder.BuildEpisodeItem(episode, null, itunes);
 
         item.Element("enclosure").Should().BeNull();
     }
@@ -246,7 +193,7 @@ public class RssBuilderTests
         XNamespace itunes = "http://www.itunes.com/dtds/podcast-1.0.dtd";
         var episode = CreateEpisode("Test", imageAssets: null);
 
-        var item = RssBuilder.BuildEpisodeItem(episode, "https://channel-image.jpg", "https://example.com", preferMp4: false, itunes);
+        var item = RssBuilder.BuildEpisodeItem(episode, "https://channel-image.jpg", itunes);
 
         var image = item.Element(itunes + "image");
         image.Should().NotBeNull();
@@ -262,7 +209,7 @@ public class RssBuilderTests
             new AudioAsset("mp3", 192, "https://example.com/audio.mp3", 41472000),
         ]);
 
-        var item = RssBuilder.BuildEpisodeItem(episode, null, "https://example.com", preferMp4: false, itunes);
+        var item = RssBuilder.BuildEpisodeItem(episode, null, itunes);
 
         var enclosure = item.Element("enclosure");
         enclosure!.Attribute("length")!.Value.Should().Be("41472000");
@@ -279,7 +226,7 @@ public class RssBuilderTests
             AudioAssets: null, Categories: null, ImageAssets: null,
             EpisodeNumber: null, SeasonNumber: null, ExplicitContent: false, Order: null);
 
-        var item = RssBuilder.BuildEpisodeItem(episode, null, "https://example.com", preferMp4: false, itunes);
+        var item = RssBuilder.BuildEpisodeItem(episode, null, itunes);
 
         item.Element(itunes + "duration")!.Value.Should().Be("01:02:03");
     }
@@ -298,7 +245,7 @@ public class RssBuilderTests
             AudioAssets: null, Categories: null, ImageAssets: null,
             EpisodeNumber: null, SeasonNumber: null, ExplicitContent: false, Order: null);
 
-        var item = RssBuilder.BuildEpisodeItem(episode, null, "https://example.com", preferMp4: false, itunes);
+        var item = RssBuilder.BuildEpisodeItem(episode, null, itunes);
 
         item.Element("pubDate")!.Value.Should().Contain("2021").And.Contain("Nov");
     }
@@ -315,7 +262,7 @@ public class RssBuilderTests
             AudioAssets: null, Categories: null, ImageAssets: null,
             EpisodeNumber: null, SeasonNumber: null, ExplicitContent: false, Order: null);
 
-        var item = RssBuilder.BuildEpisodeItem(episode, null, "https://example.com", preferMp4: false, itunes);
+        var item = RssBuilder.BuildEpisodeItem(episode, null, itunes);
 
         item.Element("pubDate")!.Value.Should().Contain("2024").And.Contain("Jan");
     }

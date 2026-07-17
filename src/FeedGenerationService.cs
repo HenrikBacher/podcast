@@ -132,7 +132,7 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
                 // pointing at 404'd URLs. Verify the latest episode's current asset hash is in the
                 // file before skipping.
                 var latestEpisode = await apiClient.FetchLatestEpisodeAsync(podcast.Urn, ct);
-                if (latestEpisode is null || await FeedReferencesLatestAssetAsync(outputPath, latestEpisode, config.PreferMp4, ct))
+                if (latestEpisode is null || await FeedReferencesLatestAssetAsync(outputPath, latestEpisode, ct))
                 {
                     logger.LogDebug("Skipped (unchanged)");
                     return new ProcessResult(RssBuilder.BuildFeedMetadata(podcast, series), Changed: false);
@@ -142,7 +142,7 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
 
             var episodes = await apiClient.FetchAllEpisodesAsync(podcast.Urn, ct);
 
-            var (rss, metadata) = RssBuilder.BuildRssFeed(series, episodes, podcast, config.BaseUrl, config.PreferMp4);
+            var (rss, metadata) = RssBuilder.BuildRssFeed(series, episodes, podcast, config.BaseUrl);
 
             // Atomic write: write to temp file then rename to avoid serving partial files
             string tempPath = outputPath + ".tmp";
@@ -175,9 +175,9 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
         }
     }
 
-    internal static async Task<bool> FeedReferencesLatestAssetAsync(string feedPath, Episode latestEpisode, bool preferMp4, CancellationToken cancellationToken = default)
+    internal static async Task<bool> FeedReferencesLatestAssetAsync(string feedPath, Episode latestEpisode, CancellationToken cancellationToken = default)
     {
-        var asset = RssBuilder.SelectAudioAsset(latestEpisode, preferMp4);
+        var asset = RssBuilder.SelectAudioAsset(latestEpisode);
         if (asset?.Url is not { } url || string.IsNullOrEmpty(url))
             return true; // No audio to verify; nothing to regenerate against.
 
