@@ -8,7 +8,9 @@ updates:
 
   # Enable updates for NuGet
   - package-ecosystem: "nuget"
-    directory: "/src" # Location of the project files
+    directories: # Every directory holding a project file — Dependabot does not follow .sln references
+      - "/src"
+      - "/tests/DrPodcast.Tests"
     schedule:
       interval: "daily" # How often to check for updates
     groups:
