@@ -7,6 +7,13 @@ public sealed class FeedRefreshBackgroundService(
 {
     private const int MaxBackoffMinutes = 60;
 
+    // Backoff starts after this many consecutive failures, then doubles per extra failure.
+    private const int FailuresBeforeBackoff = 3;
+
+    // MaxBackoffMinutes caps the result long before this, so a larger shift buys nothing and
+    // only risks overflowing the multiplication.
+    private const int MaxBackoffShift = 6;
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var podcastsJsonPath = FindPodcastsJson();
@@ -26,9 +33,7 @@ public sealed class FeedRefreshBackgroundService(
             throw;
         }
 
-        var intervalMinutes = int.TryParse(Environment.GetEnvironmentVariable("REFRESH_INTERVAL_MINUTES"), out var mins) && mins > 0
-            ? mins
-            : 15;
+        var intervalMinutes = config.RefreshIntervalMinutes;
 
         logger.LogInformation("Feed refresh service started with {Count} podcasts. Interval: {Interval} minutes.", podcastList.Podcasts.Count, intervalMinutes);
 
@@ -40,10 +45,9 @@ public sealed class FeedRefreshBackgroundService(
         while (!stoppingToken.IsCancellationRequested)
         {
             TimeSpan delay;
-            if (consecutiveFailures >= 3)
+            if (consecutiveFailures >= FailuresBeforeBackoff)
             {
-                var shift = Math.Min(consecutiveFailures - 3, 20);
-                var backoffMinutes = Math.Min(intervalMinutes * (1 << shift), MaxBackoffMinutes);
+                var backoffMinutes = BackoffMinutes(intervalMinutes, consecutiveFailures);
                 logger.LogWarning("Backing off for {Backoff} minutes after {Failures} consecutive failures.", backoffMinutes, consecutiveFailures);
                 delay = TimeSpan.FromMinutes(backoffMinutes);
             }
@@ -93,6 +97,17 @@ public sealed class FeedRefreshBackgroundService(
             logger.LogError(ex, "Feed generation failed ({Failures} consecutive). Will retry at next interval.", consecutiveFailures);
             return consecutiveFailures;
         }
+    }
+
+    /// <summary>
+    /// Exponential backoff, capped at <see cref="MaxBackoffMinutes"/>. Computed in 64-bit: at the
+    /// old 20-bit shift a large configured interval overflowed to a negative delay, which threw
+    /// out of ExecuteAsync and — with the default StopHost behaviour — took the whole host down.
+    /// </summary>
+    internal static int BackoffMinutes(int intervalMinutes, int consecutiveFailures)
+    {
+        var shift = Math.Clamp(consecutiveFailures - FailuresBeforeBackoff, 0, MaxBackoffShift);
+        return (int)Math.Min((long)intervalMinutes << shift, MaxBackoffMinutes);
     }
 
     private static string FindPodcastsJson() =>

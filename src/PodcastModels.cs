@@ -17,15 +17,43 @@ public record GeneratorConfig(
     string OutputDir = "output",
     string SiteDir = "_site",
     string SiteSourceDir = "site",
-    string BaseUrl = "https://example.com"
+    string BaseUrl = "https://example.com",
+    int RefreshIntervalMinutes = GeneratorConfig.DefaultRefreshIntervalMinutes
 )
 {
+    public const int DefaultRefreshIntervalMinutes = 15;
+
+    // Bounded so the backoff arithmetic stays in range and a typo can't park the refresh
+    // loop for months.
+    private const int MaxRefreshIntervalMinutes = 24 * 60;
+
     public string FullSiteDir => Path.Combine(OutputDir, SiteDir);
     public string FeedsDir => Path.Combine(FullSiteDir, "feeds");
 
-    public static GeneratorConfig FromEnvironment() => new GeneratorConfig(
-        BaseUrl: Environment.GetEnvironmentVariable("BASE_URL") ?? "https://example.com"
+    /// <summary>
+    /// How stale the last successful run may be before readiness reports 503. Derived from the
+    /// refresh interval so the probe actually tracks the refresh loop, with a floor that tolerates
+    /// a few missed ticks on a short interval.
+    /// </summary>
+    public TimeSpan ReadinessStaleAfter =>
+        TimeSpan.FromMinutes(Math.Max(RefreshIntervalMinutes * 4, 60));
+
+    /// <summary>Every environment variable this app reads is resolved here.</summary>
+    public static GeneratorConfig FromEnvironment() => new(
+        BaseUrl: Environment.GetEnvironmentVariable("BASE_URL") ?? "https://example.com",
+        RefreshIntervalMinutes: ParseRefreshInterval(Environment.GetEnvironmentVariable("REFRESH_INTERVAL_MINUTES"))
     );
+
+    internal static int ParseRefreshInterval(string? raw) =>
+        int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var mins) && mins > 0
+            ? Math.Min(mins, MaxRefreshIntervalMinutes)
+            : DefaultRefreshIntervalMinutes;
+
+    /// <summary>Reads the DR API key. Kept off the record so the secret isn't held in DI state.</summary>
+    public static string RequireApiKey() =>
+        Environment.GetEnvironmentVariable("API_KEY") is { } key && !string.IsNullOrWhiteSpace(key)
+            ? key
+            : throw new InvalidOperationException("API_KEY environment variable is not set.");
 }
 
 public record PodcastList

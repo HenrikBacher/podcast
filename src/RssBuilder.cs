@@ -136,9 +136,12 @@ public static class RssBuilder
         if (episode.AudioAssets is not { } assets)
             return null;
 
-        // Match the format case-insensitively so an upstream "MP3" doesn't silently
-        // drop an episode's audio.
-        return assets.Where(a => a?.Format?.ToLowerInvariant() == "mp3").MaxBy(a => a?.Bitrate ?? 0);
+        // Match the format case-insensitively so an upstream "MP3" doesn't silently drop an
+        // episode's audio. OrdinalIgnoreCase rather than ToLowerInvariant: this runs for every
+        // asset of every episode of every podcast, and the lowercased copies are pure garbage.
+        return assets
+            .Where(a => string.Equals(a?.Format, "mp3", StringComparison.OrdinalIgnoreCase))
+            .MaxBy(a => a?.Bitrate ?? 0);
     }
 
     public static XElement BuildEpisodeItem(Episode episode, string? channelImage, XNamespace itunes)

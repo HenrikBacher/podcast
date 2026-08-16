@@ -42,6 +42,8 @@ The test suite includes:
 - **PodcastHelpersTests.cs**: Helper functions (image URL extraction)
 - **RssBuilderTests.cs**: RSS/iTunes XML construction, audio asset selection, date formatting
 - **FeedGenerationServiceTests.cs**: Change detection, asset-hash verification, success threshold
+- **WebsiteGeneratorTests.cs**: Template rendering, static-asset copying, feed sorting, HTML escaping
+- **FeedRefreshBackgroundServiceTests.cs**: Backoff schedule and overflow bounds; `GeneratorConfig` env parsing
 
 **CI/CD Integration**: Tests run automatically in the build pipeline on all pull requests and pushes to main.
 
@@ -79,9 +81,12 @@ The test suite includes:
 - **Resilient HTTP**: HttpClient configured via `Microsoft.Extensions.Http.Resilience` standard resilience handler (retries, timeouts, circuit breaker)
 - **RSS Standards Compliance**: Generates feeds with iTunes and Atom namespaces
 - **Pagination Handling**: Fetches all episodes across multiple API pages (256 per page, capped at 100 pages per series)
-- **Atomic Writes**: Feeds and `index.html` are written to a `.tmp` file then renamed to avoid serving partial content
+- **Atomic Writes**: Feeds and `index.html` are written to a `.tmp` file then renamed to avoid serving partial content. `site/index.html` is the *template* and is deliberately excluded from the static-asset copy, so the raw `{{...}}` placeholders are never published
+- **Never Degrade a Good Feed**: A null series body or an empty episode list is treated as a failed refresh rather than written out — an upstream hiccup must not overwrite a populated feed with an empty one
+- **Response Compression**: Brotli/gzip for XML and HTML. Caddy does not compress unless `encode` is configured, so the app does it
 - **Change Detection**: Skips regenerating feeds whose `<lastBuildDate>` already matches the API's `LatestEpisodeStartTime`, using `XmlReader` to read only the first few elements; additionally verifies the latest episode's audio asset hash is still referenced (DR rotates hashes without bumping the timestamp)
 - **Resilient Website Listing**: `index.html` is built from the full configured podcast set using last-known metadata, so a transient fetch failure for one podcast doesn't drop its still-served feed from the listing
+- **Readiness Independent of the Listing**: Readiness is recorded before website regeneration and a listing failure is logged rather than thrown, so a cosmetic `index.html` problem can't 503 a service whose feeds are all current
 
 ### Data Flow
 1. Load podcast configuration from `podcasts.json` (parsed once at startup)
@@ -98,7 +103,11 @@ The test suite includes:
 |----------|----------|---------|-------------|
 | `API_KEY` | Yes | — | DR API key |
 | `BASE_URL` | No | `https://example.com` | Base URL for deployed feeds |
-| `REFRESH_INTERVAL_MINUTES` | No | `15` | How often the background service regenerates feeds |
+| `REFRESH_INTERVAL_MINUTES` | No | `15` | How often the background service regenerates feeds. Clamped to 1–1440; invalid values fall back to the default |
+
+All three are resolved in `GeneratorConfig` (`FromEnvironment` / `RequireApiKey`) — add new environment variables there rather than reading them at the point of use.
+
+Readiness (`/ready`) reports 503 once the last successful run is older than `max(4 × REFRESH_INTERVAL_MINUTES, 60 minutes)`, so the probe tracks the refresh loop instead of a fixed 24-hour window.
 
 ### Project Configuration
 - **Target Framework**: .NET 10.0

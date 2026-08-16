@@ -9,14 +9,7 @@ public static class PodcastHelpers
         // Priority: Podcast 1:1 (4) > Default 1:1 (3) > Podcast any (2) > Default any (1) > none (0)
         var bestAsset = imageAssets
             .Where(a => a != null)
-            .MaxBy(a => (a.Target?.ToLowerInvariant(), a.Ratio) switch
-            {
-                ("podcast", "1:1") => 4,
-                ("default", "1:1") => 3,
-                ("podcast", _)     => 2,
-                ("default", _)     => 1,
-                _                  => 0,
-            });
+            .MaxBy(Rank);
 
         if (string.IsNullOrEmpty(bestAsset?.Id)
             || bestAsset.Id.Contains("..")
@@ -24,5 +17,20 @@ public static class PodcastHelpers
             return null;
 
         return $"https://asset.dr.dk/drlyd/images/{bestAsset.Id}";
+    }
+
+    // Runs once per image asset per episode across every podcast, so compare in place rather
+    // than allocating a lowercased copy of Target for each one.
+    private static int Rank(ImageAsset asset)
+    {
+        var isSquare = string.Equals(asset.Ratio, "1:1", StringComparison.Ordinal);
+
+        if (string.Equals(asset.Target, "podcast", StringComparison.OrdinalIgnoreCase))
+            return isSquare ? 4 : 2;
+
+        if (string.Equals(asset.Target, "default", StringComparison.OrdinalIgnoreCase))
+            return isSquare ? 3 : 1;
+
+        return 0;
     }
 }

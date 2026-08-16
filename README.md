@@ -31,7 +31,7 @@ docker run -e API_KEY=<key> -e BASE_URL=<url> -p 8080:8080 ghcr.io/YOUR_ORG/drpo
 |----------|----------|---------|-------------|
 | `API_KEY` | Yes | — | DR API key |
 | `BASE_URL` | No | `https://example.com` | Base URL for feed URLs in RSS output |
-| `REFRESH_INTERVAL_MINUTES` | No | `15` | How often feeds are regenerated in the background |
+| `REFRESH_INTERVAL_MINUTES` | No | `15` | How often feeds are regenerated in the background (clamped to 1–1440) |
 
 ### Adding Podcasts
 Edit [podcasts.json](podcasts.json):

@@ -2,13 +2,16 @@ namespace DrPodcast;
 
 public sealed class DrApiClient(IHttpClientFactory httpClientFactory, ILogger<DrApiClient> logger)
 {
+    /// <summary>Name of the configured <see cref="HttpClient"/> registration in Program.cs.</summary>
+    public const string HttpClientName = "DrApi";
+
     private const string ApiUrl = "https://api.dr.dk/radio/v2/series/";
     private const int EpisodesPerPage = 256;
     private const int MaxPagesPerSeries = 100;
 
     public async Task<Series?> FetchSeriesAsync(string urn, CancellationToken cancellationToken)
     {
-        var client = httpClientFactory.CreateClient("DrApi");
+        var client = httpClientFactory.CreateClient(HttpClientName);
         using var response = await client.GetAsync($"{ApiUrl}{urn}", cancellationToken);
         response.EnsureSuccessStatusCode();
 
@@ -21,7 +24,7 @@ public sealed class DrApiClient(IHttpClientFactory httpClientFactory, ILogger<Dr
 
     public async Task<Episode?> FetchLatestEpisodeAsync(string urn, CancellationToken cancellationToken)
     {
-        var client = httpClientFactory.CreateClient("DrApi");
+        var client = httpClientFactory.CreateClient(HttpClientName);
         using var response = await client.GetAsync($"{ApiUrl}{urn}/episodes?limit=1", cancellationToken);
         response.EnsureSuccessStatusCode();
 
@@ -32,7 +35,7 @@ public sealed class DrApiClient(IHttpClientFactory httpClientFactory, ILogger<Dr
 
     public async Task<List<Episode>?> FetchAllEpisodesAsync(string urn, CancellationToken cancellationToken)
     {
-        var client = httpClientFactory.CreateClient("DrApi");
+        var client = httpClientFactory.CreateClient(HttpClientName);
         var initialUrl = $"{ApiUrl}{urn}/episodes?limit={EpisodesPerPage}";
         List<Episode> allEpisodes = new(EpisodesPerPage);
 

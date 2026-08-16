@@ -2,9 +2,17 @@ namespace DrPodcast;
 
 public static class WebsiteGenerator
 {
+    // `site/index.html` is the template, not a static asset. Copying it into the served
+    // directory would publish the raw `{{FEED_COUNT}}` placeholders and an empty feed list
+    // until GenerateIndexHtmlAsync overwrites it a moment later.
+    private const string IndexFileName = "index.html";
+
     public static async Task GenerateAsync(IEnumerable<FeedMetadata> feeds, GeneratorConfig config, ILogger? logger = null, CancellationToken cancellationToken = default)
     {
-        var sortedFeeds = feeds.OrderBy(f => f.Title).ToList();
+        // The app runs with InvariantGlobalization, so no Danish collation is available and the
+        // default comparer is effectively ordinal — which would interleave case ("Ø" before "a").
+        // OrdinalIgnoreCase at least keeps the listing alphabetical; æ/ø/å still sort after z.
+        var sortedFeeds = feeds.OrderBy(f => f.Title, StringComparer.OrdinalIgnoreCase).ToList();
 
         try
         {
@@ -37,6 +45,9 @@ public static class WebsiteGenerator
             cancellationToken.ThrowIfCancellationRequested();
 
             var relative = Path.GetRelativePath(sourceFull, file);
+            if (string.Equals(relative, IndexFileName, StringComparison.OrdinalIgnoreCase))
+                continue;
+
             var destination = Path.Combine(config.FullSiteDir, relative);
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
 
@@ -60,7 +71,7 @@ public static class WebsiteGenerator
 
     private static async Task GenerateIndexHtmlAsync(List<FeedMetadata> feeds, GeneratorConfig config, ILogger? logger, CancellationToken cancellationToken)
     {
-        var templatePath = Path.Combine(config.SiteSourceDir, "index.html");
+        var templatePath = Path.Combine(config.SiteSourceDir, IndexFileName);
         if (!File.Exists(templatePath))
         {
             logger?.LogWarning("Template file '{Path}' not found. Skipping index.html generation.", templatePath);
@@ -76,8 +87,12 @@ public static class WebsiteGenerator
             .Replace("<!-- BEGIN_FEEDS -->", feedsHtml)
             .Replace("<!-- END_FEEDS -->", "");
 
+        // Own the output directory rather than relying on a static asset having been copied
+        // there first — with no assets besides the template there'd be nothing to create it.
+        Directory.CreateDirectory(config.FullSiteDir);
+
         // Atomic write: temp file then rename so a crash mid-write can't leave a corrupt index served.
-        var outputPath = Path.Combine(config.FullSiteDir, "index.html");
+        var outputPath = Path.Combine(config.FullSiteDir, IndexFileName);
         var tempPath = outputPath + ".tmp";
         await File.WriteAllTextAsync(tempPath, html, cancellationToken);
         File.Move(tempPath, outputPath, overwrite: true);

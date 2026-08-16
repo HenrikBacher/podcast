@@ -81,17 +81,35 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
             logger.LogWarning("{Failed} feeds failed to refresh: {Slugs}", configuredCount - successCount, string.Join(", ", failedSlugs));
         }
 
-        if (changedCount > 0 || forceRegenerate)
-        {
-            await WebsiteGenerator.GenerateAsync(feedMetadata, config, logger, cancellationToken);
-        }
-
+        // Record readiness before regenerating the website: the feeds are already written and
+        // correct on disk at this point, and index.html is a cosmetic listing on top of them.
+        // Letting a website failure suppress readiness would 503 the whole service over a page.
         var minRequired = (int)Math.Ceiling(configuredCount * MinSuccessFraction);
-        if (successCount >= minRequired)
+        var metThreshold = successCount >= minRequired;
+        if (metThreshold)
         {
             Interlocked.Exchange(ref _lastSuccessfulRunUtcTicks, DateTime.UtcNow.Ticks);
         }
-        else
+
+        if (changedCount > 0 || forceRegenerate)
+        {
+            try
+            {
+                await WebsiteGenerator.GenerateAsync(feedMetadata, config, logger, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception)
+            {
+                // Already logged by WebsiteGenerator. The feeds themselves are current, so the
+                // run is not a failure — the next change will retry the listing.
+                logger.LogWarning("Feeds are up to date but the website listing could not be regenerated.");
+            }
+        }
+
+        if (!metThreshold)
         {
             logger.LogError("Run did not meet success threshold: {Success}/{Total} (required {Required}). Readiness will not advance.",
                 successCount, configuredCount, minRequired);
@@ -122,6 +140,15 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
         {
             var series = await apiClient.FetchSeriesAsync(podcast.Urn, ct);
 
+            // A 200 with a null body deserializes to null. Building a feed from it would emit an
+            // empty <title>/<description>/image and overwrite a perfectly good file while reporting
+            // success — treat it as a failed refresh and leave what's on disk alone.
+            if (series is null)
+            {
+                logger.LogWarning("DR API returned no series body for {Urn}. Leaving the existing feed untouched.", podcast.Urn);
+                return null;
+            }
+
             // Skip regeneration if the feed is already up-to-date, so Last-Modified stays stable.
             // On startup (forceRegenerate=true) this check is bypassed so code changes are applied.
             string outputPath = Path.Combine(config.FeedsDir, $"{podcast.Slug}.xml");
@@ -142,18 +169,36 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
 
             var episodes = await apiClient.FetchAllEpisodesAsync(podcast.Urn, ct);
 
+            // Never replace a populated feed with an empty one. An upstream hiccup that answers
+            // with zero items would otherwise wipe the whole back catalogue and report success.
+            // (A genuinely empty series with no file yet still gets its first, empty feed.)
+            if (episodes is not { Count: > 0 } && File.Exists(outputPath))
+            {
+                logger.LogWarning("DR API returned no episodes for {Urn}. Keeping the existing feed.", podcast.Urn);
+                return null;
+            }
+
             var (rss, metadata) = RssBuilder.BuildRssFeed(series, episodes, podcast, config.BaseUrl);
 
             // Atomic write: write to temp file then rename to avoid serving partial files
             string tempPath = outputPath + ".tmp";
-            await using (var fileStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true))
+            try
             {
-                var xmlDoc = new XDocument(new XDeclaration("1.0", "utf-8", "yes"), rss);
-                var xmlSettings = new XmlWriterSettings { Async = true, Encoding = new UTF8Encoding(false) };
-                await using var xmlWriter = XmlWriter.Create(fileStream, xmlSettings);
-                await xmlDoc.SaveAsync(xmlWriter, ct);
+                await using (var fileStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true))
+                {
+                    var xmlDoc = new XDocument(new XDeclaration("1.0", "utf-8", "yes"), rss);
+                    var xmlSettings = new XmlWriterSettings { Async = true, Encoding = new UTF8Encoding(false) };
+                    await using var xmlWriter = XmlWriter.Create(fileStream, xmlSettings);
+                    await xmlDoc.SaveAsync(xmlWriter, ct);
+                }
+                File.Move(tempPath, outputPath, overwrite: true);
             }
-            File.Move(tempPath, outputPath, overwrite: true);
+            catch
+            {
+                // Don't leave a half-written .tmp behind for a failed or cancelled write.
+                try { File.Delete(tempPath); } catch { /* best effort */ }
+                throw;
+            }
 
             logger.LogDebug("Generated");
 

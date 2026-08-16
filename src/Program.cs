@@ -14,15 +14,29 @@ builder.Logging.AddSimpleConsole(options =>
 });
 
 var config = GeneratorConfig.FromEnvironment();
-var apiKey = Environment.GetEnvironmentVariable("API_KEY");
-if (string.IsNullOrWhiteSpace(apiKey))
-    throw new InvalidOperationException("API_KEY environment variable is not set.");
+var apiKey = GeneratorConfig.RequireApiKey();
 
-AddRetryHandler(builder.Services.AddHttpClient("DrApi", client =>
+// Named (not typed) client on purpose: DrApiClient is resolved into the singleton
+// FeedGenerationService, and a typed client captured in a singleton never rotates its
+// handler. Resolving per call through the factory keeps handler lifetimes working.
+AddRetryHandler(builder.Services.AddHttpClient(DrApiClient.HttpClientName, client =>
 {
     client.DefaultRequestHeaders.Add("X-Apikey", apiKey);
     client.Timeout = TimeSpan.FromSeconds(30);
 }));
+
+// Feeds are XML and compress by roughly 80% — worth it for a server that exists to be polled.
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+    // Explicit list rather than the defaults: this covers exactly what
+    // MinimalContentTypeProvider serves. Parameters like "; charset=utf-8" are ignored
+    // during matching, so the bare media types are what belong here.
+    options.MimeTypes = [
+        "application/xml", "text/xml", "text/html", "text/css",
+        "application/javascript", "application/json", "image/svg+xml", "text/plain",
+    ];
+});
 
 builder.Services.AddSingleton(config);
 builder.Services.AddSingleton<DrApiClient>();
@@ -42,7 +56,7 @@ app.MapGet("/ready", (FeedGenerationService feedService) =>
         return Results.Text("not ready: no successful generation yet", statusCode: 503);
 
     var age = DateTime.UtcNow - lastRun;
-    if (age > TimeSpan.FromHours(24))
+    if (age > config.ReadinessStaleAfter)
         return Results.Text($"not ready: last successful run was {age.TotalMinutes:F0}min ago", statusCode: 503);
 
     return Results.Text("ready");
@@ -56,6 +70,7 @@ var contentTypeProvider = new MinimalContentTypeProvider();
 
 var fileProvider = new PhysicalFileProvider(Path.GetFullPath(config.FullSiteDir));
 
+app.UseResponseCompression();
 app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = fileProvider });
 app.UseStaticFiles(new StaticFileOptions
 {
