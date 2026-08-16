@@ -20,10 +20,17 @@ var apiKey = GeneratorConfig.RequireApiKey();
 // FeedGenerationService, and a typed client captured in a singleton never rotates its
 // handler. Resolving per call through the factory keeps handler lifetimes working.
 AddRetryHandler(builder.Services.AddHttpClient(DrApiClient.HttpClientName, client =>
-{
-    client.DefaultRequestHeaders.Add("X-Apikey", apiKey);
-    client.Timeout = TimeSpan.FromSeconds(30);
-}));
+    {
+        client.DefaultRequestHeaders.Add("X-Apikey", apiKey);
+        client.Timeout = TimeSpan.FromSeconds(30);
+    })
+    // HttpClient does not negotiate compression by default. Episode pages are large JSON
+    // (256 items each) and gzip to a fraction of their size, so this cuts both transfer
+    // time and the bytes the JSON reader has to walk.
+    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+    {
+        AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate | DecompressionMethods.Brotli,
+    }));
 
 // Feeds are XML and compress by roughly 80% — worth it for a server that exists to be polled.
 builder.Services.AddResponseCompression(options =>

@@ -43,6 +43,7 @@ The test suite includes:
 - **RssBuilderTests.cs**: RSS/iTunes XML construction, audio asset selection, date formatting
 - **FeedGenerationServiceTests.cs**: Change detection, asset-hash verification, success threshold
 - **WebsiteGeneratorTests.cs**: Template rendering, static-asset copying, feed sorting, HTML escaping
+- **FileContainsAsciiTests.cs**: Chunked ASCII search, including needles straddling chunk boundaries
 - **FeedRefreshBackgroundServiceTests.cs**: Backoff schedule and overflow bounds; `GeneratorConfig` env parsing
 
 **CI/CD Integration**: Tests run automatically in the build pipeline on all pull requests and pushes to main.
@@ -84,6 +85,8 @@ The test suite includes:
 - **Atomic Writes**: Feeds and `index.html` are written to a `.tmp` file then renamed to avoid serving partial content. `site/index.html` is the *template* and is deliberately excluded from the static-asset copy, so the raw `{{...}}` placeholders are never published
 - **Never Degrade a Good Feed**: A null series body or an empty episode list is treated as a failed refresh rather than written out — an upstream hiccup must not overwrite a populated feed with an empty one
 - **Response Compression**: Brotli/gzip for XML and HTML. Caddy does not compress unless `encode` is configured, so the app does it
+- **Constant-Memory Asset Check**: `FileContainsAsciiAsync` streams the feed in 64 KB pooled chunks (with carry-over across boundaries) instead of decoding it into a string. This runs for every unchanged podcast on every tick; the string version allocated ~4x the feed size per call, all of it on the Large Object Heap
+- **Compressed Upstream Fetches**: the DR API client sets `AutomaticDecompression`, which `HttpClient` does not enable by default — episode pages are large JSON and gzip well
 - **Change Detection**: Skips regenerating feeds whose `<lastBuildDate>` already matches the API's `LatestEpisodeStartTime`, using `XmlReader` to read only the first few elements; additionally verifies the latest episode's audio asset hash is still referenced (DR rotates hashes without bumping the timestamp)
 - **Resilient Website Listing**: `index.html` is built from the full configured podcast set using last-known metadata, so a transient fetch failure for one podcast doesn't drop its still-served feed from the listing
 - **Readiness Independent of the Listing**: Readiness is recorded before website regeneration and a listing failure is logged rather than thrown, so a cosmetic `index.html` problem can't 503 a service whose feeds are all current

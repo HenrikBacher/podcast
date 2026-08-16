@@ -236,14 +236,61 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
         var assetHash = match.Groups["asset"].Value;
         try
         {
-            // Asset hashes are 64-char hex; substring search across the file is sufficient
-            // and avoids parsing the whole feed. Files are <1 MB.
-            var content = await File.ReadAllTextAsync(feedPath, cancellationToken);
-            return content.Contains(assetHash, StringComparison.Ordinal);
+            return await FileContainsAsciiAsync(feedPath, assetHash, cancellationToken);
         }
         catch (Exception)
         {
             return false; // Can't read — let the caller regenerate.
+        }
+    }
+
+    // Kept under the 85 KB Large Object Heap threshold so the steady-state check never
+    // touches the LOH.
+    private const int SearchBufferSize = 64 * 1024;
+
+    /// <summary>
+    /// Streams <paramref name="feedPath"/> looking for an ASCII needle, without decoding the file.
+    /// This runs for every unchanged podcast on every refresh tick, and the previous
+    /// <c>File.ReadAllTextAsync</c> allocated roughly four times the feed size each time (raw bytes
+    /// plus the UTF-16 decode) — all of it on the LOH for feeds over ~21 KB.
+    /// </summary>
+    internal static async Task<bool> FileContainsAsciiAsync(string feedPath, string ascii, CancellationToken cancellationToken)
+    {
+        if (ascii.Length == 0) return true;
+
+        var needle = ArrayPool<byte>.Shared.Rent(ascii.Length);
+        var buffer = ArrayPool<byte>.Shared.Rent(SearchBufferSize);
+        try
+        {
+            if (buffer.Length <= ascii.Length)
+                return false; // Needle can't be matched against a buffer this small.
+
+            Encoding.ASCII.GetBytes(ascii, needle.AsSpan(0, ascii.Length));
+            var needleSpan = needle.AsMemory(0, ascii.Length);
+
+            await using var stream = new FileStream(feedPath, FileMode.Open, FileAccess.Read,
+                FileShare.Read, SearchBufferSize, useAsync: true);
+
+            // Bytes retained from the previous chunk so a needle straddling a chunk boundary
+            // is still found.
+            var carry = 0;
+            while (true)
+            {
+                var read = await stream.ReadAsync(buffer.AsMemory(carry, buffer.Length - carry), cancellationToken);
+                if (read == 0) return false;
+
+                var available = carry + read;
+                if (buffer.AsSpan(0, available).IndexOf(needleSpan.Span) >= 0)
+                    return true;
+
+                carry = Math.Min(ascii.Length - 1, available);
+                buffer.AsSpan(available - carry, carry).CopyTo(buffer.AsSpan(0, carry));
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+            ArrayPool<byte>.Shared.Return(needle);
         }
     }
 
