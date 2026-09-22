@@ -28,7 +28,7 @@ permissions:
   contents: read
 
 env:
-  DOTNET_VERSION: "11.0.x"
+  DOTNET_VERSION: "10.0.x"
   IMAGE_NAME: ghcr.io/${{ github.repository }}
 
 jobs:
@@ -138,9 +138,6 @@ jobs:
         uses: actions/setup-dotnet@v6
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
-          # .NET 11 is pre-GA (RC). "preview" still resolves to GA builds once 11.0 ships;
-          # drop this line then.
-          dotnet-quality: preview
 
       - name: Run Tests
         run: dotnet test tests/DrPodcast.Tests/DrPodcast.Tests.csproj --configuration Release --verbosity normal --collect:"XPlat Code Coverage"

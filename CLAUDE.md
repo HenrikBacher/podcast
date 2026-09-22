@@ -114,7 +114,7 @@ All three are resolved in `GeneratorConfig` (`FromEnvironment` / `RequireApiKey`
 Readiness (`/ready`) reports 503 once the last successful run is older than `max(4 × REFRESH_INTERVAL_MINUTES, 60 minutes)`, so the probe tracks the refresh loop instead of a fixed 24-hour window.
 
 ### Project Configuration
-- **Target Framework**: .NET 11.0
+- **Target Framework**: .NET 10.0
 - **Compilation**: NativeAOT with aggressive trimming and optimization
 - **Warning Policy**: Treats warnings as errors (except CS8618 for nullable reference types)
 - **Globalization**: Invariant mode for smaller binary size
