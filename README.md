@@ -5,7 +5,7 @@ Automated podcast RSS feed generator for DR (Danmarks Radio). Generates iTunes-c
 ## Quick Start
 
 ### Prerequisites
-- [.NET 10.0 SDK](https://dotnet.microsoft.com/download)
+- [.NET 11.0 SDK](https://dotnet.microsoft.com/download)
 - DR API key
 
 ### Run from Source
@@ -67,7 +67,7 @@ site/                          # Static website assets for feed browsing
 
 ## Technical Details
 
-- .NET 10.0 with NativeAOT compilation (trim-safe, invariant globalization)
+- .NET 11.0 with NativeAOT compilation (trim-safe, invariant globalization)
 - Polly retry policies for resilient HTTP against the DR API
 - RSS 2.0 with iTunes and Atom namespaces
 - Source-generated JSON serialization
