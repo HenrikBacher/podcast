@@ -5,7 +5,8 @@ public sealed class DrApiClient(IHttpClientFactory httpClientFactory, ILogger<Dr
     /// <summary>Name of the configured <see cref="HttpClient"/> registration in Program.cs.</summary>
     public const string HttpClientName = "DrApi";
 
-    private const string ApiUrl = "https://api.dr.dk/radio/v2/series/";
+    private const string ApiHost = "api.dr.dk";
+    private const string ApiUrl = $"https://{ApiHost}/radio/v2/series/";
     private const int EpisodesPerPage = 256;
     private const int MaxPagesPerSeries = 100;
 
@@ -58,9 +59,25 @@ public sealed class DrApiClient(IHttpClientFactory httpClientFactory, ILogger<Dr
             if (page?.Items is { } episodes)
                 allEpisodes.AddRange(episodes);
 
-            nextUrl = page?.Next;
+            nextUrl = ResolveNextUrl(page?.Next);
+            if (nextUrl is null && !string.IsNullOrEmpty(page?.Next))
+                logger.LogWarning("Ignoring untrusted pagination link {Next} while fetching {Url}. Truncating.", page.Next, initialUrl);
         }
 
         return allEpisodes;
     }
+
+    /// <summary>
+    /// Returns the pagination link only if it points back at the DR API over HTTPS. The client
+    /// sends the API key on every request, so following an arbitrary <c>next</c> from the response
+    /// body would hand the key (and a request) to whatever host the upstream named.
+    /// </summary>
+    internal static string? ResolveNextUrl(string? next) =>
+        Uri.TryCreate(next, UriKind.Absolute, out var uri)
+        && uri.Scheme == Uri.UriSchemeHttps
+        && string.Equals(uri.Host, ApiHost, StringComparison.OrdinalIgnoreCase)
+        && uri.IsDefaultPort
+        && string.IsNullOrEmpty(uri.UserInfo)
+            ? uri.AbsoluteUri
+            : null;
 }

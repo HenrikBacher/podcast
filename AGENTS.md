@@ -44,6 +44,7 @@ The test suite includes:
 - **FeedGenerationServiceTests.cs**: Change detection, asset-hash verification, success threshold
 - **WebsiteGeneratorTests.cs**: Template rendering, static-asset copying, feed sorting, HTML escaping
 - **FileContainsAsciiTests.cs**: Chunked ASCII search, including needles straddling chunk boundaries
+- **DrApiClientTests.cs**: Pagination `next` links are only followed to the DR API host over HTTPS
 - **FeedRefreshBackgroundServiceTests.cs**: Backoff schedule and overflow bounds; `GeneratorConfig` env parsing
 
 **CI/CD Integration**: Tests run automatically in the build pipeline on all pull requests and pushes to main.

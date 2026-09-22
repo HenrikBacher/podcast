@@ -299,3 +299,8 @@ test-publish/
 
 # Windows reserved device name artifact
 nul
+
+# Local environment files (docker compose reads API_KEY from .env)
+.env
+.env.*
+!.env.example

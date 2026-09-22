@@ -23,6 +23,11 @@ AddRetryHandler(builder.Services.AddHttpClient(DrApiClient.HttpClientName, clien
     {
         client.DefaultRequestHeaders.Add("X-Apikey", apiKey);
         client.Timeout = TimeSpan.FromSeconds(30);
+        // GetAsync buffers the whole body (after decompression) before returning, so this caps
+        // what a single response can cost in memory — a decompression bomb or runaway upstream
+        // fails that podcast's refresh instead of exhausting the container. A full 256-episode
+        // page is a few MB; the default limit is 2 GB.
+        client.MaxResponseContentBufferSize = 32 * 1024 * 1024;
     })
     // HttpClient does not negotiate compression by default. Episode pages are large JSON
     // (256 items each) and gzip to a fraction of their size, so this cuts both transfer
