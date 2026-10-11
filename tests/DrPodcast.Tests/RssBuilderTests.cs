@@ -167,6 +167,23 @@ public class RssBuilderTests
     }
 
     [Fact]
+    public void BuildRssFeed_ReferencesArtworkAt2048Pixels()
+    {
+        // DR's originals are 3000×3000 and up to ~1.2 MB; 2048 is inside Apple's 1400–3000 px range.
+        XNamespace itunes = "http://www.itunes.com/dtds/podcast-1.0.dtd";
+        var series = CreateSeries() with { ImageAssets = [new ImageAsset("urn:dr:radio:image:abc", "Podcast", "1:1")] };
+
+        var episode = CreateEpisode("Ep", imageAssets: [new ImageAsset("urn:dr:radio:image:ep", "Podcast", "1:1")]);
+
+        var rss = RssBuilder.BuildRssFeed(series, [episode], new Podcast("test", "urn:test", null), "https://example.com");
+
+        rss.Element("channel")!.Element(itunes + "image")!.Attribute("href")!.Value
+            .Should().Be("https://asset.dr.dk/drlyd/images/urn:dr:radio:image:abc?imwidth=2048");
+        rss.Descendants("item").Single().Element(itunes + "image")!.Attribute("href")!.Value
+            .Should().Be("https://asset.dr.dk/drlyd/images/urn:dr:radio:image:ep?imwidth=2048");
+    }
+
+    [Fact]
     public void BuildRssFeed_DoesNotPutItunesSeasonOnTheChannel()
     {
         // itunes:season is an episode-level tag.
@@ -237,16 +254,33 @@ public class RssBuilderTests
     }
 
     [Fact]
-    public void BuildEpisodeItem_UsesChannelImageAsFallback()
+    public void BuildEpisodeItem_LeavesArtworkToTheChannelWhenItHasNoneOfItsOwn()
+    {
+        // Apps fall back to the channel's artwork; repeating it on every item only made the feed longer.
+        XNamespace itunes = "http://www.itunes.com/dtds/podcast-1.0.dtd";
+
+        RssBuilder.BuildEpisodeItem(CreateEpisode("Test", imageAssets: null), "https://channel-image.jpg", itunes)
+            .Element(itunes + "image").Should().BeNull();
+        RssBuilder.BuildEpisodeItem(CreateEpisode("Test", imageAssets: [new ImageAsset("urn:dr:radio:image:abc", "Podcast", "1:1")]),
+                "https://asset.dr.dk/drlyd/images/urn:dr:radio:image:abc", itunes)
+            .Element(itunes + "image").Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(false, false, null)]
+    [InlineData(true, true, null)]
+    [InlineData(true, false, "yes")]
+    [InlineData(false, true, "no")]
+    public void BuildEpisodeItem_StatesExplicitOnlyWhereItDiffersFromTheChannel(bool episodeExplicit, bool channelExplicit, string? expected)
     {
         XNamespace itunes = "http://www.itunes.com/dtds/podcast-1.0.dtd";
-        var episode = CreateEpisode("Test", imageAssets: null);
+        var episode = CreateEpisode("Test") with { ExplicitContent = episodeExplicit };
 
-        var item = RssBuilder.BuildEpisodeItem(episode, "https://channel-image.jpg", itunes);
+        var item = RssBuilder.BuildEpisodeItem(episode, null, itunes, channelExplicit);
 
-        var image = item.Element(itunes + "image");
-        image.Should().NotBeNull();
-        image!.Attribute("href")!.Value.Should().Be("https://channel-image.jpg");
+        item.Element(itunes + "explicit")?.Value.Should().Be(expected);
+        if (expected is null) item.Element(itunes + "explicit").Should().BeNull();
+        item.Element(itunes + "author").Should().BeNull();
     }
 
     [Fact]
@@ -314,16 +348,27 @@ public class RssBuilderTests
     }
 
     [Fact]
-    public void BuildEpisodeItem_Categories_UsePlainRssCategory()
+    public void BuildEpisodeItem_HasNoCategories()
     {
-        // itunes:category is only valid on the channel.
+        // Apps go by the channel's categories; repeating them on every item only made the feed longer.
         XNamespace itunes = "http://www.itunes.com/dtds/podcast-1.0.dtd";
-        var episode = CreateEpisode("Test", categories: ["Historie", ""]);
+        var episode = CreateEpisode("Test", categories: ["Historie"]);
 
         var item = RssBuilder.BuildEpisodeItem(episode, null, itunes);
 
-        item.Elements("category").Select(c => c.Value).Should().Equal("Historie");
+        item.Elements("category").Should().BeEmpty();
         item.Elements(itunes + "category").Should().BeEmpty();
+    }
+
+    [Fact]
+    public void BuildRssFeed_PutsDrsCategoriesOnTheChannel()
+    {
+        XNamespace itunes = "http://www.itunes.com/dtds/podcast-1.0.dtd";
+        var series = CreateSeries() with { Categories = ["Krimi", "", "Dokumentar"] };
+
+        var channel = RssBuilder.BuildRssFeed(series, [], new Podcast("test", "urn:test", null), "https://example.com").Element("channel")!;
+
+        channel.Elements(itunes + "category").Select(c => c.Attribute("text")!.Value).Should().Equal("Krimi", "Dokumentar");
     }
 
     [Fact]

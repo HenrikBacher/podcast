@@ -11,28 +11,16 @@
     <meta property="og:type" content="website">
     <title>DR Podcasts</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='5' cy='19' r='2.4' fill='%23e06a1b'/%3E%3Cpath d='M3 10.5a10.5 10.5 0 0 1 10.5 10.5M3 3.5A17.5 17.5 0 0 1 20.5 21' fill='none' stroke='%23e06a1b' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E">
-    <link rel="preload" href="fonts/bricolage-grotesque.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="fonts/bricolage-grotesque-500.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="fonts/instrument-sans-400-600.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preconnect" href="https://asset.dr.dk">
     <link rel="stylesheet" href="styles.css?v={{ASSET_VERSION}}">
     <script src="script.js?v={{ASSET_VERSION}}" defer></script>
 </head>
 <body>
     <div class="wrap">
-        <header class="mast">
-            <div class="brand">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="19" r="2.4" fill="currentColor"/><path d="M3 10.5a10.5 10.5 0 0 1 10.5 10.5M3 3.5A17.5 17.5 0 0 1 20.5 21" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>
-                <h1>DR Podcasts</h1>
-            </div>
-            <p class="lede">DR’s podcasts som almindelige RSS-feeds, så du kan lytte i den podcast-app, du allerede bruger.</p>
-            <p class="fine">Uofficiel og ikke tilknyttet DR. Lyd, billeder og tekster hentes direkte fra DR.</p>
-            <p class="stamp" id="stamp">{{FEED_COUNT}} podcasts</p>
-        </header>
-
-        <ol class="steps" aria-label="Sådan abonnerer du">
-            <li><div><b>Find en podcast</b><span>Søg, eller filtrer på emne.</span></div></li>
-            <li><div><b>Kopiér feed-linket</b><span>Eller vælg din app under “Åbn i app”.</span></div></li>
-            <li><div><b>Indsæt i din app</b><span>Typisk under “Tilføj podcast” → “Via URL”.</span></div></li>
-        </ol>
-
+        <!-- The search bar is the first thing on the page; the heading is for screen readers and search engines. -->
+        <h1 class="visually-hidden">DR Podcasts</h1>
         <div class="toolbar" id="toolbar" hidden>
             <div class="toolbar-row">
                 <input class="search" id="search" type="search" placeholder="Søg i titler og beskrivelser" aria-label="Søg i podcasts" autocomplete="off" spellcheck="false">
@@ -45,13 +33,14 @@
         </div>
 
         <p class="count" id="count" aria-live="polite"></p>
-        <ul class="shelf" id="shelf">
+        <ul class="shelf" id="shelf" data-descriptions="descriptions.json?v={{DESCRIPTIONS_VERSION}}">
             <!-- BEGIN_FEEDS -->
             <!-- END_FEEDS -->
         </ul>
         <p class="empty" id="empty" hidden></p>
 
         <footer>
+            <p>Uofficiel og ikke tilknyttet DR. Lyd, billeder og tekster hentes direkte fra DR.</p>
             <p>Sidst opdateret <time class="deploy-time" datetime="{{DEPLOYMENT_TIME}}">{{DEPLOYMENT_TIME}}</time>.</p>
             <p>Feedene opdateres løbende fra DR. Afsnittene afspilles direkte fra DR’s servere.</p>
         </footer>

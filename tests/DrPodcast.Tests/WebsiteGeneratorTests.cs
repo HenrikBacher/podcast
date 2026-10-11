@@ -159,10 +159,8 @@ public class WebsiteGeneratorTests : IDisposable
         await WebsiteGenerator.GenerateAsync([new FeedMetadata("slug-a", "Podcast A", null)], config);
 
         var html = await File.ReadAllTextAsync(IndexPath(config));
-        html.Should().Contain("data-url=\"https://example.com/feeds/slug-a.xml\"")
-            .And.Contain("href=\"https://example.com/feeds/slug-a.xml\"")
-            .And.Contain("href=\"https://antennapod.org/deeplink/subscribe?url=https%3A%2F%2Fexample.com%2Ffeeds%2Fslug-a.xml&amp;title=Podcast%20A\"")
-            .And.Contain("href=\"pktc://subscribe/example.com/feeds/slug-a.xml\"");
+        // script.js builds the copy button and app links of the expanded card from this link.
+        html.Should().Contain("<a class=\"url\" href=\"https://example.com/feeds/slug-a.xml\">https://example.com/feeds/slug-a.xml</a>");
     }
 
     [Fact]
@@ -231,22 +229,91 @@ public class WebsiteGeneratorTests : IDisposable
     }
 
     [Fact]
-    public void AppLinks_BaseUrlWithoutScheme_KeepsTheWholeHost()
+    public async Task Generate_LoadsTheFirstCoversStraightAway()
     {
-        WebsiteGenerator.AppLinks("podcasts.example.dk/feeds/x.xml", "X")
-            .Should().Contain(("Pocket Casts", "pktc://subscribe/podcasts.example.dk/feeds/x.xml"));
+        // The first rows are on screen at once; the rest load as they're scrolled to.
+        var config = CreateConfig();
+        WriteSiteSource(config);
+
+        await WebsiteGenerator.GenerateAsync(Enumerable.Range(0, 8).Select(i => new FeedMetadata($"p{i}", $"P{i}", $"https://asset.dr.dk/i{i}.jpg")), config);
+
+        var covers = System.Text.RegularExpressions.Regex.Matches(await File.ReadAllTextAsync(IndexPath(config)), "<img [^>]*>").Select(m => m.Value).ToList();
+        covers.Should().HaveCount(8);
+        covers[0].Should().Contain("fetchpriority=\"high\"").And.NotContain("loading=");
+        covers[1..6].Should().AllSatisfy(c => c.Should().NotContain("loading=").And.NotContain("fetchpriority"));
+        covers[6..].Should().AllSatisfy(c => c.Should().Contain("loading=\"lazy\""));
     }
 
     [Fact]
-    public async Task Generate_EmbedsTheFullDescriptionHiddenForTheDialog()
+    public async Task Generate_PutsDescriptionsInTheirOwnFileBySlug()
     {
+        // Only the expanded card shows them; embedded in every card they were half the compressed page.
         var config = CreateConfig();
         WriteSiteSource(config);
 
         await WebsiteGenerator.GenerateAsync(
-            [new FeedMetadata("a", "A", null, Description: "Første afsnit.\nVært: <Lasse> & co.")], config);
+        [
+            new FeedMetadata("b", "B", null, Description: "Første afsnit.\nVært: <Lasse> & co."),
+            new FeedMetadata("a", "A", null, Description: "Om A"),
+            new FeedMetadata("c", "C", null),
+        ], config);
+
+        (await File.ReadAllTextAsync(Path.Combine(config.FullSiteDir, "descriptions.json")))
+            .Should().Be("""{"a":"Om A","b":"Første afsnit.\nVært: <Lasse> & co."}""");
+        var html = await File.ReadAllTextAsync(IndexPath(config));
+        html.Should().Contain("data-slug=\"b\"").And.NotContain("Første afsnit");
+    }
+
+    [Fact]
+    public async Task Generate_LinksDescriptionsByContentHash()
+    {
+        // Cached for an hour, so a new page must not reuse the URL of descriptions that lack its podcasts.
+        var config = CreateConfig();
+        WriteSiteSource(config);
+        File.WriteAllText(Path.Combine(config.SiteSourceDir, "index.html"), "<ul data-descriptions=\"descriptions.json?v={{DESCRIPTIONS_VERSION}}\"></ul>");
+
+        await WebsiteGenerator.GenerateAsync([new FeedMetadata("a", "A", null, Description: "Om A")], config);
+        var first = await File.ReadAllTextAsync(IndexPath(config));
+        await WebsiteGenerator.GenerateAsync([new FeedMetadata("a", "A", null, Description: "Om A")], config);
+        var same = await File.ReadAllTextAsync(IndexPath(config));
+        await WebsiteGenerator.GenerateAsync([new FeedMetadata("a", "A", null, Description: "Nyt om A")], config);
+        var changed = await File.ReadAllTextAsync(IndexPath(config));
+
+        first.Should().MatchRegex("descriptions\\.json\\?v=[0-9a-f]{10}\"").And.Be(same).And.NotBe(changed);
+    }
+
+    [Fact]
+    public async Task Generate_LeavesUnchangedDescriptionsUntouched()
+    {
+        // Its ETag derives from the mtime, so a rewrite would make browsers download it again.
+        var config = CreateConfig();
+        WriteSiteSource(config);
+        var path = Path.Combine(config.FullSiteDir, "descriptions.json");
+        await WebsiteGenerator.GenerateAsync([new FeedMetadata("a", "A", null, Description: "Om A")], config);
+        var earlier = DateTime.UtcNow.AddHours(-1);
+        File.SetLastWriteTimeUtc(path, earlier);
+
+        await WebsiteGenerator.GenerateAsync([new FeedMetadata("a", "A", null, Description: "Om A")], config);
+
+        File.GetLastWriteTimeUtc(path).Should().Be(earlier);
+    }
+
+    [Fact]
+    public async Task Generate_ShowsDrsSmallCoverOnCards()
+    {
+        // The 3000×3000 originals are ~1.2 MB each; the card shows 96 px.
+        var config = CreateConfig();
+        WriteSiteSource(config);
+
+        await WebsiteGenerator.GenerateAsync([new FeedMetadata("a", "A", "https://asset.dr.dk/drlyd/images/urn:dr:radio:image:abc")], config);
 
         (await File.ReadAllTextAsync(IndexPath(config)))
-            .Should().Contain("<p class=\"description\" hidden=\"\">Første afsnit.\nVært: &lt;Lasse&gt; &amp; co.</p>");
+            .Should().Contain("src=\"https://asset.dr.dk/drlyd/images/urn:dr:radio:image:abc?imwidth=320\"");
+    }
+
+    [Fact]
+    public void CardCover_AppendsToAnExistingQuery()
+    {
+        WebsiteGenerator.CardCover("https://asset.dr.dk/i.jpg?a=1").Should().Be("https://asset.dr.dk/i.jpg?a=1&imwidth=320");
     }
 }

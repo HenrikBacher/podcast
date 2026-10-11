@@ -1,3 +1,6 @@
+using System.IO.Compression;
+using Microsoft.AspNetCore.ResponseCompression;
+
 // Web server mode: serve static feeds + periodic background regeneration
 var builder = WebApplication.CreateBuilder(args);
 builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
@@ -28,6 +31,10 @@ builder.Services.AddResponseCompression(options =>
         "application/javascript", "application/json", "image/svg+xml", "text/plain",
     ];
 });
+// The default is Fastest. Optimal (Brotli quality 4) is ~10% smaller for ~15–30 ms more on a 3.4 MB feed, and
+// only full downloads pay it: most feed requests are conditional and end in a bodiless 304.
+builder.Services.Configure<BrotliCompressionProviderOptions>(options => options.Level = CompressionLevel.Optimal);
+builder.Services.Configure<GzipCompressionProviderOptions>(options => options.Level = CompressionLevel.Optimal);
 
 builder.Services.AddSingleton(config);
 builder.Services.AddSingleton<FeedGenerationService>();
@@ -65,6 +72,9 @@ var contentTypeProvider = new MinimalContentTypeProvider();
 
 var fileProvider = new PhysicalFileProvider(Path.GetFullPath(config.FullSiteDir));
 
+// The site source ships in the image, so the stylesheet and script hash is fixed for the process.
+var assetVersion = WebsiteGenerator.AssetVersion(config.SiteSourceDir);
+
 app.UseResponseCompression();
 app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = fileProvider });
 app.UseStaticFiles(new StaticFileOptions
@@ -73,12 +83,7 @@ app.UseStaticFiles(new StaticFileOptions
     ContentTypeProvider = contentTypeProvider,
     OnPrepareResponse = ctx =>
     {
-        var contentType = ctx.Context.Response.ContentType ?? "";
-        var headers = ctx.Context.Response.GetTypedHeaders();
-        if (contentType.Contains("xml", StringComparison.OrdinalIgnoreCase))
-            headers.CacheControl = new() { Public = true, MaxAge = TimeSpan.FromMinutes(5) };
-        else
-            headers.CacheControl = new() { Public = true, MaxAge = TimeSpan.FromHours(1) };
+        ctx.Context.Response.GetTypedHeaders().CacheControl = CachePolicy.For(ctx.Context.Request, ctx.Context.Response.ContentType, assetVersion);
     }
 });
 

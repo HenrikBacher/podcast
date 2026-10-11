@@ -71,13 +71,8 @@
         };
     });
 
-    const stamp = document.getElementById('stamp');
-    const newest = Math.min(...cards.map(c => c.age));
-    if (stamp && newest !== Infinity) stamp.textContent = `${cards.length} podcasts · nyeste afsnit ${ago(newest)}`;
-
     // ── Copy feed link ──────────────────────────
-    // One listener for every copy button, including the copies inside the expanded card.
-    for (const button of shelf.querySelectorAll('.copy')) button.hidden = false;
+    // The copy buttons are in the expanded card, which is rebuilt on every open; one listener serves them all.
     document.addEventListener('click', async e => {
         const button = e.target.closest('.copy');
         if (!button) return;
@@ -101,12 +96,67 @@
     // ── Expanded card ───────────────────────────
     // Clicking a card grows it into a dialog with the same content plus the full description.
     // Where the browser supports view transitions, the card itself morphs into the dialog and back.
+    // The descriptions aren't in the page: descriptions.json is fetched the first time a card opens.
     const dialog = document.getElementById('details');
     const dialogCard = document.getElementById('details-card');
     if (dialog && dialogCard && typeof dialog.showModal === 'function') {
         const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
         const morphName = 'expanding-card';
         let openCard = null;
+        // The cards only link to their feed; the expanded card has the subscribe controls.
+        shelf.classList.add('expandable');
+
+        // The ways into each app's subscribe flow; all take the feed's public address unchanged.
+        const appLinks = (feedUrl, title) => {
+            const url = encodeURIComponent(feedUrl);
+            const withoutScheme = feedUrl.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '');
+            return [
+                ['AntennaPod', `https://antennapod.org/deeplink/subscribe?url=${url}&title=${encodeURIComponent(title)}`],
+                ['Apple Podcasts', `podcast://${withoutScheme}`],
+                ['Overcast', `overcast://x-callback-url/add?url=${url}`],
+                ['Pocket Casts', `pktc://subscribe/${withoutScheme}`],
+            ];
+        };
+
+        const element = (tag, className, text) => {
+            const el = document.createElement(tag);
+            if (className) el.className = className;
+            if (text) el.textContent = text;
+            return el;
+        };
+
+        // The copy button and the "Åbn i app" menu.
+        const subscribeControls = (feedUrl, title) => {
+            const copyButton = element('button', 'btn primary copy', 'Kopiér feed-link');
+            copyButton.type = 'button';
+            copyButton.dataset.url = feedUrl;
+            const menu = element('div', 'menu');
+            for (const [app, href] of appLinks(feedUrl, title)) {
+                const link = element('a', null, app);
+                link.href = href;
+                link.rel = 'nofollow';
+                menu.append(link);
+            }
+            const openIn = element('details', 'open-in');
+            openIn.append(element('summary', 'btn', 'Åbn i app'), menu);
+            const actions = element('div', 'actions');
+            actions.append(copyButton, openIn);
+            return actions;
+        };
+
+        // Every description by slug, fetched once. A failed fetch leaves the description out and is
+        // retried on the next open.
+        let descriptions = null;
+        const loadDescriptions = () => descriptions ??= (shelf.dataset.descriptions
+            ? fetch(shelf.dataset.descriptions).then(r => {
+                if (!r.ok) throw new Error(r.statusText);
+                return r.json();
+            })
+            : Promise.resolve({})
+        ).catch(() => {
+            descriptions = null;
+            return {};
+        });
 
         // Hands the view-transition name from one element to the other across the update, so the
         // browser animates the first into the second.
@@ -131,9 +181,21 @@
                 heading.textContent = card.dataset.title ?? heading.textContent;
                 heading.id = 'details-title';
             }
-            const description = copy.querySelector('.description');
-            if (description) description.hidden = false;
-            copy.querySelector('.open-in')?.removeAttribute('open');
+            // The feed link's href is the feed's address exactly as the server wrote it.
+            const feedLink = copy.querySelector('.url');
+            if (feedLink) feedLink.before(subscribeControls(feedLink.getAttribute('href'), card.dataset.title ?? ''));
+            // Below the tagline; filled in once descriptions.json is here. Each open has its own paragraph,
+            // so a late answer for a dialog that has since closed only fills in one that's gone.
+            const description = document.createElement('p');
+            description.className = 'description';
+            description.hidden = true;
+            copy.querySelector('.latest')?.before(description);
+            const slug = card.dataset.slug;
+            loadDescriptions().then(all => {
+                if (!slug || !Object.hasOwn(all, slug)) return;
+                description.textContent = all[slug];
+                description.hidden = false;
+            });
             openCard = card;
             morph(card, dialog, () => {
                 dialogCard.replaceChildren(...copy.children);
@@ -198,47 +260,64 @@
     const topics = [...topicCounts].sort((a, b) => b[1] - a[1] || collator.compare(a[0], b[0]));
     const newCount = cards.filter(c => c.isNew).length;
 
+    // Built once; a topic change only moves aria-pressed.
+    const chipButtons = [];
     const chip = (label, value, n) => {
         const b = document.createElement('button');
         b.type = 'button';
         b.className = 'chip';
-        b.setAttribute('aria-pressed', String(value === topic));
         const small = document.createElement('small');
         small.textContent = n;
         b.append(label, small);
         b.addEventListener('click', () => { topic = value; render(); });
+        chipButtons.push([b, value]);
         return b;
+    };
+    if (topics.length > 0 || newCount > 0)
+        chips.replaceChildren(
+            chip('Alle', null, cards.length),
+            ...(newCount > 0 ? [chip('Nye podcasts', NEW, newCount)] : []),
+            ...topics.map(([t, n]) => chip(t, t, n)));
+
+    // Cards are only moved when the order changes, not on every keystroke: moving all 680 makes the
+    // browser lay out the whole shelf again.
+    const byTitle = (a, b) => collator.compare(a.title, b.title);
+    // Undated cards (age Infinity) would give NaN; || falls back to the title.
+    const byNewest = (a, b) => (a.age - b.age) || byTitle(a, b);
+    const applySort = () => {
+        const ordered = [...cards].sort(sort === 'new' ? byNewest : byTitle);
+        if (ordered.some((c, i) => shelf.children[i] !== c.el)) shelf.append(...ordered.map(c => c.el));
     };
 
     function render() {
-        if (topics.length > 0 || newCount > 0)
-            chips.replaceChildren(
-                chip('Alle', null, cards.length),
-                ...(newCount > 0 ? [chip('Nye podcasts', NEW, newCount)] : []),
-                ...topics.map(([t, n]) => chip(t, t, n)));
+        for (const [b, value] of chipButtons) b.setAttribute('aria-pressed', String(value === topic));
         sortNew?.setAttribute('aria-pressed', String(sort === 'new'));
         sortAz?.setAttribute('aria-pressed', String(sort === 'az'));
 
         const terms = fold(search.value.trim(), false).split(/\s+/).filter(Boolean);
-        const shown = cards
-            .filter(c => !topic || (topic === NEW ? c.isNew : c.categories.includes(topic)))
-            .filter(c => terms.every(t => c.hay.includes(t)))
-            // Undated cards (age Infinity) would give NaN; || falls back to the title.
-            .sort(sort === 'new' ? (a, b) => (a.age - b.age) || collator.compare(a.title, b.title) : (a, b) => collator.compare(a.title, b.title));
+        let shown = 0;
+        for (const c of cards) {
+            const match = (!topic || (topic === NEW ? c.isNew : c.categories.includes(topic))) && terms.every(t => c.hay.includes(t));
+            if (c.el.hidden === match) c.el.hidden = !match;
+            if (match) shown++;
+        }
 
-        const visible = new Set(shown);
-        for (const c of cards) c.el.hidden = !visible.has(c);
-        shelf.append(...shown.map(c => c.el));
-
-        if (count) count.textContent = shown.length === cards.length ? '' : `${shown.length} af ${cards.length} podcasts`;
+        if (count) count.textContent = shown === cards.length ? '' : `${shown} af ${cards.length} podcasts`;
         if (empty) {
-            empty.hidden = shown.length > 0;
+            empty.hidden = shown > 0;
             empty.textContent = `Ingen podcasts matcher “${search.value.trim()}”${topic ? ` i ${topic}` : ''}. Prøv et kortere ord, eller vælg “Alle”.`;
         }
     }
 
-    search.addEventListener('input', render);
-    sortNew?.addEventListener('click', () => { sort = 'new'; render(); });
-    sortAz?.addEventListener('click', () => { sort = 'az'; render(); });
+    // Typing waits for a pause rather than filtering on every key.
+    let searchTimer;
+    search.addEventListener('input', () => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(render, 100);
+    });
+    const sortBy = order => { sort = order; applySort(); render(); };
+    sortNew?.addEventListener('click', () => sortBy('new'));
+    sortAz?.addEventListener('click', () => sortBy('az'));
+    applySort();
     render();
 })();

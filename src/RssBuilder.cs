@@ -22,6 +22,12 @@ public static class RssBuilder
     internal static bool TryParseFeedDate(string? raw, out DateTime utc) =>
         DateTime.TryParse(raw, CultureInfo.InvariantCulture, UtcParseStyles, out utc);
 
+    /// <summary>
+    /// Artwork as feeds reference it: 2048×2048, inside Apple's 1400–3000 px range and well below the size of
+    /// DR's 3000×3000 originals (up to ~1.2 MB). The website asks for a smaller size of the same image.
+    /// </summary>
+    internal static string FeedArtwork(string imageUrl) => PodcastHelpers.WithImageWidth(imageUrl, 2048);
+
     public static string DetermineItunesType(Series? series) =>
         series?.PresentationType == "Show" ? "serial" : "episodic";
 
@@ -95,7 +101,7 @@ public static class RssBuilder
 
         if (!string.IsNullOrEmpty(metadata.ImageUrl))
         {
-            channel.Add(new XElement(itunes + "image", new XAttribute("href", metadata.ImageUrl)));
+            channel.Add(new XElement(itunes + "image", new XAttribute("href", FeedArtwork(metadata.ImageUrl))));
         }
 
         if (!string.IsNullOrEmpty(series?.Punchline))
@@ -129,7 +135,7 @@ public static class RssBuilder
 
             foreach (var episode in sorted.Where(HasDownloadableAudio))
             {
-                channel.Add(BuildEpisodeItem(episode, metadata.ImageUrl, itunes));
+                channel.Add(BuildEpisodeItem(episode, metadata.ImageUrl, itunes, channelExplicit: series?.ExplicitContent == true));
             }
         }
 
@@ -176,11 +182,17 @@ public static class RssBuilder
             .MaxBy(a => a?.Bitrate ?? 0);
     }
 
-    public static XElement BuildEpisodeItem(Episode episode, string? channelImage, XNamespace itunes)
+    /// <summary>
+    /// An episode's &lt;item&gt;. What it shares with the channel (author, explicit flag, artwork) is left
+    /// out: apps fall back to the channel's, and repeating it on every item only made feeds longer.
+    /// </summary>
+    public static XElement BuildEpisodeItem(Episode episode, string? channelImage, XNamespace itunes, bool channelExplicit = false)
     {
         var audioAsset = SelectAudioAsset(episode);
 
-        var imageUrl = PodcastHelpers.GetImageUrlFromAssets(episode.ImageAssets) ?? channelImage;
+        var imageUrl = PodcastHelpers.GetImageUrlFromAssets(episode.ImageAssets);
+        if (imageUrl == channelImage)
+            imageUrl = null;
 
         var rawTime = episode.StartTime ?? episode.PublishTime;
         var pubDate = TryParseFeedDate(rawTime, out var dt)
@@ -191,9 +203,7 @@ public static class RssBuilder
             new XElement("title", episode.Title ?? ""),
             new XElement("description", episode.Description ?? ""),
             new XElement("pubDate", pubDate),
-            new XElement(itunes + "explicit", episode.ExplicitContent ? "yes" : "no"),
-            new XElement(itunes + "author", "DR")
-            );
+            episode.ExplicitContent == channelExplicit ? null : new XElement(itunes + "explicit", episode.ExplicitContent ? "yes" : "no"));
 
         // Whole seconds, as Apple recommends. An hh:mm:ss TimeSpan format wraps at 24 hours.
         if (episode.DurationMilliseconds is { } durationMs)
@@ -203,7 +213,7 @@ public static class RssBuilder
 
         if (!string.IsNullOrEmpty(imageUrl))
         {
-            item.Add(new XElement(itunes + "image", new XAttribute("href", imageUrl)));
+            item.Add(new XElement(itunes + "image", new XAttribute("href", FeedArtwork(imageUrl))));
         }
 
         if (episode.EpisodeNumber is not null)
@@ -235,13 +245,8 @@ public static class RssBuilder
                 new XAttribute("type", "audio/mpeg")));
         }
 
-        // itunes:category is a channel-level tag; an episode's categories are plain RSS <category>.
-        foreach (var category in episode.Categories ?? [])
-        {
-            if (!string.IsNullOrEmpty(category))
-                item.Add(new XElement("category", category));
-        }
-
+        // No categories per episode: apps go by the channel's, and repeating them on every item only made
+        // the feed longer.
         return item;
     }
 }

@@ -1,3 +1,5 @@
+using System.Text.Encodings.Web;
+
 namespace DrPodcast;
 
 public static class WebsiteGenerator
@@ -6,6 +8,12 @@ public static class WebsiteGenerator
     // directory would publish the raw `{{FEED_COUNT}}` placeholders and an empty feed list
     // until GenerateIndexHtmlAsync overwrites it a moment later.
     private const string IndexFileName = "index.html";
+
+    // The series descriptions, which only the expanded card shows; script.js fetches them on the first open.
+    private const string DescriptionsFileName = "descriptions.json";
+
+    // Covers loaded straight away: two rows of three on a wide screen, the first few on a phone.
+    private const int EagerCovers = 6;
 
     private static readonly string[] DanishMonths = ["jan.", "feb.", "mar.", "apr.", "maj", "jun.", "jul.", "aug.", "sep.", "okt.", "nov.", "dec."];
 
@@ -85,26 +93,62 @@ public static class WebsiteGenerator
         var feedsHtml = GenerateFeedsHtml(feeds, config.BaseUrl);
         var template = await File.ReadAllTextAsync(templatePath, cancellationToken);
 
+        // Own the output directory rather than relying on a static asset having been copied
+        // there first — with no assets besides the template there'd be nothing to create it.
+        Directory.CreateDirectory(config.FullSiteDir);
+
+        // Written before the page that links to it. Its URL carries a hash of its content, so the hour it is
+        // cached for can't pair a new page with descriptions that lack its podcasts.
+        var descriptions = DescriptionsJson(feeds);
+        await WriteIfChangedAsync(Path.Combine(config.FullSiteDir, DescriptionsFileName), descriptions, cancellationToken);
+
         var html = template
             .Replace("{{ASSET_VERSION}}", AssetVersion(config.SiteSourceDir))
+            .Replace("{{DESCRIPTIONS_VERSION}}", Convert.ToHexStringLower(SHA256.HashData(descriptions))[..10])
             .Replace("{{DEPLOYMENT_TIME}}", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture))
             .Replace("{{FEED_COUNT}}", feeds.Count.ToString(CultureInfo.InvariantCulture))
             .Replace("<!-- BEGIN_FEEDS -->", feedsHtml)
             .Replace("<!-- END_FEEDS -->", "");
 
-        // Own the output directory rather than relying on a static asset having been copied
-        // there first — with no assets besides the template there'd be nothing to create it.
-        Directory.CreateDirectory(config.FullSiteDir);
-        await WriteAtomicallyAsync(Path.Combine(config.FullSiteDir, IndexFileName), html, cancellationToken);
+        await WriteAtomicallyAsync(Path.Combine(config.FullSiteDir, IndexFileName), Encoding.UTF8.GetBytes(html), cancellationToken);
         logger?.LogDebug("Generated index.html with {Count} feeds", feeds.Count);
     }
 
     // Temp file then rename, so a crash mid-write can't leave a corrupt file being served.
-    private static async Task WriteAtomicallyAsync(string path, string content, CancellationToken cancellationToken)
+    private static async Task WriteAtomicallyAsync(string path, byte[] content, CancellationToken cancellationToken)
     {
         var tempPath = path + ".tmp";
-        await File.WriteAllTextAsync(tempPath, content, cancellationToken);
+        await File.WriteAllBytesAsync(tempPath, content, cancellationToken);
         File.Move(tempPath, path, overwrite: true);
+    }
+
+    // Static-file ETags derive from mtime and length, so rewriting identical content would make every
+    // browser holding it download it again once its cache expires.
+    private static async Task WriteIfChangedAsync(string path, byte[] content, CancellationToken cancellationToken)
+    {
+        if (File.Exists(path) && (await File.ReadAllBytesAsync(path, cancellationToken)).AsSpan().SequenceEqual(content))
+            return;
+        await WriteAtomicallyAsync(path, content, cancellationToken);
+    }
+
+    /// <summary>
+    /// The descriptions by slug, which the expanded card fetches the first time one is opened. Embedded in
+    /// every card they were about half of the compressed page, for a dialog most visitors never open. Sorted
+    /// by slug, so the file (and the URL its hash goes into) only changes when a description does.
+    /// </summary>
+    internal static byte[] DescriptionsJson(IEnumerable<FeedMetadata> feeds)
+    {
+        using var buffer = new MemoryStream();
+        // Relaxed escaping keeps æøå as two UTF-8 bytes instead of a six-byte \u escape. The file is parsed
+        // as JSON, never embedded in HTML, so leaving < > & unescaped is safe.
+        using (var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping }))
+        {
+            writer.WriteStartObject();
+            foreach (var feed in feeds.Where(f => !string.IsNullOrEmpty(f.Description)).OrderBy(f => f.Slug, StringComparer.Ordinal))
+                writer.WriteString(feed.Slug, feed.Description);
+            writer.WriteEndObject();
+        }
+        return buffer.ToArray();
     }
 
     /// <summary>
@@ -123,16 +167,13 @@ public static class WebsiteGenerator
         return Convert.ToHexStringLower(hash.GetHashAndReset())[..10];
     }
 
-    // The ways into each app's subscribe flow; all take the feed's public https address unchanged.
-    internal static IEnumerable<(string App, string Href)> AppLinks(string feedUrl, string title)
-    {
-        var schemeEnd = feedUrl.IndexOf("://", StringComparison.Ordinal);
-        var withoutScheme = schemeEnd < 0 ? feedUrl : feedUrl[(schemeEnd + 3)..];
-        yield return ("AntennaPod", $"https://antennapod.org/deeplink/subscribe?url={Uri.EscapeDataString(feedUrl)}&title={Uri.EscapeDataString(title)}");
-        yield return ("Apple Podcasts", $"podcast://{withoutScheme}");
-        yield return ("Overcast", $"overcast://x-callback-url/add?url={Uri.EscapeDataString(feedUrl)}");
-        yield return ("Pocket Casts", $"pktc://subscribe/{withoutScheme}");
-    }
+    /// <summary>
+    /// The cover as the website shows it. DR's originals are 3000×3000 (~1.2 MB) and the cards show them at
+    /// 96 px, so the page asks DR's image server for its 320 px version (~20–30 KB, WebP where the browser
+    /// accepts it); that is its smallest size and still sharp on high-density screens. Feeds keep the
+    /// full-size artwork podcast apps want.
+    /// </summary>
+    internal static string CardCover(string imageUrl) => PodcastHelpers.WithImageWidth(imageUrl, 320);
 
     internal static string FormatDanishDate(DateTime utc)
     {
@@ -159,9 +200,10 @@ public static class WebsiteGenerator
 
     private static string GenerateFeedsHtml(IEnumerable<FeedMetadata> feeds, string baseUrl)
     {
-        // XElement escapes content and attributes. The cards are complete without JavaScript;
-        // script.js adds search, filtering, sorting, relative dates and the copy button.
-        var feedElements = feeds.Select(feed =>
+        // XElement escapes content and attributes. Without JavaScript a card is its podcast and a link to
+        // its feed; script.js adds search, filtering, sorting, relative dates and the expanded card with
+        // the copy button and app links, which it builds from the feed link.
+        var feedElements = feeds.Select((feed, index) =>
         {
             var feedUrl = RssBuilder.FeedUrl(baseUrl, feed.Slug);
             var categories = feed.Categories?.Split('|') ?? [];
@@ -171,11 +213,13 @@ public static class WebsiteGenerator
                 ? new XElement("div", new XAttribute("class", "cover"))
                 : new XElement("img",
                     new XAttribute("class", "cover"),
-                    new XAttribute("src", feed.ImageUrl),
+                    new XAttribute("src", CardCover(feed.ImageUrl)),
                     new XAttribute("alt", ""),
                     new XAttribute("width", "96"),
                     new XAttribute("height", "96"),
-                    new XAttribute("loading", "lazy"));
+                    // The first rows are on screen at once; lazy-loading them would only hold them back.
+                    index < EagerCovers ? null : new XAttribute("loading", "lazy"),
+                    index == 0 ? new XAttribute("fetchpriority", "high") : null);
 
             var latest = new XElement("p", new XAttribute("class", "latest"));
             if (!string.IsNullOrEmpty(feed.LatestEpisodeTitle))
@@ -191,6 +235,8 @@ public static class WebsiteGenerator
 
             return new XElement("li",
                 new XAttribute("class", "card"),
+                // Looks the card's description up in descriptions.json.
+                new XAttribute("data-slug", feed.Slug),
                 new XAttribute("data-title", feed.Title),
                 new XAttribute("data-categories", feed.Categories ?? ""),
                 // script.js marks the card "Ny podcast" while this is under 30 days old.
@@ -203,24 +249,7 @@ public static class WebsiteGenerator
                         categories.Select(c => new XElement("span", new XAttribute("class", "tag"), c))),
                     new XElement("h2", feed.Title),
                     string.IsNullOrEmpty(feed.Subtitle) ? null : new XElement("p", new XAttribute("class", "sub"), feed.Subtitle),
-                    // Shown in a dialog when the title is clicked (script.js); line breaks are kept by CSS.
-                    string.IsNullOrEmpty(feed.Description) ? null : new XElement("p",
-                        new XAttribute("class", "description"), new XAttribute("hidden", ""), feed.Description),
                     latest,
-                    new XElement("div", new XAttribute("class", "actions"),
-                        new XElement("button",
-                            new XAttribute("type", "button"),
-                            new XAttribute("class", "btn primary copy"),
-                            new XAttribute("data-url", feedUrl),
-                            new XAttribute("hidden", ""),
-                            "Kopiér feed-link"),
-                        new XElement("details", new XAttribute("class", "open-in"),
-                            new XElement("summary", new XAttribute("class", "btn"), "Åbn i app"),
-                            new XElement("div", new XAttribute("class", "menu"),
-                                AppLinks(feedUrl, feed.Title).Select(link => new XElement("a",
-                                    new XAttribute("href", link.Href),
-                                    new XAttribute("rel", "nofollow"),
-                                    link.App))))),
                     new XElement("a", new XAttribute("class", "url"), new XAttribute("href", feedUrl), feedUrl)));
         });
 

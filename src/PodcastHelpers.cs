@@ -2,6 +2,13 @@ namespace DrPodcast;
 
 public static class PodcastHelpers
 {
+    /// <summary>
+    /// The image at a given width from DR's image server, which serves fixed sizes (320, 640, 1024, 2048,
+    /// and the 3000×3000 original) and rounds a requested width up to the next one.
+    /// </summary>
+    public static string WithImageWidth(string imageUrl, int width) =>
+        $"{imageUrl}{(imageUrl.Contains('?') ? '&' : '?')}imwidth={width}";
+
     public static string? GetImageUrlFromAssets(List<ImageAsset>? imageAssets)
     {
         if (imageAssets is not { Count: > 0 }) return null;
