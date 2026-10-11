@@ -46,6 +46,7 @@ The test suite includes:
 - **WebsiteGeneratorTests.cs**: Template rendering, static-asset copying, feed sorting, HTML escaping, exact feed URLs and app links on the cards
 - **FileContainsAsciiTests.cs**: Chunked ASCII search, including needles straddling chunk boundaries
 - **DrApiClientTests.cs**: Pagination `next` links are only followed to the DR API host over HTTPS; targeted short-page refetch (failures keep the first pass, episodes without an id aren't duplicated); newest-first latest-episode lookup; incomplete-list warning; the registered client doesn't follow redirects
+- **PodcastCatalogTests.cs**: Slugs from DR's series slugs (production-number suffix dropped), collisions, unsafe slugs
 - **FeedRefreshBackgroundServiceTests.cs**: Backoff schedule and overflow bounds; `GeneratorConfig` env parsing
 
 **CI/CD Integration**: Tests run automatically in the build pipeline on all pull requests and pushes to main.
@@ -77,7 +78,7 @@ The test suite includes:
 - **WebsiteGenerator.cs**: Generates the static website — copies static assets from `site/` (including the self-hosted fonts in `site/fonts/`) and renders `index.html` from a template: one card per feed with tagline, categories, newest episode, episode count, a copy button and "Åbn i app" links (AntennaPod, Apple Podcasts, Overcast, Pocket Casts), newest episode first. `site/script.js` adds search, topic filters, A–Å sorting with Danish collation and relative dates; the page works without it. Light/dark follows the system theme (`prefers-color-scheme`). `styles.css` and `script.js` are linked with a content hash (`{{ASSET_VERSION}}`) so their one-hour cache can't pair new markup with old assets. Dates are shown in Danish local time, computed by the EU summer-time rule because the container has no time-zone data. A failed newest-episode lookup is logged and skipped rather than failing the refresh
 - **MinimalContentTypeProvider.cs**: Small explicit MIME-type map for static file serving (trim-friendly)
 - **RegexCache.cs**: Source-generated regex for DR asset-URL parsing
-- **podcasts.json**: Configuration file containing podcast slugs and URNs to process (Danish podcasts)
+- **PodcastCatalog.cs**: Turns DR's series listing into the podcasts to publish; a feed's slug is DR's slug without its `-{productionNumber}` suffix
 
 ### Key Design Patterns
 - **NativeAOT Optimization**: Source-generated JSON serialization, trim-safe patterns, aggressive optimization settings
@@ -91,14 +92,14 @@ The test suite includes:
 - **Response Compression**: Brotli/gzip for XML and HTML. Caddy does not compress unless `encode` is configured, so the app does it
 - **Constant-Memory Asset Check**: `FileContainsAsciiAsync` streams the feed in 64 KB pooled chunks (with carry-over across boundaries) instead of decoding it into a string. This runs for every unchanged podcast on every tick; the string version allocated ~4x the feed size per call, all of it on the Large Object Heap
 - **Compressed Upstream Fetches**: the DR API client sets `AutomaticDecompression`, which `HttpClient` does not enable by default — episode pages are large JSON and gzip well
-- **Change Detection**: Skips regenerating feeds whose `<lastBuildDate>` already matches the API's `LatestEpisodeStartTime`, using `XmlReader` to read only the first few elements; additionally verifies the latest episode's audio asset hash is still referenced (DR rotates hashes without bumping the timestamp). The latest episode is requested with `sort=desc`: the endpoint's default order follows the series' `defaultOrder`, so for `Asc` series `limit=1` used to return episode 1. A full regeneration runs on startup and then daily, bounding staleness from what change detection can't see (rotated hashes on older episodes, edited or removed episodes)
+- **Change Detection**: Skips regenerating feeds whose `<lastBuildDate>` already matches the API's `LatestEpisodeStartTime`, using `XmlReader` to read only the first few elements; additionally verifies the latest episode's audio asset hash is still referenced (DR rotates hashes without bumping the timestamp) — only for series that published within the last day (`AssetCheckWindow`; about 50 series on a typical day), since with every DR series that check would otherwise be ~680 requests per run. Older episodes are covered by the daily full refresh. The latest episode is requested with `sort=desc`: the endpoint's default order follows the series' `defaultOrder`, so for `Asc` series `limit=1` used to return episode 1. A full regeneration runs on startup and then daily, bounding staleness from what change detection can't see (rotated hashes on older episodes, edited or removed episodes)
 - **Cross-Checks Against `LatestEpisodeStartTime`**: `DrApiClient` logs a warning when the latest-episode lookup, or the newest episode in a full fetch, disagrees with the series' own latest timestamp — the signature of both upstream bugs above
 - **Resilient Website Listing**: `index.html` is built from the full configured podcast set using last-known metadata, so a transient fetch failure for one podcast doesn't drop its still-served feed from the listing. It is rebuilt whenever a feed changed or the listing differs from the last one rendered (always on a process's first run), so a podcast that failed on the startup run reappears once it recovers
 - **Readiness Independent of the Listing**: Readiness is recorded before website regeneration and a listing failure is logged rather than thrown, so a cosmetic `index.html` problem can't 503 a service whose feeds are all current
 
 ### Data Flow
-1. Load podcast configuration from `podcasts.json` (parsed once at startup)
-2. For each podcast (processed in parallel), fetch series metadata from the DR API
+1. Discover every DR series (`/radio/v2/series`, ~680) on each run; an incomplete or failed listing falls back to the previous one
+2. For each podcast (processed in parallel), use the series data from the listing
 3. Compare `LatestEpisodeStartTime` against the existing feed's `<lastBuildDate>` — skip if unchanged (bypassed on startup and the daily full refresh)
 4. For an otherwise-skipped feed, verify the newest episode's current audio asset hash is still present; regenerate if it has rotated
 5. Paginate through all episodes for the series (up to 256 per page, max 100 pages); refetch short pages in 5-item pages and merge
@@ -150,7 +151,7 @@ In practice every series and episode carries a Podcast 1:1 image (checked Oct 20
 ### CI/CD Workflows
 
 #### build-and-release.yml
-- **Triggers**: Pushes/PRs to main affecting `src/`, `tests/`, `site/`, `podcasts.json`, or `Dockerfile`; weekly scheduled run
+- **Triggers**: Pushes/PRs to main affecting `src/`, `tests/`, `site/`, or `Dockerfile`; weekly scheduled run
 - **Versioning**: Determined by PR body checkboxes — Major / Minor / Patch
 - **Docker**: Builds and pushes image to `ghcr.io/{repository}` on merge to main
 - **Release**: Creates a GitHub Release tagged with the new version on merge to main

@@ -5,6 +5,11 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
     private const int MaxConcurrentPodcasts = 6;
     private static readonly TimeSpan PerPodcastTimeout = TimeSpan.FromMinutes(2);
 
+    // The audio-hash check costs a request per podcast per run: with every DR series that's ~680 requests
+    // every 15 minutes. It runs only for series that published within this window (about 50 of them on a
+    // typical day); rotations on older episodes are caught by the daily full refresh.
+    private static readonly TimeSpan AssetCheckWindow = TimeSpan.FromDays(1);
+
     // A run with too many failed podcasts must not flip readiness to "ok" — otherwise the
     // probe lies while the site serves stale or incomplete content. Require at least this
     // fraction of configured podcasts to succeed before recording a successful run.
@@ -31,6 +36,38 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
         }
     }
 
+    // The podcasts discovered on the last run, reused when a listing comes back incomplete or fails.
+    private PodcastList? _catalog;
+
+    /// <summary>Discovers every DR series, then generates their feeds.</summary>
+    public async Task GenerateFeedsAsync(GeneratorConfig config, bool forceRegenerate = false, CancellationToken cancellationToken = default)
+    {
+        PodcastList catalog;
+        try
+        {
+            var (series, complete) = await apiClient.FetchAllSeriesAsync(cancellationToken);
+            catalog = PodcastCatalog.Build(series, logger);
+            if (!complete && _catalog is { } previous)
+            {
+                // A short listing mustn't make podcasts vanish: keep the ones it missed from last time,
+                // fetching their series data individually.
+                var found = catalog.Podcasts.Select(p => p.Urn).ToHashSet(StringComparer.Ordinal);
+                catalog = new PodcastList { Podcasts = [.. catalog.Podcasts, .. previous.Podcasts.Where(p => !found.Contains(p.Urn)).Select(p => p with { Series = null })] };
+            }
+        }
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested && _catalog is not null)
+        {
+            logger.LogWarning(ex, "Fetching the series list failed; using the {Count} podcasts found last time.", _catalog.Podcasts.Count);
+            catalog = new PodcastList { Podcasts = [.. _catalog.Podcasts.Select(p => p with { Series = null })] };
+        }
+
+        if (catalog.Podcasts.Count != _catalog?.Podcasts.Count)
+            logger.LogInformation("Found {Count} podcasts at DR.", catalog.Podcasts.Count);
+        _catalog = catalog;
+
+        await GenerateFeedsAsync(catalog, config, forceRegenerate, cancellationToken);
+    }
+
     public async Task GenerateFeedsAsync(PodcastList podcastList, GeneratorConfig config, bool forceRegenerate = false, CancellationToken cancellationToken = default)
     {
         if (podcastList.Podcasts.Count == 0)
@@ -55,9 +92,12 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
         });
 
         foreach (var r in results)
-            _lastKnownMetadata[r.Metadata.Slug] = r.Metadata;
+        {
+            if (r.Metadata is { } m) _lastKnownMetadata[r.Slug] = m;
+            else _lastKnownMetadata.TryRemove(r.Slug, out _);
+        }
 
-        var changedSlugs = results.Where(r => r.Changed).Select(r => r.Metadata.Slug).Order(StringComparer.Ordinal).ToList();
+        var changedSlugs = results.Where(r => r.Changed).Select(r => r.Slug).Order(StringComparer.Ordinal).ToList();
         var changedCount = changedSlugs.Count;
         var configuredCount = podcastList.Podcasts.Count;
         var successCount = results.Count;
@@ -82,7 +122,7 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
 
         if (successCount < configuredCount)
         {
-            var successSlugs = results.Select(r => r.Metadata.Slug).ToHashSet(StringComparer.Ordinal);
+            var successSlugs = results.Select(r => r.Slug).ToHashSet(StringComparer.Ordinal);
             var failedSlugs = podcastList.Podcasts.Select(p => p.Slug).Where(s => !successSlugs.Contains(s));
             logger.LogWarning("{Failed} feeds failed to refresh: {Slugs}", configuredCount - successCount, string.Join(", ", failedSlugs));
         }
@@ -125,7 +165,8 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
         }
     }
 
-    private readonly record struct ProcessResult(FeedMetadata Metadata, bool Changed);
+    // A null Metadata means the podcast was processed fine but has nothing to publish (no playable episodes).
+    private readonly record struct ProcessResult(string Slug, FeedMetadata? Metadata, bool Changed);
 
     public sealed class FeedGenerationFailedException(int successCount, int configuredCount, int requiredCount)
         : Exception($"Only {successCount}/{configuredCount} podcasts succeeded; required at least {requiredCount}.")
@@ -148,7 +189,7 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
 
         try
         {
-            var series = await apiClient.FetchSeriesAsync(podcast.Urn, ct);
+            var series = podcast.Series ?? await apiClient.FetchSeriesAsync(podcast.Urn, ct);
 
             // A 200 with a null body deserializes to null. Building a feed from it would emit an
             // empty <title>/<description>/image and overwrite a perfectly good file while reporting
@@ -157,6 +198,24 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
             {
                 logger.LogWarning("DR API returned no series body for {Urn}. Leaving the existing feed untouched.", podcast.Urn);
                 return null;
+            }
+
+            string outputPath = Path.Combine(config.FeedsDir, $"{podcast.Slug}.xml");
+            var known = _lastKnownMetadata.GetValueOrDefault(podcast.Slug);
+
+            // Skip regeneration if the feed is already up-to-date, so Last-Modified stays stable.
+            // On startup and the daily full refresh (forceRegenerate=true) this check is bypassed.
+            var upToDate = !forceRegenerate && File.Exists(outputPath) && !await HasNewerEpisodesAsync(outputPath, series, ct);
+            var recentlyActive = RssBuilder.TryParseFeedDate(series.LatestEpisodeStartTime, out var lastStart) && DateTime.UtcNow - lastStart < AssetCheckWindow;
+            if (upToDate && !recentlyActive && known is not null)
+            {
+                logger.LogDebug("Skipped (unchanged, not recently active)");
+                return new ProcessResult(podcast.Slug, RssBuilder.BuildFeedMetadata(podcast, series) with
+                {
+                    EpisodeCount = known.EpisodeCount,
+                    LatestEpisodeTitle = known.LatestEpisodeTitle,
+                    LatestEpisodeUtc = known.LatestEpisodeUtc,
+                }, Changed: false);
             }
 
             // The newest episode feeds the audio-hash check and the website listing. Both can do without it,
@@ -173,12 +232,8 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
 
             // The website may only name an episode the feed contains, and stream-only ones are left out.
             var newestPlayable = latestEpisode is { } candidate && RssBuilder.HasDownloadableAudio(candidate) ? candidate : null;
-            var known = _lastKnownMetadata.GetValueOrDefault(podcast.Slug);
 
-            // Skip regeneration if the feed is already up-to-date, so Last-Modified stays stable.
-            // On startup and the daily full refresh (forceRegenerate=true) this check is bypassed.
-            string outputPath = Path.Combine(config.FeedsDir, $"{podcast.Slug}.xml");
-            if (!forceRegenerate && File.Exists(outputPath) && !await HasNewerEpisodesAsync(outputPath, series, ct))
+            if (upToDate)
             {
                 // The date check passed, but DR rotates audio asset hashes for already-published
                 // episodes (re-encodes etc.) without bumping LatestEpisodeStartTime — leaving feeds
@@ -195,7 +250,7 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
                     };
                     if (newestPlayable is null && known is not null)
                         unchanged = unchanged with { LatestEpisodeTitle = known.LatestEpisodeTitle, LatestEpisodeUtc = known.LatestEpisodeUtc };
-                    return new ProcessResult(unchanged, Changed: false);
+                    return new ProcessResult(podcast.Slug, unchanged, Changed: false);
                 }
                 logger.LogDebug("Regenerating: latest episode's audio asset hash has rotated");
             }
@@ -208,7 +263,13 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
             // Never replace a populated feed with an empty one. An upstream hiccup that answers with zero
             // items, or with items whose audio is missing, would otherwise wipe the whole back catalogue and
             // report success. (A genuinely empty series with no file yet still gets its first, empty feed.)
-            if (playable.Count == 0 && File.Exists(outputPath))
+            if (playable.Count == 0 && !File.Exists(outputPath))
+            {
+                // Typically a music show DR offers only as a stream. Nothing to publish, and nothing wrong.
+                logger.LogDebug("No episodes with downloadable audio; not published.");
+                return new ProcessResult(podcast.Slug, null, Changed: false);
+            }
+            if (playable.Count == 0)
             {
                 logger.LogWarning("DR API returned no episodes with downloadable audio for {Urn} ({Count} in total). Keeping the existing feed.",
                     podcast.Urn, episodes.Count);
@@ -239,7 +300,7 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
             if (await FileHoldsAsync(existing, xml, ct))
             {
                 logger.LogDebug("Regenerated with identical content; file left untouched");
-                return new ProcessResult(metadata, Changed: false);
+                return new ProcessResult(podcast.Slug, metadata, Changed: false);
             }
 
             // Atomic write: write to temp file then rename to avoid serving partial files
@@ -258,7 +319,7 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
 
             logger.LogDebug("Generated");
 
-            return new ProcessResult(metadata, Changed: true);
+            return new ProcessResult(podcast.Slug, metadata, Changed: true);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

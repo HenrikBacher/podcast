@@ -1,6 +1,6 @@
 # DrPodcast
 
-Automated podcast RSS feed generator for DR (Danmarks Radio). Generates iTunes-compatible RSS feeds for **41 Danish podcasts** as a self-hosted web server with periodic background refresh.
+Automated podcast RSS feed generator for DR (Danmarks Radio). Generates iTunes-compatible RSS feeds for **every podcast series DR lists** (about 650 with downloadable audio) as a self-hosted web server with periodic background refresh.
 
 ## Quick Start
 
@@ -33,15 +33,9 @@ docker run -e API_KEY=<key> -e BASE_URL=<url> -p 8080:8080 ghcr.io/YOUR_ORG/drpo
 | `BASE_URL` | No | `https://example.com` | Base URL for feed URLs in RSS output |
 | `REFRESH_INTERVAL_MINUTES` | No | `15` | How often feeds are regenerated in the background (clamped to 1–1440) |
 
-### Adding Podcasts
-Edit [podcasts.json](podcasts.json):
-```json
-{
-  "podcasts": [
-    { "slug": "example-podcast", "urn": "urn:dr:radio:series:..." }
-  ]
-}
-```
+### Which Podcasts
+Every series DR lists is published; new series appear by themselves. A feed's URL is
+`{BASE_URL}/feeds/{slug}.xml`, where the slug is DR's own series slug without its numeric suffix.
 
 ## Testing
 ```bash
@@ -58,7 +52,7 @@ src/
   PodcastModels.cs             # Data models with source-generated JSON serialization
   PodcastHelpers.cs            # Image URL extraction
   WebsiteGenerator.cs          # Static website and manifest generation
-  podcasts.json                # List of podcast slugs and URNs
+  PodcastCatalog.cs            # Which podcasts to publish, discovered from DR
 tests/                         # xUnit test suite
 site/                          # Static website assets for feed browsing
 .github/workflows/

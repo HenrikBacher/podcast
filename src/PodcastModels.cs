@@ -1,15 +1,16 @@
 namespace DrPodcast;
 
-[JsonSerializable(typeof(PodcastList))]
 [JsonSerializable(typeof(Series))]
 [JsonSerializable(typeof(List<Episode>))]
-[JsonSerializable(typeof(EpisodesPage))]
+[JsonSerializable(typeof(ApiPage<Episode>))]
+[JsonSerializable(typeof(ApiPage<Series>))]
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 public partial class PodcastJsonContext : JsonSerializerContext
 {
 }
 
-public record EpisodesPage(List<Episode>? Items, string? Next, int? TotalSize, int? Offset);
+/// <summary>One page of a DR API listing (episodes of a series, or all series).</summary>
+public record ApiPage<T>(List<T>? Items, string? Next, int? TotalSize, int? Offset);
 
 /// <summary>What the website lists about a feed. Compared by value to decide when index.html is rebuilt.</summary>
 public record FeedMetadata(
@@ -71,7 +72,8 @@ public record PodcastList
     public List<Podcast> Podcasts { get; init; } = [];
 }
 
-public record Podcast(string Slug, string Urn, List<ImageAsset>? ImageAssets);
+/// <param name="Series">The series as discovery listed it, which saves fetching it again; null means fetch.</param>
+public record Podcast(string Slug, string Urn, Series? Series = null);
 
 public record Episode(
     string? Title,
@@ -106,7 +108,10 @@ public record Series(
     string? Punchline,
     string? Description,
     List<ImageAsset>? ImageAssets,
-    int? NumberOfSeasons = null
+    int? NumberOfSeasons = null,
+    string? Id = null,
+    string? Slug = null,
+    string? ProductionNumber = null
 )
 {
     // DR reports a seasonal show's season count as either numberOfSeries or numberOfSeasons,

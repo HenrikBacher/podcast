@@ -28,8 +28,7 @@ public static class RssBuilder
     /// <param name="newestEpisode">The newest episode the feed contains, named on the website.</param>
     public static FeedMetadata BuildFeedMetadata(Podcast podcast, Series? series, Episode? newestEpisode = null)
     {
-        var imageUrl = PodcastHelpers.GetImageUrlFromAssets(series?.ImageAssets)
-                       ?? PodcastHelpers.GetImageUrlFromAssets(podcast.ImageAssets);
+        var imageUrl = PodcastHelpers.GetImageUrlFromAssets(series?.ImageAssets);
         var title = series?.Title ?? podcast.Slug.Replace("-", " ");
         var categories = series?.Categories?.Where(c => !string.IsNullOrEmpty(c)).ToList();
         return new FeedMetadata(podcast.Slug, StripTrailingFeedParenthetical(title), imageUrl,

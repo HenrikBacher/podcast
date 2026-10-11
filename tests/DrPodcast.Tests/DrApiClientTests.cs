@@ -102,6 +102,19 @@ public class DrApiClientTests
     }
 
     [Fact]
+    public async Task FetchAllSeries_ReturnsEverySeriesWithItsId()
+    {
+        var api = new FakeDrApi();
+        foreach (var n in Enumerable.Range(1, 300))
+            api.Set($"urn:dr:radio:series:{n:x24}", FakeDrApi.SeriesWith($"S{n}", latestEpisode: 1), []);
+
+        var (series, complete) = await ClientFor(api).FetchAllSeriesAsync(CancellationToken.None);
+
+        series.Should().HaveCount(300).And.OnlyContain(s => s.Id != null && s.Id.StartsWith("urn:dr:radio:series:"));
+        complete.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task FetchAllEpisodes_CompleteFirstPass_IsNotRefetched()
     {
         var api = new FakeDrApi();

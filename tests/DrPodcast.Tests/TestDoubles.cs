@@ -97,9 +97,23 @@ internal sealed class FakeDrApi : HttpMessageHandler
         if (Delay > TimeSpan.Zero && DelayWhen?.Invoke(uri) != false)
             await Task.Delay(Delay, cancellationToken);
 
-        // "{urn}" or "{urn}/episodes" after the API's base URL.
+        // "" (the series listing), "{urn}" or "{urn}/episodes" after the API's base URL.
         var segments = uri.GetLeftPart(UriPartial.Path)[DrApiClient.ApiUrl.Length..].Split('/');
         var urn = segments[0];
+        var query = HttpUtility.ParseQueryString(uri.Query);
+        var limit = int.Parse(query["limit"] ?? "256", CultureInfo.InvariantCulture);
+        var offset = int.Parse(query["offset"] ?? "0", CultureInfo.InvariantCulture);
+
+        if (urn == "")
+        {
+            if (FailRequest?.Invoke(uri) == true)
+                return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
+            List<Series> all;
+            lock (_series) all = [.. _series.Select(kv => kv.Value.Series with { Id = kv.Key })];
+            var seriesPage = new ApiPage<Series>([.. all.Skip(offset).Take(limit)], NextLink("", limit, offset, all.Count), all.Count, offset);
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(seriesPage, PodcastJsonContext.Default.ApiPageSeries) };
+        }
+
         (Series Series, List<Episode> Episodes) entry;
         lock (_series)
         {
@@ -110,23 +124,22 @@ internal sealed class FakeDrApi : HttpMessageHandler
         if (segments is not [_, "episodes"])
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(entry.Series, PodcastJsonContext.Default.Series) };
 
-        var query = HttpUtility.ParseQueryString(uri.Query);
-        var limit = int.Parse(query["limit"] ?? "256", CultureInfo.InvariantCulture);
-        var offset = int.Parse(query["offset"] ?? "0", CultureInfo.InvariantCulture);
         var ordered = query["sort"] == "desc"
             ? [.. entry.Episodes.OrderByDescending(e => e.StartTime, StringComparer.Ordinal)]
             : entry.Episodes;
 
         var items = ordered.Skip(offset).Take(limit).Where(e => DropFromPage?.Invoke(limit, e) != true).ToList();
-        var next = offset + limit < Math.Min(ordered.Count, NextStopsAt ?? int.MaxValue) ? $"{DrApiClient.ApiUrl}{urn}/episodes?limit={limit}&offset={offset + limit}" : null;
-        var page = new EpisodesPage(items, next, ordered.Count, offset);
-        return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(page, PodcastJsonContext.Default.EpisodesPage) };
+        var page = new ApiPage<Episode>(items, NextLink($"{urn}/episodes", limit, offset, ordered.Count), ordered.Count, offset);
+        return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(page, PodcastJsonContext.Default.ApiPageEpisode) };
     }
+
+    private string? NextLink(string path, int limit, int offset, int total) =>
+        offset + limit < Math.Min(total, NextStopsAt ?? int.MaxValue) ? $"{DrApiClient.ApiUrl}{path}?limit={limit}&offset={offset + limit}" : null;
 
     public static Series SeriesWith(string title, int latestEpisode, string defaultOrder = "Desc") =>
         TestData.CreateSeries(title: title, defaultOrder: defaultOrder) with { LatestEpisodeStartTime = StartTimeOf(latestEpisode) };
 
-    /// <summary>Episode <paramref name="n"/> starts n days into 2026, with an mp3 asset of the given hash.</summary>
+    /// <summary>Episode <paramref name="n"/> starts n - 2 days from now, with an mp3 asset of the given hash.</summary>
     public static Episode EpisodeNumber(int n, string? assetHash = null) =>
         TestData.CreateEpisode($"Episode {n}", order: n,
             audioAssets: [new AudioAsset("mp3", 192, $"https://api.dr.dk/radio/v1/assetlinks/urn:dr:radio:episode:{n:x4}/{assetHash ?? new string('a', 64)}", 1000)])
@@ -134,8 +147,10 @@ internal sealed class FakeDrApi : HttpMessageHandler
 
     public static List<Episode> Episodes(int count) => [.. Enumerable.Range(1, count).Select(n => EpisodeNumber(n))];
 
+    // Relative to now, so episode 2 counts as just published (the audio-hash check only runs for series
+    // active in the last day) and episode 1 as the day before.
     public static string StartTimeOf(int n) =>
-        new DateTime(2026, 1, 1, 5, 0, 0, DateTimeKind.Utc).AddDays(n).ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
+        DateTime.UtcNow.AddDays(n - 2).ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
 }
 
 internal sealed class StubHttpClientFactory(HttpMessageHandler handler, TimeSpan? timeout = null) : IHttpClientFactory

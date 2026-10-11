@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization.Metadata;
+
 namespace DrPodcast;
 
 public sealed class DrApiClient(IHttpClientFactory httpClientFactory, ILogger<DrApiClient> logger)
@@ -7,14 +9,14 @@ public sealed class DrApiClient(IHttpClientFactory httpClientFactory, ILogger<Dr
 
     private const string ApiHost = "api.dr.dk";
     internal const string ApiUrl = $"https://{ApiHost}/radio/v2/series/";
-    private const int EpisodesPerPage = 256;
-    private const int MaxPagesPerSeries = 100;
+    private const int PageSize = 256;
+    private const int MaxPages = 100;
 
     // DR's episodes endpoint can return short pages while its next links still advance the offset by
     // the full page size, silently skipping episodes. One series came back with 51 of its 128 episodes
     // in 256-item pages and 116 in 10-item pages; only 5-item pages were complete. Short pages are
     // refetched at this size.
-    private const int FallbackEpisodesPerPage = 5;
+    private const int FallbackPageSize = 5;
 
     /// <summary>Registers the named HttpClient this class uses, and the class itself as a singleton.</summary>
     public static void Register(IServiceCollection services, string apiKey)
@@ -68,7 +70,7 @@ public sealed class DrApiClient(IHttpClientFactory httpClientFactory, ILogger<Dr
         var client = httpClientFactory.CreateClient(HttpClientName);
         // Without sort=desc the endpoint follows the series' defaultOrder, so for an "Asc" series
         // limit=1 is its first episode. The parameter is undocumented, hence the check below.
-        var page = await FetchPageAsync(client, $"{ApiUrl}{urn}/episodes?limit=1&sort=desc", cancellationToken);
+        var page = await FetchPageAsync(client, $"{ApiUrl}{urn}/episodes?limit=1&sort=desc", PodcastJsonContext.Default.ApiPageEpisode, cancellationToken);
         var latest = page?.Items is { Count: > 0 } items ? items[0] : null;
 
         if (ParseTime(latestEpisodeStartTime) is { } expected && ParseTime(latest?.StartTime) is { } got && got != expected)
@@ -80,76 +82,28 @@ public sealed class DrApiClient(IHttpClientFactory httpClientFactory, ILogger<Dr
     }
 
     /// <summary>
-    /// Every episode of the series. Pages that come back short are refetched in small pages and merged.
-    /// <c>Complete</c> is false when the result still falls short of the total the API reports; a warning
-    /// is also logged when nothing is as new as <paramref name="latestEpisodeStartTime"/>.
+    /// Every series DR lists, which is the set of podcasts this app publishes. <c>Complete</c> is false
+    /// when the result still falls short of the total the API reports.
+    /// </summary>
+    public async Task<(List<Series> Series, bool Complete)> FetchAllSeriesAsync(CancellationToken cancellationToken)
+    {
+        var client = httpClientFactory.CreateClient(HttpClientName);
+        var (series, totalSize) = await FetchListAsync(client, ApiUrl, PodcastJsonContext.Default.ApiPageSeries,
+            s => s.Id ?? $"{s.Title}\n{s.Slug}", "the series list", cancellationToken);
+        return (series, !(series.Count < totalSize));
+    }
+
+    /// <summary>
+    /// Every episode of the series. <c>Complete</c> is false when the result still falls short of the
+    /// total the API reports; a warning is also logged when nothing is as new as
+    /// <paramref name="latestEpisodeStartTime"/>.
     /// </summary>
     public async Task<(List<Episode> Episodes, bool Complete)> FetchAllEpisodesAsync(string urn, string? latestEpisodeStartTime, CancellationToken cancellationToken)
     {
         var client = httpClientFactory.CreateClient(HttpClientName);
-        List<Episode> episodes = new(EpisodesPerPage);
-        HashSet<string> seen = new(StringComparer.Ordinal);
-        List<(int Offset, int Length)> shortPages = [];
-        int? totalSize = null;
-
-        var initialUrl = $"{ApiUrl}{urn}/episodes?limit={EpisodesPerPage}";
-        string? nextUrl = initialUrl;
-        var nextOffset = 0;
-        for (var pageCount = 1; !string.IsNullOrEmpty(nextUrl); pageCount++)
-        {
-            if (pageCount > MaxPagesPerSeries)
-            {
-                logger.LogWarning("Reached page limit ({MaxPages}) fetching episodes from {Url}. Truncating.", MaxPagesPerSeries, initialUrl);
-                break;
-            }
-            var page = await FetchPageAsync(client, nextUrl, cancellationToken);
-            totalSize ??= page?.TotalSize;
-            var items = page?.Items ?? [];
-            Add(items);
-
-            nextUrl = ResolveNextUrl(page?.Next);
-            if (nextUrl is null && !string.IsNullOrEmpty(page?.Next))
-                logger.LogWarning("Ignoring untrusted pagination link {Next} while fetching {Url}. Truncating.", page.Next, initialUrl);
-
-            // A page holds the full page size unless it's the last one. Comparing what came back with
-            // what should have finds the windows DR silently thinned out.
-            var offset = page?.Offset ?? (pageCount - 1) * EpisodesPerPage;
-            var expected = totalSize is { } total ? Math.Min(EpisodesPerPage, total - offset) : nextUrl is null ? items.Count : EpisodesPerPage;
-            if (items.Count < expected)
-                shortPages.Add((offset, expected));
-            nextOffset = offset + EpisodesPerPage;
-        }
-
-        // Pagination that stopped before the reported total (no next link, an untrusted one, or the
-        // page limit) leaves windows that were never visited; they're refetched the same way.
-        if (totalSize is { } reported)
-        {
-            for (var o = nextOffset; o < Math.Min(reported, MaxPagesPerSeries * EpisodesPerPage); o += EpisodesPerPage)
-                shortPages.Add((o, Math.Min(EpisodesPerPage, reported - o)));
-        }
-
-        if (shortPages.Count > 0)
-        {
-            var before = episodes.Count;
-            try
-            {
-                // Offsets are built here rather than taken from next links, so only the thinned-out
-                // windows are refetched (at most 52 requests each).
-                foreach (var (offset, length) in shortPages)
-                {
-                    for (var o = offset; o < offset + length; o += FallbackEpisodesPerPage)
-                        Add((await FetchPageAsync(client, $"{ApiUrl}{urn}/episodes?limit={FallbackEpisodesPerPage}&offset={o}", cancellationToken))?.Items ?? []);
-                }
-                logger.LogInformation("DR API returned {ShortPages} short or missing page(s) for {Urn}; refetching them in {FallbackPageSize}-item pages added {Added} episodes ({Count}/{Total}).",
-                    shortPages.Count, urn, FallbackEpisodesPerPage, episodes.Count - before, episodes.Count, totalSize);
-            }
-            // Anything but the caller giving up, including an HttpClient timeout (which also surfaces as
-            // a cancellation): keep what was fetched so far.
-            catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
-            {
-                logger.LogWarning(ex, "Refetching short pages for {Urn} failed; keeping the {Count} episodes fetched so far.", urn, episodes.Count);
-            }
-        }
+        // Episodes without an id are matched on title and start time.
+        var (episodes, totalSize) = await FetchListAsync(client, $"{ApiUrl}{urn}/episodes", PodcastJsonContext.Default.ApiPageEpisode,
+            e => e.Id ?? $"{e.Title}\n{e.StartTime}", urn, cancellationToken);
 
         var complete = !(episodes.Count < totalSize);
         var newest = episodes.Max(e => ParseTime(e.StartTime));
@@ -160,26 +114,100 @@ public sealed class DrApiClient(IHttpClientFactory httpClientFactory, ILogger<Dr
         }
 
         return (episodes, complete);
+    }
 
-        // The same episode can come back twice: from a refetched window, or on two offset pages when
-        // one is published mid-fetch. Episodes without an id are matched on title and start time.
-        void Add(List<Episode> items)
+    /// <summary>
+    /// Follows a DR listing's pagination, then refetches in small pages every window that came back short
+    /// or was never reached (see <see cref="FallbackPageSize"/>). Items are merged by <paramref name="key"/>:
+    /// the same one can come back from a refetched window, or on two offset pages when one is added
+    /// mid-fetch. Returns the items and the total the API reports.
+    /// </summary>
+    private async Task<(List<T> Items, int? TotalSize)> FetchListAsync<T>(HttpClient client, string listUrl, JsonTypeInfo<ApiPage<T>> pageType,
+        Func<T, string> key, string source, CancellationToken cancellationToken)
+    {
+        List<T> items = new(PageSize);
+        HashSet<string> seen = new(StringComparer.Ordinal);
+        List<(int Offset, int Length)> shortPages = [];
+        int? totalSize = null;
+
+        var initialUrl = $"{listUrl}?limit={PageSize}";
+        string? nextUrl = initialUrl;
+        var nextOffset = 0;
+        for (var pageCount = 1; !string.IsNullOrEmpty(nextUrl); pageCount++)
         {
-            foreach (var episode in items)
+            if (pageCount > MaxPages)
             {
-                if (seen.Add(episode.Id ?? $"{episode.Title}\n{episode.StartTime}"))
-                    episodes.Add(episode);
+                logger.LogWarning("Reached page limit ({MaxPages}) fetching {Url}. Truncating.", MaxPages, initialUrl);
+                break;
+            }
+            var page = await FetchPageAsync(client, nextUrl, pageType, cancellationToken);
+            totalSize ??= page?.TotalSize;
+            var pageItems = page?.Items ?? [];
+            Add(pageItems);
+
+            nextUrl = ResolveNextUrl(page?.Next);
+            if (nextUrl is null && !string.IsNullOrEmpty(page?.Next))
+                logger.LogWarning("Ignoring untrusted pagination link {Next} while fetching {Url}. Truncating.", page.Next, initialUrl);
+
+            // A page holds the full page size unless it's the last one. Comparing what came back with
+            // what should have finds the windows DR silently thinned out.
+            var offset = page?.Offset ?? (pageCount - 1) * PageSize;
+            var expected = totalSize is { } total ? Math.Min(PageSize, total - offset) : nextUrl is null ? pageItems.Count : PageSize;
+            if (pageItems.Count < expected)
+                shortPages.Add((offset, expected));
+            nextOffset = offset + PageSize;
+        }
+
+        // Pagination that stopped before the reported total (no next link, an untrusted one, or the
+        // page limit) leaves windows that were never visited; they're refetched the same way.
+        if (totalSize is { } reported)
+        {
+            for (var o = nextOffset; o < Math.Min(reported, MaxPages * PageSize); o += PageSize)
+                shortPages.Add((o, Math.Min(PageSize, reported - o)));
+        }
+
+        if (shortPages.Count > 0)
+        {
+            var before = items.Count;
+            try
+            {
+                // Offsets are built here rather than taken from next links, so only the thinned-out
+                // windows are refetched (at most 52 requests each).
+                foreach (var (offset, length) in shortPages)
+                {
+                    for (var o = offset; o < offset + length; o += FallbackPageSize)
+                        Add((await FetchPageAsync(client, $"{listUrl}?limit={FallbackPageSize}&offset={o}", pageType, cancellationToken))?.Items ?? []);
+                }
+                logger.LogInformation("DR API returned {ShortPages} short or missing page(s) for {Source}; refetching them in {FallbackPageSize}-item pages added {Added} ({Count}/{Total}).",
+                    shortPages.Count, source, FallbackPageSize, items.Count - before, items.Count, totalSize);
+            }
+            // Anything but the caller giving up, including an HttpClient timeout (which also surfaces as
+            // a cancellation): keep what was fetched so far.
+            catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
+            {
+                logger.LogWarning(ex, "Refetching short pages for {Source} failed; keeping the {Count} fetched so far.", source, items.Count);
+            }
+        }
+
+        return (items, totalSize);
+
+        void Add(List<T> pageItems)
+        {
+            foreach (var item in pageItems)
+            {
+                if (seen.Add(key(item)))
+                    items.Add(item);
             }
         }
     }
 
-    private static async Task<EpisodesPage?> FetchPageAsync(HttpClient client, string url, CancellationToken cancellationToken)
+    private static async Task<ApiPage<T>?> FetchPageAsync<T>(HttpClient client, string url, JsonTypeInfo<ApiPage<T>> pageType, CancellationToken cancellationToken)
     {
         using var response = await client.GetAsync(url, cancellationToken);
         response.EnsureSuccessStatusCode();
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        return await JsonSerializer.DeserializeAsync(stream, PodcastJsonContext.Default.EpisodesPage, cancellationToken);
+        return await JsonSerializer.DeserializeAsync(stream, pageType, cancellationToken);
     }
 
     private static DateTimeOffset? ParseTime(string? raw) =>

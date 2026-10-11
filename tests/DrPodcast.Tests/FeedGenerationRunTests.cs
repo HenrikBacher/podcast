@@ -162,6 +162,71 @@ public class FeedGenerationRunTests : IDisposable
         File.ReadAllText(FeedPath("alpha")).Should().Contain("ep-2");
     }
 
+    // Gives a fixture series the slug and production number DR's listing carries, so discovery finds it.
+    private void MakeDiscoverable(string urn, string slug, Series series, List<Episode> episodes) =>
+        _api.Set(urn, series with { Slug = $"{slug}-1001", ProductionNumber = "1001" }, episodes);
+
+    [Fact]
+    public async Task Discovery_PublishesEverySeriesUnderItsDerivedSlug()
+    {
+        MakeDiscoverable(UrnA, "alpha", FakeDrApi.SeriesWith("Alpha", latestEpisode: 2), FakeDrApi.Episodes(2));
+        MakeDiscoverable(UrnB, "bravo", FakeDrApi.SeriesWith("Bravo", latestEpisode: 2), FakeDrApi.Episodes(2));
+
+        await NewService().GenerateFeedsAsync(_config, forceRegenerate: true);
+
+        File.Exists(FeedPath("alpha")).Should().BeTrue();
+        File.Exists(FeedPath("bravo")).Should().BeTrue();
+        Listing().Should().Contain("feeds/alpha.xml").And.Contain("feeds/bravo.xml");
+    }
+
+    [Fact]
+    public async Task Discovery_SeriesWithOnlyStreams_IsNotPublishedAndDoesNotFailTheRun()
+    {
+        MakeDiscoverable(UrnA, "alpha", FakeDrApi.SeriesWith("Alpha", latestEpisode: 2), FakeDrApi.Episodes(2));
+        MakeDiscoverable(UrnB, "bravo", FakeDrApi.SeriesWith("Bravo", latestEpisode: 2),
+            [.. FakeDrApi.Episodes(2).Select(e => e with { AudioAssets = [new AudioAsset("HLS", 0, "https://api.dr.dk/s.m3u8", null)] })]);
+
+        var logger = new ListLogger<FeedGenerationService>();
+        await NewService(logger).GenerateFeedsAsync(_config, forceRegenerate: true);
+
+        File.Exists(FeedPath("bravo")).Should().BeFalse();
+        Listing().Should().Contain("feeds/alpha.xml").And.NotContain("feeds/bravo.xml");
+        // Hundreds of stream-only music shows must not count against the 50% success threshold.
+        logger.Entries.Should().NotContain(e => e.Message.Contains("failed to refresh"));
+    }
+
+    [Fact]
+    public async Task Discovery_ListingFails_UsesThePodcastsFoundLastTime()
+    {
+        MakeDiscoverable(UrnA, "alpha", FakeDrApi.SeriesWith("Alpha", latestEpisode: 2), FakeDrApi.Episodes(2));
+        var service = NewService();
+        await service.GenerateFeedsAsync(_config, forceRegenerate: true);
+
+        _api.FailRequest = u => u.AbsolutePath.TrimEnd('/') == "/radio/v2/series";
+        _api.Set(UrnA, FakeDrApi.SeriesWith("Alpha", latestEpisode: 3) with { Slug = "alpha-1001", ProductionNumber = "1001" }, FakeDrApi.Episodes(3));
+        await service.GenerateFeedsAsync(_config);
+
+        File.ReadAllText(FeedPath("alpha")).Should().Contain("ep-3");
+    }
+
+    [Fact]
+    public async Task InactiveSeries_SkipsTheLatestEpisodeLookup()
+    {
+        // Nothing published in the last day: the audio-hash check is left to the daily full refresh.
+        _api.Set(UrnA, FakeDrApi.SeriesWith("Alpha", latestEpisode: 2) with { LatestEpisodeStartTime = "2020-01-01T05:00:00Z" }, FakeDrApi.Episodes(2));
+        var service = NewService();
+        await service.GenerateFeedsAsync(_podcasts, _config, forceRegenerate: true);
+        int Lookups(string urn) => _api.Requests.Count(u => u.AbsolutePath.Contains(urn) && u.Query.Contains("sort=desc"));
+        var (alphaBefore, bravoBefore) = (Lookups(UrnA), Lookups(UrnB));
+
+        await service.GenerateFeedsAsync(_podcasts, _config);
+
+        // Bravo published recently and is still checked; Alpha isn't.
+        Lookups(UrnA).Should().Be(alphaBefore);
+        Lookups(UrnB).Should().Be(bravoBefore + 1);
+        Listing().Should().Contain("feeds/alpha.xml");
+    }
+
     [Fact]
     public async Task AscendingSeries_RotatedAudioHashOnTheNewestEpisode_IsPickedUp()
     {

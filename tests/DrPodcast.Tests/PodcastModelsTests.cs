@@ -3,58 +3,6 @@ namespace DrPodcast.Tests;
 public class PodcastModelsTests
 {
     [Fact]
-    public void PodcastList_ShouldDeserializeFromJson()
-    {
-        var json = """
-        {
-            "podcasts": [
-                {
-                    "slug": "test-podcast",
-                    "urn": "urn:dr:radio:series:12345"
-                }
-            ]
-        }
-        """;
-
-        var result = JsonSerializer.Deserialize(json, PodcastJsonContext.Default.PodcastList);
-
-        result.Should().BeEquivalentTo(new PodcastList
-        {
-            Podcasts = [new Podcast("test-podcast", "urn:dr:radio:series:12345", null)]
-        });
-    }
-
-    [Fact]
-    public void Podcast_ShouldDeserializeWithImageAssets()
-    {
-        var json = """
-        {
-            "podcasts": [
-                {
-                    "slug": "test-podcast",
-                    "urn": "urn:dr:radio:series:12345",
-                    "imageAssets": [
-                        {
-                            "id": "img-123",
-                            "target": "podcast",
-                            "ratio": "1:1"
-                        }
-                    ]
-                }
-            ]
-        }
-        """;
-
-        var result = JsonSerializer.Deserialize(json, PodcastJsonContext.Default.PodcastList);
-
-        result.Should().BeEquivalentTo(new PodcastList
-        {
-            Podcasts = [new Podcast("test-podcast", "urn:dr:radio:series:12345",
-                [new ImageAsset("img-123", "podcast", "1:1")])]
-        });
-    }
-
-    [Fact]
     public void Series_ShouldDeserializeCompleteObject()
     {
         var json = """
@@ -99,17 +47,19 @@ public class PodcastModelsTests
             Punchline: "A great test podcast",
             Description: "This is a detailed description of the test podcast.",
             ImageAssets: [new ImageAsset("img-456", "default", "16:9")],
-            NumberOfSeasons: 2
+            NumberOfSeasons: 2,
+            Id: "12345",
+            Slug: "test-podcast"
         ));
     }
 
     [Fact]
-    public void EpisodesPage_ReadsTotalSize()
+    public void ApiPage_ReadsTotalSize()
     {
         // FetchAllEpisodesAsync compares what it collected against this to catch short pages.
         var json = """{ "items": [], "next": null, "totalSize": 128, "limit": 256, "offset": 0 }""";
 
-        var page = JsonSerializer.Deserialize(json, PodcastJsonContext.Default.EpisodesPage);
+        var page = JsonSerializer.Deserialize(json, PodcastJsonContext.Default.ApiPageEpisode);
 
         page!.TotalSize.Should().Be(128);
     }

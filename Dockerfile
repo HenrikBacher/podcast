@@ -6,7 +6,6 @@ COPY src/DrPodcast.csproj src/
 RUN dotnet restore src/DrPodcast.csproj -r linux-musl-x64
 COPY src/ src/
 COPY site/ site/
-COPY podcasts.json src/
 RUN dotnet publish src/DrPodcast.csproj -c Release -r linux-musl-x64 \
     -p:DebugType=none -p:StripSymbols=true -o /out
 
@@ -14,7 +13,6 @@ RUN dotnet publish src/DrPodcast.csproj -c Release -r linux-musl-x64 \
 FROM alpine:3
 WORKDIR /app
 COPY --from=build --chown=99:100 /out/DrPodcast ./
-COPY --from=build --chown=99:100 /out/podcasts.json ./
 COPY --from=build --chown=99:100 /src/site/ site/
 RUN mkdir -p output && chown 99:100 /app/output
 USER 99:100
