@@ -27,9 +27,15 @@ on:
 permissions:
   contents: read
 
+# One run per ref at a time. Two quick merges to main would otherwise both read the same latest tag,
+# compute the same version, and push it (and :latest) in whichever order their builds finish.
+# A superseded PR run is cancelled; a push to main waits for the running one instead.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   DOTNET_VERSION: "10.0.x"
-  IMAGE_NAME: ghcr.io/${{ github.repository }}
 
 jobs:
   determine-version:
@@ -41,6 +47,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       version-tag: ${{ steps.version.outputs.version-tag }}
       is-release: ${{ steps.version.outputs.is-release }}
+      image: ${{ steps.version.outputs.image }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -126,6 +133,8 @@ jobs:
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           "version-tag=v$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           "is-release=$isRelease" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          # Docker rejects uppercase repository names, and github.repository keeps the owner's casing.
+          "image=ghcr.io/$($env:GITHUB_REPOSITORY.ToLowerInvariant())" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
   test:
     runs-on: ubuntu-latest
@@ -193,7 +202,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ${{ env.IMAGE_NAME }}
+          images: ${{ needs.determine-version.outputs.image }}
           tags: |
             type=raw,value=latest
             type=raw,value=${{ needs.determine-version.outputs.version-tag }}
@@ -214,7 +223,7 @@ jobs:
       - name: Generate signed build provenance attestation
         uses: actions/attest-build-provenance@v4
         with:
-          subject-name: ${{ env.IMAGE_NAME }}
+          subject-name: ${{ needs.determine-version.outputs.image }}
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
 
@@ -229,13 +238,13 @@ jobs:
             ### Docker
 
             ```bash
-            docker pull ${{ env.IMAGE_NAME }}:${{ needs.determine-version.outputs.version-tag }}
+            docker pull ${{ needs.determine-version.outputs.image }}:${{ needs.determine-version.outputs.version-tag }}
             ```
 
             Or use `latest`:
 
             ```bash
-            docker pull ${{ env.IMAGE_NAME }}:latest
+            docker pull ${{ needs.determine-version.outputs.image }}:latest
             ```
           draft: false
           prerelease: false

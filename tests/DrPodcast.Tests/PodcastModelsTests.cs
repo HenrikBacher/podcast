@@ -98,8 +98,20 @@ public class PodcastModelsTests
             Title: "Test Podcast",
             Punchline: "A great test podcast",
             Description: "This is a detailed description of the test podcast.",
-            ImageAssets: [new ImageAsset("img-456", "default", "16:9")]
+            ImageAssets: [new ImageAsset("img-456", "default", "16:9")],
+            NumberOfSeasons: 2
         ));
+    }
+
+    [Fact]
+    public void EpisodesPage_ReadsTotalSize()
+    {
+        // FetchAllEpisodesAsync compares what it collected against this to catch short pages.
+        var json = """{ "items": [], "next": null, "totalSize": 128, "limit": 256, "offset": 0 }""";
+
+        var page = JsonSerializer.Deserialize(json, PodcastJsonContext.Default.EpisodesPage);
+
+        page!.TotalSize.Should().Be(128);
     }
 
     [Fact]

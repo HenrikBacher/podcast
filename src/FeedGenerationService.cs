@@ -15,6 +15,12 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
     // feed file is still on disk and served, so dropping it from index.html would be a lie.
     private readonly ConcurrentDictionary<string, FeedMetadata> _lastKnownMetadata = new();
 
+    // The listing as last rendered into index.html, or null before the first render in this process.
+    // The page is rebuilt whenever the listing differs from it, not only when a feed changed: a podcast
+    // that failed on the startup run has no metadata yet, and once it recovers its feed is "unchanged",
+    // so it would otherwise stay missing from the page. DR title and cover edits get through the same way.
+    private IReadOnlyList<FeedMetadata>? _renderedListing;
+
     private long _lastSuccessfulRunUtcTicks;
     public DateTime? LastSuccessfulRunUtc
     {
@@ -91,11 +97,13 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
             Interlocked.Exchange(ref _lastSuccessfulRunUtcTicks, DateTime.UtcNow.Ticks);
         }
 
-        if (changedCount > 0 || forceRegenerate)
+        var listingChanged = _renderedListing is null || !_renderedListing.SequenceEqual(feedMetadata);
+        if (changedCount > 0 || listingChanged)
         {
             try
             {
                 await WebsiteGenerator.GenerateAsync(feedMetadata, config, logger, cancellationToken);
+                _renderedListing = feedMetadata;
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -104,7 +112,7 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
             catch (Exception)
             {
                 // Already logged by WebsiteGenerator. The feeds themselves are current, so the
-                // run is not a failure — the next change will retry the listing.
+                // run is not a failure — the next run retries the listing.
                 logger.LogWarning("Feeds are up to date but the website listing could not be regenerated.");
             }
         }
@@ -129,7 +137,9 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
 
     private async Task<ProcessResult?> ProcessPodcastAsync(Podcast podcast, GeneratorConfig config, bool forceRegenerate, CancellationToken cancellationToken)
     {
-        using var scope = logger.BeginScope(new Dictionary<string, object> { ["Slug"] = podcast.Slug });
+        // A message-template scope rather than a dictionary: the simple console formatter renders a
+        // scope with ToString(), which for a dictionary is just its type name.
+        using var scope = logger.BeginScope("Slug: {Slug}", podcast.Slug);
 
         // Per-podcast budget so one hung series can't starve the others up to the outer 10-minute cap.
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -150,7 +160,7 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
             }
 
             // Skip regeneration if the feed is already up-to-date, so Last-Modified stays stable.
-            // On startup (forceRegenerate=true) this check is bypassed so code changes are applied.
+            // On startup and the daily full refresh (forceRegenerate=true) this check is bypassed.
             string outputPath = Path.Combine(config.FeedsDir, $"{podcast.Slug}.xml");
             if (!forceRegenerate && File.Exists(outputPath) && !await HasNewerEpisodesAsync(outputPath, series, ct))
             {
@@ -158,7 +168,7 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
                 // episodes (re-encodes etc.) without bumping LatestEpisodeStartTime — leaving feeds
                 // pointing at 404'd URLs. Verify the latest episode's current asset hash is in the
                 // file before skipping.
-                var latestEpisode = await apiClient.FetchLatestEpisodeAsync(podcast.Urn, ct);
+                var latestEpisode = await apiClient.FetchLatestEpisodeAsync(podcast.Urn, series.LatestEpisodeStartTime, ct);
                 if (latestEpisode is null || await FeedReferencesLatestAssetAsync(outputPath, latestEpisode, ct))
                 {
                     logger.LogDebug("Skipped (unchanged)");
@@ -167,12 +177,12 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
                 logger.LogDebug("Regenerating: latest episode's audio asset hash has rotated");
             }
 
-            var episodes = await apiClient.FetchAllEpisodesAsync(podcast.Urn, ct);
+            var episodes = await apiClient.FetchAllEpisodesAsync(podcast.Urn, series.LatestEpisodeStartTime, ct);
 
             // Never replace a populated feed with an empty one. An upstream hiccup that answers
             // with zero items would otherwise wipe the whole back catalogue and report success.
             // (A genuinely empty series with no file yet still gets its first, empty feed.)
-            if (episodes is not { Count: > 0 } && File.Exists(outputPath))
+            if (episodes.Count == 0 && File.Exists(outputPath))
             {
                 logger.LogWarning("DR API returned no episodes for {Urn}. Keeping the existing feed.", podcast.Urn);
                 return null;
@@ -180,17 +190,23 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
 
             var (rss, metadata) = RssBuilder.BuildRssFeed(series, episodes, podcast, config.BaseUrl);
 
+            // A regeneration that reproduces the file byte for byte must leave it alone: static-file
+            // ETag and Last-Modified derive from the file's mtime and length, not its content, so a
+            // rewrite would turn every podcatcher's conditional GET into a full download. A changed feed
+            // is usually a few episodes longer than the file, hence the buffer headroom.
+            var existing = new FileInfo(outputPath);
+            var xml = RssBuilder.Serialize(rss, expectedSize: existing.Exists ? (int)existing.Length + 64 * 1024 : 0);
+            if (await FileHoldsAsync(existing, xml, ct))
+            {
+                logger.LogDebug("Regenerated with identical content; file left untouched");
+                return new ProcessResult(metadata, Changed: false);
+            }
+
             // Atomic write: write to temp file then rename to avoid serving partial files
             string tempPath = outputPath + ".tmp";
             try
             {
-                await using (var fileStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true))
-                {
-                    var xmlDoc = new XDocument(new XDeclaration("1.0", "utf-8", "yes"), rss);
-                    var xmlSettings = new XmlWriterSettings { Async = true, Encoding = new UTF8Encoding(false) };
-                    await using var xmlWriter = XmlWriter.Create(fileStream, xmlSettings);
-                    await xmlDoc.SaveAsync(xmlWriter, ct);
-                }
+                await File.WriteAllBytesAsync(tempPath, xml, ct);
                 File.Move(tempPath, outputPath, overwrite: true);
             }
             catch
@@ -208,7 +224,9 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
         {
             throw;
         }
-        catch (OperationCanceledException)
+        // Only this podcast's own budget. An HttpClient.Timeout surfaces as a cancellation too, and
+        // reporting it as the 2-minute budget would misstate what happened; it's logged as a failure.
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
         {
             logger.LogWarning("Timed out after {Timeout}s processing {Urn}", PerPodcastTimeout.TotalSeconds, podcast.Urn);
             return null;
@@ -268,8 +286,10 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
             Encoding.ASCII.GetBytes(ascii, needle.AsSpan(0, ascii.Length));
             var needleSpan = needle.AsMemory(0, ascii.Length);
 
+            // bufferSize 0: this loop does its own buffering. FileStream's buffer would cost a fresh
+            // 64 KB per call, because every read after the first is smaller than it.
             await using var stream = new FileStream(feedPath, FileMode.Open, FileAccess.Read,
-                FileShare.Read, SearchBufferSize, useAsync: true);
+                FileShare.Read, bufferSize: 0, useAsync: true);
 
             // Bytes retained from the previous chunk so a needle straddling a chunk boundary
             // is still found.
@@ -291,6 +311,22 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
         {
             ArrayPool<byte>.Shared.Return(buffer);
             ArrayPool<byte>.Shared.Return(needle);
+        }
+    }
+
+    // A length mismatch, the usual sign of a real change, settles it without reading the file. Anything
+    // unreadable counts as different, so it gets written.
+    private static async Task<bool> FileHoldsAsync(FileInfo file, ReadOnlyMemory<byte> content, CancellationToken cancellationToken)
+    {
+        if (!file.Exists || file.Length != content.Length)
+            return false;
+        try
+        {
+            return (await File.ReadAllBytesAsync(file.FullName, cancellationToken)).AsSpan().SequenceEqual(content.Span);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
         }
     }
 

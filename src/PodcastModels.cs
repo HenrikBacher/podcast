@@ -9,7 +9,7 @@ public partial class PodcastJsonContext : JsonSerializerContext
 {
 }
 
-public record EpisodesPage(List<Episode>? Items, string? Next);
+public record EpisodesPage(List<Episode>? Items, string? Next, int? TotalSize);
 
 public record FeedMetadata(string Slug, string Title, string? ImageUrl);
 
@@ -95,5 +95,12 @@ public record Series(
     string? Title,
     string? Punchline,
     string? Description,
-    List<ImageAsset>? ImageAssets
-);
+    List<ImageAsset>? ImageAssets,
+    int? NumberOfSeasons = null
+)
+{
+    // DR reports a seasonal show's season count as either numberOfSeries or numberOfSeasons,
+    // depending on the series ("laegens-bord" only has the latter).
+    [JsonIgnore]
+    public bool HasSeasons => NumberOfSeries > 0 || NumberOfSeasons > 0;
+}

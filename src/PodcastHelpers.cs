@@ -6,7 +6,9 @@ public static class PodcastHelpers
     {
         if (imageAssets is not { Count: > 0 }) return null;
 
-        // Priority: Podcast 1:1 (4) > Default 1:1 (3) > Podcast any (2) > Default any (1) > none (0)
+        // Priority: Podcast 1:1 (4) > Default 1:1 (3) > Podcast any (2) > Default any (1) > any other
+        // target (0). An unrecognised target (DR also sends "SquareImage") is a last resort: still better
+        // than a channel with no image.
         var bestAsset = imageAssets
             .Where(a => a != null)
             .MaxBy(Rank);

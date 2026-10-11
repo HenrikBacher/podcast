@@ -1,3 +1,5 @@
+using static DrPodcast.Tests.TestData;
+
 namespace DrPodcast.Tests;
 
 public class RssBuilderTests
@@ -130,6 +132,38 @@ public class RssBuilderTests
     }
 
     [Fact]
+    public void BuildRssFeed_SeasonCountOnlyInNumberOfSeasons_SortsLatestSeasonFirst()
+    {
+        // DR reports some series' seasons as numberOfSeasons rather than numberOfSeries ("laegens-bord"),
+        // and those were sorted as if they had no seasons: season 1 first.
+        var series = CreateSeries(numberOfSeasons: 2, defaultOrder: "Asc");
+        var episodes = new List<Episode>
+        {
+            CreateEpisode("S1E1", seasonNumber: 1, order: 100001),
+            CreateEpisode("S1E2", seasonNumber: 1, order: 100002),
+            CreateEpisode("S2E1", seasonNumber: 2, order: 200001),
+        };
+        var podcast = new Podcast("test", "urn:test", null);
+
+        var (rss, _) = RssBuilder.BuildRssFeed(series, episodes, podcast, "https://example.com");
+
+        var items = rss.Descendants("item").Select(i => i.Element("title")?.Value).ToList();
+        items.Should().Equal("S2E1", "S1E1", "S1E2");
+    }
+
+    [Fact]
+    public void BuildRssFeed_DoesNotPutItunesSeasonOnTheChannel()
+    {
+        // itunes:season is an episode-level tag.
+        XNamespace itunes = "http://www.itunes.com/dtds/podcast-1.0.dtd";
+        var podcast = new Podcast("test", "urn:test", null);
+
+        var (rss, _) = RssBuilder.BuildRssFeed(CreateSeries(numberOfSeries: 3), [], podcast, "https://example.com");
+
+        rss.Element("channel")!.Element(itunes + "season").Should().BeNull();
+    }
+
+    [Fact]
     public void BuildRssFeed_NullEpisodes_ProducesEmptyChannel()
     {
         var series = CreateSeries();
@@ -215,20 +249,66 @@ public class RssBuilderTests
         enclosure!.Attribute("length")!.Value.Should().Be("41472000");
     }
 
-    [Fact]
-    public void BuildEpisodeItem_FormatsDuration()
+    [Theory]
+    [InlineData(3_723_000, "3723")]
+    [InlineData(90_000_000, "90000")] // 25 hours, which an hh:mm:ss format wraps to 01:00:00
+    public void BuildEpisodeItem_WritesDurationInWholeSeconds(int durationMilliseconds, string expected)
     {
         XNamespace itunes = "http://www.itunes.com/dtds/podcast-1.0.dtd";
-        var episode = new Episode(
-            Title: "Test", Description: null, PublishTime: "2024-01-01T00:00:00Z",
-            StartTime: null,
-            Id: "ep-1", PresentationUrl: null, DurationMilliseconds: 3723000,
-            AudioAssets: null, Categories: null, ImageAssets: null,
-            EpisodeNumber: null, SeasonNumber: null, ExplicitContent: false, Order: null);
+        var episode = CreateEpisode("Test") with { DurationMilliseconds = durationMilliseconds };
 
         var item = RssBuilder.BuildEpisodeItem(episode, null, itunes);
 
-        item.Element(itunes + "duration")!.Value.Should().Be("01:02:03");
+        item.Element(itunes + "duration")!.Value.Should().Be(expected);
+    }
+
+    [Fact]
+    public void BuildEpisodeItem_UnknownDuration_OmitsTheElement()
+    {
+        XNamespace itunes = "http://www.itunes.com/dtds/podcast-1.0.dtd";
+        var episode = CreateEpisode("Test") with { DurationMilliseconds = null };
+
+        var item = RssBuilder.BuildEpisodeItem(episode, null, itunes);
+
+        item.Element(itunes + "duration").Should().BeNull();
+    }
+
+    [Fact]
+    public void BuildEpisodeItem_Guid_IsMarkedAsNotAPermalink()
+    {
+        // RSS 2.0 spells it isPermaLink. XML is case-sensitive, so another spelling is ignored and the
+        // guid defaults to being a permalink, which an episode id isn't.
+        XNamespace itunes = "http://www.itunes.com/dtds/podcast-1.0.dtd";
+
+        var guid = RssBuilder.BuildEpisodeItem(CreateEpisode("Test"), null, itunes).Element("guid")!;
+
+        guid.Attribute("isPermaLink")!.Value.Should().Be("false");
+        guid.Attributes().Should().ContainSingle();
+    }
+
+    [Fact]
+    public void BuildEpisodeItem_UnknownFileSize_WritesZeroLength()
+    {
+        // length is a required enclosure attribute.
+        XNamespace itunes = "http://www.itunes.com/dtds/podcast-1.0.dtd";
+        var episode = CreateEpisode("Test", audioAssets: [new AudioAsset("mp3", 192, "https://example.com/audio.mp3", null)]);
+
+        var item = RssBuilder.BuildEpisodeItem(episode, null, itunes);
+
+        item.Element("enclosure")!.Attribute("length")!.Value.Should().Be("0");
+    }
+
+    [Fact]
+    public void BuildEpisodeItem_Categories_UsePlainRssCategory()
+    {
+        // itunes:category is only valid on the channel.
+        XNamespace itunes = "http://www.itunes.com/dtds/podcast-1.0.dtd";
+        var episode = CreateEpisode("Test", categories: ["Historie", ""]);
+
+        var item = RssBuilder.BuildEpisodeItem(episode, null, itunes);
+
+        item.Elements("category").Select(c => c.Value).Should().Equal("Historie");
+        item.Elements(itunes + "category").Should().BeEmpty();
     }
 
     [Fact]
@@ -269,49 +349,17 @@ public class RssBuilderTests
 
     #endregion
 
-    #region Helpers
+    #region Serialize
 
-    private static Series CreateSeries(
-        string? presentationType = null,
-        int numberOfSeries = 0,
-        string? defaultOrder = null,
-        string? title = "Test Series") => new(
-        Categories: null,
-        NumberOfSeries: numberOfSeries,
-        PresentationType: presentationType,
-        LatestEpisodeStartTime: null,
-        PresentationUrl: null,
-        ExplicitContent: false,
-        DefaultOrder: defaultOrder,
-        Title: title,
-        Punchline: null,
-        Description: "Test description",
-        ImageAssets: null
-    );
-
-    private static Episode CreateEpisode(
-        string title,
-        int? seasonNumber = null,
-        long? order = null,
-        List<AudioAsset>? audioAssets = null,
-        List<ImageAsset>? imageAssets = null)
+    [Fact]
+    public void Serialize_WritesUtf8WithoutBomAfterAnXmlDeclaration()
     {
-        return new Episode(
-            Title: title,
-            Description: null,
-            PublishTime: "2024-01-01T00:00:00Z",
-            StartTime: "2024-01-01T00:00:00Z",
-            Id: $"ep-{title}",
-            PresentationUrl: null,
-            DurationMilliseconds: 60000,
-            AudioAssets: audioAssets,
-            Categories: null,
-            ImageAssets: imageAssets,
-            EpisodeNumber: null,
-            SeasonNumber: seasonNumber,
-            ExplicitContent: false,
-            Order: order
-        );
+        // Feeds on disk are compared byte for byte with this output before being rewritten, so a
+        // format change would rewrite every feed once.
+        var bytes = RssBuilder.Serialize(new XElement("rss", new XElement("channel", "æøå")));
+
+        System.Text.Encoding.UTF8.GetString(bytes.Span)
+            .Should().Be("""<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss><channel>æøå</channel></rss>""");
     }
 
     #endregion

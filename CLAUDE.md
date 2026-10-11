@@ -40,11 +40,12 @@ dotnet watch test --project tests/DrPodcast.Tests/DrPodcast.Tests.csproj
 The test suite includes:
 - **PodcastModelsTests.cs**: JSON serialization/deserialization of podcast models
 - **PodcastHelpersTests.cs**: Helper functions (image URL extraction)
-- **RssBuilderTests.cs**: RSS/iTunes XML construction, audio asset selection, date formatting
-- **FeedGenerationServiceTests.cs**: Change detection, asset-hash verification, success threshold
+- **RssBuilderTests.cs**: RSS/iTunes XML construction, audio asset selection, date formatting, byte-exact serialization
+- **FeedGenerationServiceTests.cs**: Change detection, asset-hash verification
+- **FeedGenerationRunTests.cs**: Whole generation runs against an in-memory DR API (`TestDoubles.cs`): listing recovery after a restart, byte-identical regenerations left untouched, rotated hashes on `Asc` series, timeout attribution
 - **WebsiteGeneratorTests.cs**: Template rendering, static-asset copying, feed sorting, HTML escaping
 - **FileContainsAsciiTests.cs**: Chunked ASCII search, including needles straddling chunk boundaries
-- **DrApiClientTests.cs**: Pagination `next` links are only followed to the DR API host over HTTPS
+- **DrApiClientTests.cs**: Pagination `next` links are only followed to the DR API host over HTTPS; short-page fallback; newest-first latest-episode lookup; incomplete-list warning; the registered client doesn't follow redirects
 - **FeedRefreshBackgroundServiceTests.cs**: Backoff schedule and overflow bounds; `GeneratorConfig` env parsing
 
 **CI/CD Integration**: Tests run automatically in the build pipeline on all pull requests and pushes to main.
@@ -68,7 +69,7 @@ The test suite includes:
 ### Core Components
 - **Program.cs**: Application entry point — ASP.NET Core host setup, health/readiness endpoints, static file serving
 - **FeedGenerationService.cs**: Orchestrator — iterates podcasts in parallel, decides when to skip via `HasNewerEpisodesAsync`/`FeedReferencesLatestAssetAsync`, writes RSS XML atomically, tracks readiness and last-known metadata
-- **DrApiClient.cs**: HTTP access to the DR API — fetches series metadata, the latest episode, and paginates full episode lists
+- **DrApiClient.cs**: HTTP access to the DR API — fetches series metadata, the latest episode, and paginates full episode lists; registers its own named HttpClient (`DrApiClient.Register`: API key header, timeout, response cap, compression, no redirects, resilience)
 - **RssBuilder.cs**: Pure XML construction — builds RSS feeds and episode `<item>` elements, including episode sorting and audio asset selection
 - **FeedRefreshBackgroundService.cs**: Background service — runs feed generation on startup and on a periodic timer with exponential backoff on failure
 - **PodcastModels.cs**: Data models and `GeneratorConfig`, with JSON source generation for NativeAOT compatibility
@@ -80,27 +81,29 @@ The test suite includes:
 
 ### Key Design Patterns
 - **NativeAOT Optimization**: Source-generated JSON serialization, trim-safe patterns, aggressive optimization settings
-- **Resilient HTTP**: HttpClient configured via `Microsoft.Extensions.Http.Resilience` standard resilience handler (retries, timeouts, circuit breaker)
+- **Resilient HTTP**: HttpClient configured via `Microsoft.Extensions.Http.Resilience` standard resilience handler (retries, timeouts, circuit breaker). Redirects are not followed: the API key is a custom header, which .NET keeps on a redirect to any host
 - **RSS Standards Compliance**: Generates feeds with iTunes and Atom namespaces
-- **Pagination Handling**: Fetches all episodes across multiple API pages (256 per page, capped at 100 pages per series)
+- **Pagination Handling**: Fetches all episodes across multiple API pages (256 per page, capped at 100 pages per series). DR sometimes returns short pages while its `next` links still advance by the full page size (in Oct 2026 `tyran` came back with 51 of its 128 episodes), so when the collected count is below the API's `totalSize` the fetch is repeated in 5-item pages and merged by episode id
 - **Atomic Writes**: Feeds and `index.html` are written to a `.tmp` file then renamed to avoid serving partial content. `site/index.html` is the *template* and is deliberately excluded from the static-asset copy, so the raw `{{...}}` placeholders are never published
+- **Unchanged Feeds Are Not Rewritten**: A regeneration that reproduces the existing file byte for byte leaves it untouched. Static-file ETag and Last-Modified derive from mtime and length, not content, so even an identical rewrite would make every podcatcher download the feed again
 - **Never Degrade a Good Feed**: A null series body or an empty episode list is treated as a failed refresh rather than written out — an upstream hiccup must not overwrite a populated feed with an empty one
 - **Response Compression**: Brotli/gzip for XML and HTML. Caddy does not compress unless `encode` is configured, so the app does it
 - **Constant-Memory Asset Check**: `FileContainsAsciiAsync` streams the feed in 64 KB pooled chunks (with carry-over across boundaries) instead of decoding it into a string. This runs for every unchanged podcast on every tick; the string version allocated ~4x the feed size per call, all of it on the Large Object Heap
 - **Compressed Upstream Fetches**: the DR API client sets `AutomaticDecompression`, which `HttpClient` does not enable by default — episode pages are large JSON and gzip well
-- **Change Detection**: Skips regenerating feeds whose `<lastBuildDate>` already matches the API's `LatestEpisodeStartTime`, using `XmlReader` to read only the first few elements; additionally verifies the latest episode's audio asset hash is still referenced (DR rotates hashes without bumping the timestamp)
-- **Resilient Website Listing**: `index.html` is built from the full configured podcast set using last-known metadata, so a transient fetch failure for one podcast doesn't drop its still-served feed from the listing
+- **Change Detection**: Skips regenerating feeds whose `<lastBuildDate>` already matches the API's `LatestEpisodeStartTime`, using `XmlReader` to read only the first few elements; additionally verifies the latest episode's audio asset hash is still referenced (DR rotates hashes without bumping the timestamp). The latest episode is requested with `sort=desc`: the endpoint's default order follows the series' `defaultOrder`, so for `Asc` series `limit=1` used to return episode 1. A full regeneration runs on startup and then daily, bounding staleness from what change detection can't see (rotated hashes on older episodes, edited or removed episodes)
+- **Cross-Checks Against `LatestEpisodeStartTime`**: `DrApiClient` logs a warning when the latest-episode lookup, or the newest episode in a full fetch, disagrees with the series' own latest timestamp — the signature of both upstream bugs above
+- **Resilient Website Listing**: `index.html` is built from the full configured podcast set using last-known metadata, so a transient fetch failure for one podcast doesn't drop its still-served feed from the listing. It is rebuilt whenever a feed changed or the listing differs from the last one rendered (always on a process's first run), so a podcast that failed on the startup run reappears once it recovers
 - **Readiness Independent of the Listing**: Readiness is recorded before website regeneration and a listing failure is logged rather than thrown, so a cosmetic `index.html` problem can't 503 a service whose feeds are all current
 
 ### Data Flow
 1. Load podcast configuration from `podcasts.json` (parsed once at startup)
 2. For each podcast (processed in parallel), fetch series metadata from the DR API
-3. Compare `LatestEpisodeStartTime` against the existing feed's `<lastBuildDate>` — skip if unchanged
-4. For an otherwise-skipped feed, verify the latest episode's current audio asset hash is still present; regenerate if it has rotated
-5. Paginate through all episodes for the series (up to 256 per page, max 100 pages)
+3. Compare `LatestEpisodeStartTime` against the existing feed's `<lastBuildDate>` — skip if unchanged (bypassed on startup and the daily full refresh)
+4. For an otherwise-skipped feed, verify the newest episode's current audio asset hash is still present; regenerate if it has rotated
+5. Paginate through all episodes for the series (up to 256 per page, max 100 pages); if short of the API's `totalSize`, refetch in 5-item pages and merge
 6. Sort episodes and generate RSS XML with full iTunes metadata
-7. Atomically write the feed to `output/_site/feeds/{slug}.xml`
-8. Regenerate the static website (`output/_site/index.html`) when any feed changed or on a forced startup run
+7. Atomically write the feed to `output/_site/feeds/{slug}.xml`, unless it is byte-identical to the existing file
+8. Regenerate the static website (`output/_site/index.html`) when any feed changed or the listing differs from the last render
 
 ### Environment Variables
 | Variable | Required | Default | Description |
@@ -122,7 +125,7 @@ Readiness (`/ready`) reports 503 once the last successful run is older than `max
 ### Episode Sorting Logic
 The application uses different sorting strategies depending on whether a podcast has seasons (see `RssBuilder.BuildRssFeed`):
 
-- **Seasonal shows** (`NumberOfSeries > 0`): Sort by season descending (latest first), then by episode order
+- **Seasonal shows** (`NumberOfSeries > 0` or `NumberOfSeasons > 0` — DR reports the season count under either field, depending on the series): Sort by season descending (latest first), then by episode order
   - Ascending (`DefaultOrder="Asc"`): Latest season first, then episodes 1→N within season
   - Descending: Latest season first, then episodes N→1 within season
 - **Non-seasonal shows**: Standard order without season consideration
@@ -135,7 +138,10 @@ When extracting image URLs from `ImageAssets` (`PodcastHelpers.cs`):
 2. Default target with 1:1 ratio
 3. Podcast target with any ratio
 4. Default target with any ratio
-5. Falls back to the channel image if an episode has no suitable image
+5. Any other target (DR also sends `SquareImage`) as a last resort
+6. Falls back to the channel image if an episode has no image at all
+
+In practice every series and episode carries a Podcast 1:1 image (checked Oct 2026), so steps 2–6 are defensive.
 
 ### Audio Asset Selection
 `RssBuilder.SelectAudioAsset` picks the highest-bitrate `mp3` asset as the enclosure audio (the format is matched **case-insensitively**).

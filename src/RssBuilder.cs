@@ -96,16 +96,15 @@ public static class RssBuilder
             channel.Add(new XElement(itunes + "summary", series.Description));
         }
 
-        AddCategories(channel, series?.Categories, itunes);
-
-        if (series?.NumberOfSeries > 0)
+        foreach (var category in series?.Categories ?? [])
         {
-            channel.Add(new XElement(itunes + "season", series.NumberOfSeries));
+            if (!string.IsNullOrEmpty(category))
+                channel.Add(new XElement(itunes + "category", new XAttribute("text", category)));
         }
 
         if (episodes is not null)
         {
-            var hasSeasons = series?.NumberOfSeries > 0;
+            var hasSeasons = series?.HasSeasons == true;
             var ascending = series?.DefaultOrder == "Asc";
 
             IOrderedEnumerable<Episode> sorted = (hasSeasons, ascending) switch
@@ -131,6 +130,22 @@ public static class RssBuilder
         return (rss, metadata);
     }
 
+    /// <summary>
+    /// The feed as written to disk: UTF-8 without a BOM, after an XML declaration. Deterministic for a
+    /// given tree, which is what lets an unchanged feed be recognised byte for byte and left alone.
+    /// </summary>
+    /// <param name="expectedSize">Initial buffer size. Feeds run to a few MB, and growing the buffer by
+    /// doubling would leave a trail of discarded Large Object Heap arrays behind it.</param>
+    public static ReadOnlyMemory<byte> Serialize(XElement rss, int expectedSize = 0)
+    {
+        var buffer = new MemoryStream(expectedSize);
+        using (var writer = XmlWriter.Create(buffer, new XmlWriterSettings { Encoding = new UTF8Encoding(false) }))
+        {
+            new XDocument(new XDeclaration("1.0", "utf-8", "yes"), rss).Save(writer);
+        }
+        return buffer.GetBuffer().AsMemory(0, (int)buffer.Length);
+    }
+
     public static AudioAsset? SelectAudioAsset(Episode episode)
     {
         if (episode.AudioAssets is not { } assets)
@@ -149,9 +164,6 @@ public static class RssBuilder
         var audioAsset = SelectAudioAsset(episode);
 
         var imageUrl = PodcastHelpers.GetImageUrlFromAssets(episode.ImageAssets) ?? channelImage;
-        var duration = episode.DurationMilliseconds is not null
-            ? TimeSpan.FromMilliseconds(episode.DurationMilliseconds.Value).ToString(@"hh\:mm\:ss")
-            : "";
 
         var rawTime = episode.StartTime ?? episode.PublishTime;
         var pubDate = TryParseFeedDate(rawTime, out var dt)
@@ -163,9 +175,14 @@ public static class RssBuilder
             new XElement("description", episode.Description ?? ""),
             new XElement("pubDate", pubDate),
             new XElement(itunes + "explicit", episode.ExplicitContent ? "yes" : "no"),
-            new XElement(itunes + "author", "DR"),
-            new XElement(itunes + "duration", duration)
+            new XElement(itunes + "author", "DR")
             );
+
+        // Whole seconds, as Apple recommends. An hh:mm:ss TimeSpan format wraps at 24 hours.
+        if (episode.DurationMilliseconds is { } durationMs)
+        {
+            item.Add(new XElement(itunes + "duration", durationMs / 1000));
+        }
 
         if (!string.IsNullOrEmpty(imageUrl))
         {
@@ -189,37 +206,25 @@ public static class RssBuilder
 
         if (!string.IsNullOrEmpty(episode.Id))
         {
-            item.Add(new XElement("guid", new XAttribute("isPermalink", "false"), episode.Id));
+            item.Add(new XElement("guid", new XAttribute("isPermaLink", "false"), episode.Id));
         }
 
         if (audioAsset?.Url is { } url && !string.IsNullOrEmpty(url))
         {
-            var enclosure = new XElement("enclosure",
+            // RSS 2.0 requires length; 0 is the conventional value when the size is unknown.
+            item.Add(new XElement("enclosure",
                 new XAttribute("url", url),
-                new XAttribute("type", "audio/mpeg"));
-
-            if (audioAsset.FileSize is not null)
-            {
-                enclosure.Add(new XAttribute("length", audioAsset.FileSize.Value));
-            }
-
-            item.Add(enclosure);
+                new XAttribute("length", audioAsset.FileSize ?? 0),
+                new XAttribute("type", "audio/mpeg")));
         }
 
-        AddCategories(item, episode.Categories, itunes);
+        // itunes:category is a channel-level tag; an episode's categories are plain RSS <category>.
+        foreach (var category in episode.Categories ?? [])
+        {
+            if (!string.IsNullOrEmpty(category))
+                item.Add(new XElement("category", category));
+        }
 
         return item;
     }
-
-    private static void AddCategories(XElement element, List<string>? categories, XNamespace itunes)
-    {
-        if (categories is null) return;
-
-        foreach (var category in categories)
-        {
-            if (string.IsNullOrEmpty(category)) continue;
-            element.Add(new XElement(itunes + "category", new XAttribute("text", category)));
-        }
-    }
-
 }

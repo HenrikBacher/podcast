@@ -1,7 +1,83 @@
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+
 namespace DrPodcast.Tests;
 
 public class DrApiClientTests
 {
+    private const string Urn = "urn:dr:radio:series:aaaaaaaaaaaaaaaaaaaaaaaa";
+
+    private static DrApiClient ClientFor(FakeDrApi api, ILogger<DrApiClient>? logger = null) =>
+        new(new StubHttpClientFactory(api), logger ?? NullLogger<DrApiClient>.Instance);
+
+    [Fact]
+    public async Task FetchAllEpisodes_ShortPages_RefetchesInSmallPagesAndRecoversEveryEpisode()
+    {
+        // DR's short pages: items missing from big pages while the next link still advances by the
+        // full page size.
+        var episodes = FakeDrApi.Episodes(40);
+        var api = new FakeDrApi { DropFromPage = (pageSize, index) => pageSize > 5 && index % 3 == 0 };
+        api.Set(Urn, FakeDrApi.SeriesWith("S", latestEpisode: 40), episodes);
+
+        var result = await ClientFor(api).FetchAllEpisodesAsync(Urn, FakeDrApi.StartTimeOf(40), CancellationToken.None);
+
+        result.Select(e => e.Id).Should().BeEquivalentTo(episodes.Select(e => e.Id));
+    }
+
+    [Fact]
+    public async Task FetchAllEpisodes_CompleteFirstPass_IsNotRefetched()
+    {
+        var api = new FakeDrApi();
+        api.Set(Urn, FakeDrApi.SeriesWith("S", latestEpisode: 300), FakeDrApi.Episodes(300));
+
+        var result = await ClientFor(api).FetchAllEpisodesAsync(Urn, FakeDrApi.StartTimeOf(300), CancellationToken.None);
+
+        result.Should().HaveCount(300);
+        api.Requests.Should().HaveCount(2, "300 episodes fit in two 256-item pages");
+    }
+
+    [Fact]
+    public async Task FetchAllEpisodes_NothingAsNewAsTheSeriesLatest_WarnsThatTheListLooksIncomplete()
+    {
+        // The other signature of the short-page bug: the series' latest episode is from day 9, but the
+        // newest one that came back is from day 2.
+        var logger = new ListLogger<DrApiClient>();
+        var api = new FakeDrApi();
+        api.Set(Urn, FakeDrApi.SeriesWith("S", latestEpisode: 9), FakeDrApi.Episodes(2));
+
+        await ClientFor(api, logger).FetchAllEpisodesAsync(Urn, FakeDrApi.StartTimeOf(9), CancellationToken.None);
+
+        logger.Entries.Should().Contain(e => e.Level == LogLevel.Warning && e.Message.Contains("looks incomplete"));
+    }
+
+    [Fact]
+    public async Task FetchLatestEpisode_AscendingSeries_ReturnsTheNewestEpisode()
+    {
+        // In the endpoint's default order an "Asc" series lists its first episode first.
+        var api = new FakeDrApi();
+        api.Set(Urn, FakeDrApi.SeriesWith("S", latestEpisode: 3, defaultOrder: "Asc"), FakeDrApi.Episodes(3));
+
+        var latest = await ClientFor(api).FetchLatestEpisodeAsync(Urn, FakeDrApi.StartTimeOf(3), CancellationToken.None);
+
+        latest!.Id.Should().Be("ep-3");
+    }
+
+    [Fact]
+    public void RegisteredHttpClient_DoesNotFollowRedirects()
+    {
+        // The API key is a custom header, which .NET keeps on a redirect to any host.
+        var services = new ServiceCollection().AddLogging();
+        DrApiClient.Register(services, apiKey: "test-key");
+        using var provider = services.BuildServiceProvider();
+
+        var handler = provider.GetRequiredService<IHttpMessageHandlerFactory>().CreateHandler(DrApiClient.HttpClientName);
+        while (handler is DelegatingHandler { InnerHandler: { } inner })
+            handler = inner;
+
+        handler.Should().BeOfType<SocketsHttpHandler>().Which.AllowAutoRedirect.Should().BeFalse();
+    }
+
     [Theory]
     [InlineData("https://api.dr.dk/radio/v2/series/urn:dr:radio:series:abc/episodes?limit=256&offset=256")]
     [InlineData("https://API.DR.DK/radio/v2/series/x/episodes?offset=512")]

@@ -14,6 +14,12 @@ public sealed class FeedRefreshBackgroundService(
     // only risks overflowing the multiplication.
     private const int MaxBackoffShift = 6;
 
+    // Change detection only notices a newer episode, or a rotated audio hash on the latest one. A daily
+    // full regeneration bounds how long anything else can stay stale: rotated hashes on older episodes,
+    // edited titles and descriptions, removed episodes. Unchanged feeds come out byte-identical and
+    // aren't rewritten, so this doesn't invalidate podcatchers' cached copies.
+    private static readonly TimeSpan FullRefreshInterval = TimeSpan.FromHours(24);
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var podcastsJsonPath = FindPodcastsJson();
@@ -38,12 +44,17 @@ public sealed class FeedRefreshBackgroundService(
         logger.LogInformation("Feed refresh service started with {Count} podcasts. Interval: {Interval} minutes.", podcastList.Podcasts.Count, intervalMinutes);
 
         int consecutiveFailures = 0;
-
-        // Force regeneration on startup so code changes are always applied when the container restarts
-        consecutiveFailures = await RunGenerationAsync(podcastList, config, consecutiveFailures, forceRegenerate: true, stoppingToken);
+        // MinValue makes the first run, at startup, a full regeneration too: that's what applies code
+        // changes when the container restarts.
+        var lastFullRefreshUtc = DateTime.MinValue;
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            var fullRefresh = DateTime.UtcNow - lastFullRefreshUtc >= FullRefreshInterval;
+            if (fullRefresh)
+                lastFullRefreshUtc = DateTime.UtcNow;
+            consecutiveFailures = await RunGenerationAsync(podcastList, config, consecutiveFailures, forceRegenerate: fullRefresh, stoppingToken);
+
             TimeSpan delay;
             if (consecutiveFailures >= FailuresBeforeBackoff)
             {
@@ -64,8 +75,6 @@ public sealed class FeedRefreshBackgroundService(
             {
                 return;
             }
-
-            consecutiveFailures = await RunGenerationAsync(podcastList, config, consecutiveFailures, forceRegenerate: false, stoppingToken);
         }
     }
 

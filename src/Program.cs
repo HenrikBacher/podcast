@@ -1,6 +1,3 @@
-static void AddRetryHandler(IHttpClientBuilder httpBuilder) =>
-    httpBuilder.AddStandardResilienceHandler();
-
 // Web server mode: serve static feeds + periodic background regeneration
 var builder = WebApplication.CreateBuilder(args);
 builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
@@ -11,31 +8,13 @@ builder.Logging.AddSimpleConsole(options =>
     options.SingleLine = true;
     options.TimestampFormat = "yyyy-MM-dd HH:mm:ss ";
     options.UseUtcTimestamp = true;
+    // Shows the per-podcast "Slug: …" scope, so anything logged while processing a podcast
+    // (DrApiClient's messages included) says which one.
+    options.IncludeScopes = true;
 });
 
 var config = GeneratorConfig.FromEnvironment();
-var apiKey = GeneratorConfig.RequireApiKey();
-
-// Named (not typed) client on purpose: DrApiClient is resolved into the singleton
-// FeedGenerationService, and a typed client captured in a singleton never rotates its
-// handler. Resolving per call through the factory keeps handler lifetimes working.
-AddRetryHandler(builder.Services.AddHttpClient(DrApiClient.HttpClientName, client =>
-    {
-        client.DefaultRequestHeaders.Add("X-Apikey", apiKey);
-        client.Timeout = TimeSpan.FromSeconds(30);
-        // GetAsync buffers the whole body (after decompression) before returning, so this caps
-        // what a single response can cost in memory — a decompression bomb or runaway upstream
-        // fails that podcast's refresh instead of exhausting the container. A full 256-episode
-        // page is a few MB; the default limit is 2 GB.
-        client.MaxResponseContentBufferSize = 32 * 1024 * 1024;
-    })
-    // HttpClient does not negotiate compression by default. Episode pages are large JSON
-    // (256 items each) and gzip to a fraction of their size, so this cuts both transfer
-    // time and the bytes the JSON reader has to walk.
-    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
-    {
-        AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate | DecompressionMethods.Brotli,
-    }));
+DrApiClient.Register(builder.Services, GeneratorConfig.RequireApiKey());
 
 // Feeds are XML and compress by roughly 80% — worth it for a server that exists to be polled.
 builder.Services.AddResponseCompression(options =>
@@ -51,7 +30,6 @@ builder.Services.AddResponseCompression(options =>
 });
 
 builder.Services.AddSingleton(config);
-builder.Services.AddSingleton<DrApiClient>();
 builder.Services.AddSingleton<FeedGenerationService>();
 builder.Services.AddHostedService<FeedRefreshBackgroundService>();
 

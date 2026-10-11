@@ -148,6 +148,20 @@ public class PodcastHelpersTests
     }
 
     [Fact]
+    public void GetImageUrlFromAssets_OnlyUnrankedTargets_UsesOneAsALastResort()
+    {
+        // DR also sends targets this doesn't rank (e.g. "SquareImage"); some image beats none.
+        var imageAssets = new List<ImageAsset>
+        {
+            new("square-img", "SquareImage", "1:1")
+        };
+
+        var result = PodcastHelpers.GetImageUrlFromAssets(imageAssets);
+
+        result.Should().Be("https://asset.dr.dk/drlyd/images/square-img");
+    }
+
+    [Fact]
     public void GetImageUrlFromAssets_ShouldRejectPathTraversal()
     {
         var imageAssets = new List<ImageAsset>
