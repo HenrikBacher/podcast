@@ -8,7 +8,7 @@ public static class PodcastCatalog
         var podcasts = new List<Podcast>();
         var taken = new Dictionary<string, string>(StringComparer.Ordinal);
         // Ordered by id, so if two series ever derive the same slug the same one keeps it on every run.
-        foreach (var s in series.Where(s => !string.IsNullOrEmpty(s.Id)).OrderBy(s => s.Id, StringComparer.Ordinal))
+        foreach (var s in series.Where(s => !string.IsNullOrEmpty(s.Id) && !IsNewsBulletin(s)).OrderBy(s => s.Id, StringComparer.Ordinal))
         {
             if (SlugFor(s) is not { } slug)
             {
@@ -31,6 +31,10 @@ public static class PodcastCatalog
 
     // Feed URLs are /feeds/{slug}.xml and podcatchers are subscribed to them, so a slug must stay stable.
     // It is DR's own slug without its "-{productionNumber}" suffix, the part DR keeps fixed.
+    // Hourly news bulletins aren't published: DR types exactly Radioavisen and the P4 regional news
+    // ("P4 … regionale nyheder") as News.
+    internal static bool IsNewsBulletin(Series series) => series.PresentationType == "News";
+
     internal static string? SlugFor(Series series)
     {
         var slug = series.Slug;

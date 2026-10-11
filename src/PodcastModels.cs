@@ -22,7 +22,11 @@ public record FeedMetadata(
     string? Categories = null,
     int? EpisodeCount = null,
     string? LatestEpisodeTitle = null,
-    DateTime? LatestEpisodeUtc = null);
+    DateTime? LatestEpisodeUtc = null,
+    // When the series' first episode came out, set only for podcasts in their own right
+    // (Series.IsStandalonePodcast), so the website can mark new ones.
+    DateTime? FirstEpisodeUtc = null,
+    string? Description = null);
 
 public record GeneratorConfig(
     string OutputDir = "output",
@@ -111,11 +115,18 @@ public record Series(
     int? NumberOfSeasons = null,
     string? Id = null,
     string? Slug = null,
-    string? ProductionNumber = null
+    string? ProductionNumber = null,
+    string? PodcastUrl = null
 )
 {
     // DR reports a seasonal show's season count as either numberOfSeries or numberOfSeasons,
     // depending on the series ("laegens-bord" only has the latter).
     [JsonIgnore]
     public bool HasSeasons => NumberOfSeries > 0 || NumberOfSeasons > 0;
+
+    // A podcast in its own right: DR publishes its own podcast feed for it, or presents it as a show.
+    // Most other series are live radio programmes, which DR keeps online for only a few weeks, so their
+    // oldest available episode says nothing about when they started.
+    [JsonIgnore]
+    public bool IsStandalonePodcast => !string.IsNullOrEmpty(PodcastUrl) || PresentationType == "Show";
 }

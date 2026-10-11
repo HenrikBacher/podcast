@@ -193,12 +193,19 @@ public static class WebsiteGenerator
                 new XAttribute("class", "card"),
                 new XAttribute("data-title", feed.Title),
                 new XAttribute("data-categories", feed.Categories ?? ""),
+                // script.js marks the card "Ny podcast" while this is under 30 days old.
+                feed.FirstEpisodeUtc is { } first
+                    ? new XAttribute("data-first-episode", first.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture))
+                    : null,
                 cover,
                 new XElement("div", new XAttribute("class", "info"),
                     new XElement("div", new XAttribute("class", "tags"),
                         categories.Select(c => new XElement("span", new XAttribute("class", "tag"), c))),
                     new XElement("h2", feed.Title),
                     string.IsNullOrEmpty(feed.Subtitle) ? null : new XElement("p", new XAttribute("class", "sub"), feed.Subtitle),
+                    // Shown in a dialog when the title is clicked (script.js); line breaks are kept by CSS.
+                    string.IsNullOrEmpty(feed.Description) ? null : new XElement("p",
+                        new XAttribute("class", "description"), new XAttribute("hidden", ""), feed.Description),
                     latest,
                     new XElement("div", new XAttribute("class", "actions"),
                         new XElement("button",

@@ -40,4 +40,28 @@ public class PodcastCatalogTests
 
         PodcastCatalog.Build([series]).Podcasts.Single().Series.Should().Be(series);
     }
+
+    [Fact]
+    public void Build_LeavesOutNewsBulletins()
+    {
+        // DR's "News" type is Radioavisen and the P4 regional news.
+        var catalog = PodcastCatalog.Build(
+        [
+            DrSeries("urn:a", "radioavisen-111", "111") with { PresentationType = "News" },
+            DrSeries("urn:b", "genstart-222", "222") with { PresentationType = "Ongoing" },
+        ]);
+
+        catalog.Podcasts.Select(p => p.Slug).Should().Equal("genstart");
+    }
+
+    [Theory]
+    [InlineData("https://api.dr.dk/podcasts/v1/feeds/x", "Ongoing", true)]
+    [InlineData(null, "Show", true)]
+    [InlineData(null, "Ongoing", false)]
+    [InlineData(null, "CurrentAffairs", false)]
+    public void IsStandalonePodcast_DrPodcastFeedOrShow(string? podcastUrl, string presentationType, bool expected)
+    {
+        (TestData.CreateSeries(presentationType: presentationType) with { PodcastUrl = podcastUrl })
+            .IsStandalonePodcast.Should().Be(expected);
+    }
 }

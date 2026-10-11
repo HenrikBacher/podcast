@@ -215,6 +215,7 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
                     EpisodeCount = known.EpisodeCount,
                     LatestEpisodeTitle = known.LatestEpisodeTitle,
                     LatestEpisodeUtc = known.LatestEpisodeUtc,
+                    FirstEpisodeUtc = known.FirstEpisodeUtc,
                 }, Changed: false);
             }
 
@@ -247,6 +248,7 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
                     var unchanged = RssBuilder.BuildFeedMetadata(podcast, series, newestPlayable) with
                     {
                         EpisodeCount = known?.EpisodeCount ?? await CountItemsAsync(outputPath),
+                        FirstEpisodeUtc = known?.FirstEpisodeUtc,
                     };
                     if (newestPlayable is null && known is not null)
                         unchanged = unchanged with { LatestEpisodeTitle = known.LatestEpisodeTitle, LatestEpisodeUtc = known.LatestEpisodeUtc };
@@ -276,8 +278,13 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
                 return null;
             }
 
+            var starts = playable.Select(e => RssBuilder.TryParseFeedDate(e.StartTime ?? e.PublishTime, out var start) ? start : (DateTime?)null).ToList();
             var newest = newestPlayable ?? playable.MaxBy(e => RssBuilder.TryParseFeedDate(e.StartTime ?? e.PublishTime, out var start) ? start : DateTime.MinValue);
-            var metadata = RssBuilder.BuildFeedMetadata(podcast, series, newest) with { EpisodeCount = playable.Count };
+            var metadata = RssBuilder.BuildFeedMetadata(podcast, series, newest) with
+            {
+                EpisodeCount = playable.Count,
+                FirstEpisodeUtc = series.IsStandalonePodcast ? starts.Min() : null,
+            };
             var playableCount = playable.Count;
 
             // Likewise for a list DR itself reports as short: it doesn't replace a feed with more episodes.

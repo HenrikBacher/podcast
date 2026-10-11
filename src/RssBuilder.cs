@@ -33,6 +33,7 @@ public static class RssBuilder
         var categories = series?.Categories?.Where(c => !string.IsNullOrEmpty(c)).ToList();
         return new FeedMetadata(podcast.Slug, StripTrailingFeedParenthetical(title), imageUrl,
             Subtitle: string.IsNullOrEmpty(series?.Punchline) ? null : series.Punchline,
+            Description: string.IsNullOrEmpty(series?.Description) ? null : series.Description,
             Categories: categories is { Count: > 0 } ? string.Join('|', categories) : null,
             LatestEpisodeTitle: newestEpisode?.Title,
             LatestEpisodeUtc: TryParseFeedDate(newestEpisode?.StartTime ?? series?.LatestEpisodeStartTime, out var latest) ? latest : null);

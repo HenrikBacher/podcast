@@ -210,6 +210,22 @@ public class FeedGenerationRunTests : IDisposable
     }
 
     [Fact]
+    public async Task FirstEpisodeDate_IsPublishedOnlyForStandalonePodcasts()
+    {
+        // Alpha has DR's podcast feed; Bravo is a radio programme whose old episodes DR drops, so its
+        // oldest available episode says nothing about when it started.
+        var alphaEpisodes = FakeDrApi.Episodes(2);
+        _api.Set(UrnA, FakeDrApi.SeriesWith("Alpha", latestEpisode: 2) with { PodcastUrl = "https://api.dr.dk/podcasts/v1/feeds/alpha" }, alphaEpisodes);
+        _api.Set(UrnB, FakeDrApi.SeriesWith("Bravo", latestEpisode: 2) with { PresentationType = "Ongoing" }, FakeDrApi.Episodes(2));
+
+        await NewService().GenerateFeedsAsync(_podcasts, _config, forceRegenerate: true);
+
+        var cards = Listing().Split("<li ");
+        cards.Single(c => c.Contains("feeds/alpha.xml")).Should().Contain($"data-first-episode=\"{alphaEpisodes[0].StartTime}\"");
+        cards.Single(c => c.Contains("feeds/bravo.xml")).Should().NotContain("data-first-episode");
+    }
+
+    [Fact]
     public async Task InactiveSeries_SkipsTheLatestEpisodeLookup()
     {
         // Nothing published in the last day: the audio-hash check is left to the daily full refresh.

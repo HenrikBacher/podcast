@@ -56,6 +56,13 @@
             <p>Feedene opdateres løbende fra DR. Afsnittene afspilles direkte fra DR’s servere.</p>
         </footer>
     </div>
+    <!-- Filled with a copy of the clicked card (script.js), which the card visibly grows into. -->
+    <dialog class="details" id="details" aria-labelledby="details-title">
+        <div class="details-body">
+            <button type="button" class="details-close" id="details-close" aria-label="Luk">×</button>
+            <div class="details-card" id="details-card"></div>
+        </div>
+    </dialog>
     <div class="toast" id="toast" role="status" hidden></div>
 </body>
 </html>

@@ -236,4 +236,17 @@ public class WebsiteGeneratorTests : IDisposable
         WebsiteGenerator.AppLinks("podcasts.example.dk/feeds/x.xml", "X")
             .Should().Contain(("Pocket Casts", "pktc://subscribe/podcasts.example.dk/feeds/x.xml"));
     }
+
+    [Fact]
+    public async Task Generate_EmbedsTheFullDescriptionHiddenForTheDialog()
+    {
+        var config = CreateConfig();
+        WriteSiteSource(config);
+
+        await WebsiteGenerator.GenerateAsync(
+            [new FeedMetadata("a", "A", null, Description: "Første afsnit.\nVært: <Lasse> & co.")], config);
+
+        (await File.ReadAllTextAsync(IndexPath(config)))
+            .Should().Contain("<p class=\"description\" hidden=\"\">Første afsnit.\nVært: &lt;Lasse&gt; &amp; co.</p>");
+    }
 }

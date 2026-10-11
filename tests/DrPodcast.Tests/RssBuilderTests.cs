@@ -387,7 +387,7 @@ public class RssBuilderTests
             CreateEpisode("LA Riots 3:4") with { StartTime = "2026-10-05T05:00:00+02:00" });
 
         metadata.Should().Be(new FeedMetadata("bakspejl", "Bakspejl", null, "Afgørende nedslag i historien", "Dokumentar|Historie", null,
-            "LA Riots 3:4", new DateTime(2026, 10, 5, 3, 0, 0, DateTimeKind.Utc)));
+            "LA Riots 3:4", new DateTime(2026, 10, 5, 3, 0, 0, DateTimeKind.Utc), Description: "Test description"));
     }
 
     #endregion
