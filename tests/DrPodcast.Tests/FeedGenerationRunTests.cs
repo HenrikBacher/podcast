@@ -84,6 +84,46 @@ public class FeedGenerationRunTests : IDisposable
     }
 
     [Fact]
+    public async Task IncompleteEpisodeList_DoesNotReplaceAFullerFeed()
+    {
+        _api.Set(UrnA, FakeDrApi.SeriesWith("Alpha", latestEpisode: 10), FakeDrApi.Episodes(10));
+        await NewService().GenerateFeedsAsync(_podcasts, _config, forceRegenerate: true);
+
+        // Episodes 7-10 now go missing at every page size, so the list stays short of totalSize.
+        _api.DropFromPage = (_, e) => e.Order > 6;
+        await NewService().GenerateFeedsAsync(_podcasts, _config, forceRegenerate: true);
+
+        File.ReadAllText(FeedPath("alpha")).Should().Contain("ep-10");
+    }
+
+    [Fact]
+    public async Task IncompleteEpisodeList_StillReplacesASparserFeed()
+    {
+        _api.Set(UrnA, FakeDrApi.SeriesWith("Alpha", latestEpisode: 3), FakeDrApi.Episodes(3));
+        await NewService().GenerateFeedsAsync(_podcasts, _config, forceRegenerate: true);
+
+        _api.Set(UrnA, FakeDrApi.SeriesWith("Alpha", latestEpisode: 10), FakeDrApi.Episodes(10));
+        _api.DropFromPage = (_, e) => e.Order > 6;
+        await NewService().GenerateFeedsAsync(_podcasts, _config, forceRegenerate: true);
+
+        File.ReadAllText(FeedPath("alpha")).Should().Contain("ep-6");
+    }
+
+    [Fact]
+    public async Task IncompleteEpisodeList_WithAsManyEpisodes_IsWrittenSoTheNewEpisodeArrives()
+    {
+        _api.Set(UrnA, FakeDrApi.SeriesWith("Alpha", latestEpisode: 6), FakeDrApi.Episodes(6));
+        await NewService().GenerateFeedsAsync(_podcasts, _config, forceRegenerate: true);
+
+        // Episode 7 is published while episode 1 goes missing at every page size: still six episodes.
+        _api.Set(UrnA, FakeDrApi.SeriesWith("Alpha", latestEpisode: 7), FakeDrApi.Episodes(7));
+        _api.DropFromPage = (_, e) => e.Order == 1;
+        await NewService().GenerateFeedsAsync(_podcasts, _config, forceRegenerate: true);
+
+        File.ReadAllText(FeedPath("alpha")).Should().Contain("ep-7");
+    }
+
+    [Fact]
     public async Task AscendingSeries_RotatedAudioHashOnTheNewestEpisode_IsPickedUp()
     {
         // DR re-encodes published episodes without bumping latestEpisodeStartTime. For an "Asc" series

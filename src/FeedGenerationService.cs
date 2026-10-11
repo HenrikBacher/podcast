@@ -177,7 +177,7 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
                 logger.LogDebug("Regenerating: latest episode's audio asset hash has rotated");
             }
 
-            var episodes = await apiClient.FetchAllEpisodesAsync(podcast.Urn, series.LatestEpisodeStartTime, ct);
+            var (episodes, complete) = await apiClient.FetchAllEpisodesAsync(podcast.Urn, series.LatestEpisodeStartTime, ct);
 
             // Never replace a populated feed with an empty one. An upstream hiccup that answers
             // with zero items would otherwise wipe the whole back catalogue and report success.
@@ -185,6 +185,15 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
             if (episodes.Count == 0 && File.Exists(outputPath))
             {
                 logger.LogWarning("DR API returned no episodes for {Urn}. Keeping the existing feed.", podcast.Urn);
+                return null;
+            }
+
+            // Likewise for a list DR itself reports as short: it doesn't replace a feed with more episodes.
+            // With as many or more it's written, since it may hold a new episode the old feed lacks.
+            if (!complete && File.Exists(outputPath) && await CountItemsAsync(outputPath) > episodes.Count)
+            {
+                logger.LogWarning("Episode list for {Urn} is incomplete ({Count} episodes) and the existing feed has more. Keeping it.",
+                    podcast.Urn, episodes.Count);
                 return null;
             }
 
@@ -327,6 +336,28 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return false;
+        }
+    }
+
+    // Unreadable or corrupt counts as empty, so whatever was fetched gets written over it.
+    internal static async Task<int> CountItemsAsync(string feedPath)
+    {
+        try
+        {
+            var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, Async = true };
+            await using var fileStream = new FileStream(feedPath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true);
+            using var reader = XmlReader.Create(fileStream, settings);
+            var count = 0;
+            while (await reader.ReadAsync())
+            {
+                if (reader.NodeType == XmlNodeType.Element && reader.LocalName == "item")
+                    count++;
+            }
+            return count;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or XmlException)
+        {
+            return 0;
         }
     }
 

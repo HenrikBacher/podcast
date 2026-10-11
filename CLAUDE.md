@@ -42,10 +42,10 @@ The test suite includes:
 - **PodcastHelpersTests.cs**: Helper functions (image URL extraction)
 - **RssBuilderTests.cs**: RSS/iTunes XML construction, audio asset selection, date formatting, byte-exact serialization
 - **FeedGenerationServiceTests.cs**: Change detection, asset-hash verification
-- **FeedGenerationRunTests.cs**: Whole generation runs against an in-memory DR API (`TestDoubles.cs`): listing recovery after a restart, byte-identical regenerations left untouched, rotated hashes on `Asc` series, timeout attribution
+- **FeedGenerationRunTests.cs**: Whole generation runs against an in-memory DR API (`TestDoubles.cs`): listing recovery after a restart, byte-identical regenerations left untouched, rotated hashes on `Asc` series, timeout attribution, incomplete lists never replacing a fuller feed
 - **WebsiteGeneratorTests.cs**: Template rendering, static-asset copying, feed sorting, HTML escaping
 - **FileContainsAsciiTests.cs**: Chunked ASCII search, including needles straddling chunk boundaries
-- **DrApiClientTests.cs**: Pagination `next` links are only followed to the DR API host over HTTPS; short-page fallback; newest-first latest-episode lookup; incomplete-list warning; the registered client doesn't follow redirects
+- **DrApiClientTests.cs**: Pagination `next` links are only followed to the DR API host over HTTPS; targeted short-page refetch (failures keep the first pass, episodes without an id aren't duplicated); newest-first latest-episode lookup; incomplete-list warning; the registered client doesn't follow redirects
 - **FeedRefreshBackgroundServiceTests.cs**: Backoff schedule and overflow bounds; `GeneratorConfig` env parsing
 
 **CI/CD Integration**: Tests run automatically in the build pipeline on all pull requests and pushes to main.
@@ -83,10 +83,10 @@ The test suite includes:
 - **NativeAOT Optimization**: Source-generated JSON serialization, trim-safe patterns, aggressive optimization settings
 - **Resilient HTTP**: HttpClient configured via `Microsoft.Extensions.Http.Resilience` standard resilience handler (retries, timeouts, circuit breaker). Redirects are not followed: the API key is a custom header, which .NET keeps on a redirect to any host
 - **RSS Standards Compliance**: Generates feeds with iTunes and Atom namespaces
-- **Pagination Handling**: Fetches all episodes across multiple API pages (256 per page, capped at 100 pages per series). DR sometimes returns short pages while its `next` links still advance by the full page size (in Oct 2026 `tyran` came back with 51 of its 128 episodes), so when the collected count is below the API's `totalSize` the fetch is repeated in 5-item pages and merged by episode id
+- **Pagination Handling**: Fetches all episodes across multiple API pages (256 per page, capped at 100 pages per series). DR sometimes returns short pages while its `next` links still advance by the full page size (in Oct 2026 `tyran` came back with 51 of its 128 episodes), so every page that came back with fewer items than it should (judged against the API's `totalSize`) has its window refetched in 5-item pages, merged by episode id (title + start time for the rare episode without one). Windows the pagination never reached (it stopped before `totalSize`) are fetched the same way. If the refetch fails, what was already fetched is kept
 - **Atomic Writes**: Feeds and `index.html` are written to a `.tmp` file then renamed to avoid serving partial content. `site/index.html` is the *template* and is deliberately excluded from the static-asset copy, so the raw `{{...}}` placeholders are never published
 - **Unchanged Feeds Are Not Rewritten**: A regeneration that reproduces the existing file byte for byte leaves it untouched. Static-file ETag and Last-Modified derive from mtime and length, not content, so even an identical rewrite would make every podcatcher download the feed again
-- **Never Degrade a Good Feed**: A null series body or an empty episode list is treated as a failed refresh rather than written out — an upstream hiccup must not overwrite a populated feed with an empty one
+- **Never Degrade a Good Feed**: A null series body or an empty episode list is treated as a failed refresh rather than written out — an upstream hiccup must not overwrite a populated feed with an empty one. Likewise, an episode list still short of `totalSize` after the refetch doesn't replace a feed that has more episodes
 - **Response Compression**: Brotli/gzip for XML and HTML. Caddy does not compress unless `encode` is configured, so the app does it
 - **Constant-Memory Asset Check**: `FileContainsAsciiAsync` streams the feed in 64 KB pooled chunks (with carry-over across boundaries) instead of decoding it into a string. This runs for every unchanged podcast on every tick; the string version allocated ~4x the feed size per call, all of it on the Large Object Heap
 - **Compressed Upstream Fetches**: the DR API client sets `AutomaticDecompression`, which `HttpClient` does not enable by default — episode pages are large JSON and gzip well
@@ -100,7 +100,7 @@ The test suite includes:
 2. For each podcast (processed in parallel), fetch series metadata from the DR API
 3. Compare `LatestEpisodeStartTime` against the existing feed's `<lastBuildDate>` — skip if unchanged (bypassed on startup and the daily full refresh)
 4. For an otherwise-skipped feed, verify the newest episode's current audio asset hash is still present; regenerate if it has rotated
-5. Paginate through all episodes for the series (up to 256 per page, max 100 pages); if short of the API's `totalSize`, refetch in 5-item pages and merge
+5. Paginate through all episodes for the series (up to 256 per page, max 100 pages); refetch short pages in 5-item pages and merge
 6. Sort episodes and generate RSS XML with full iTunes metadata
 7. Atomically write the feed to `output/_site/feeds/{slug}.xml`, unless it is byte-identical to the existing file
 8. Regenerate the static website (`output/_site/index.html`) when any feed changed or the listing differs from the last render

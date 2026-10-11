@@ -65,11 +65,19 @@ internal sealed class FakeDrApi : HttpMessageHandler
     /// <summary>Series URNs that answer 503 Service Unavailable.</summary>
     public HashSet<string> Failing { get; } = [];
 
-    /// <summary>Applied to every request before it's answered, honouring cancellation.</summary>
+    /// <summary>Applied before answering requests that match <see cref="DelayWhen"/> (all, if unset), honouring cancellation.</summary>
     public TimeSpan Delay { get; set; }
 
-    /// <summary>Given (page size, index within the page), true drops that item from the page.</summary>
-    public Func<int, int, bool>? DropFromPage { get; set; }
+    public Func<Uri, bool>? DelayWhen { get; set; }
+
+    /// <summary>Episode pages stop offering a next link once they reach this offset.</summary>
+    public int? NextStopsAt { get; set; }
+
+    /// <summary>Given (page size, episode), true leaves that episode out of the page.</summary>
+    public Func<int, Episode, bool>? DropFromPage { get; set; }
+
+    /// <summary>Requests for which this returns true answer 503 Service Unavailable.</summary>
+    public Func<Uri, bool>? FailRequest { get; set; }
 
     public IReadOnlyList<Uri> Requests
     {
@@ -85,7 +93,7 @@ internal sealed class FakeDrApi : HttpMessageHandler
     {
         var uri = request.RequestUri!;
         lock (_requests) _requests.Add(uri);
-        if (Delay > TimeSpan.Zero)
+        if (Delay > TimeSpan.Zero && DelayWhen?.Invoke(uri) != false)
             await Task.Delay(Delay, cancellationToken);
 
         // "{urn}" or "{urn}/episodes" after the API's base URL.
@@ -94,7 +102,7 @@ internal sealed class FakeDrApi : HttpMessageHandler
         (Series Series, List<Episode> Episodes) entry;
         lock (_series)
         {
-            if (Failing.Contains(urn) || !_series.TryGetValue(urn, out entry))
+            if (Failing.Contains(urn) || FailRequest?.Invoke(uri) == true || !_series.TryGetValue(urn, out entry))
                 return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
         }
 
@@ -108,9 +116,9 @@ internal sealed class FakeDrApi : HttpMessageHandler
             ? [.. entry.Episodes.OrderByDescending(e => e.StartTime, StringComparer.Ordinal)]
             : entry.Episodes;
 
-        var items = ordered.Skip(offset).Take(limit).Where((_, index) => DropFromPage?.Invoke(limit, index) != true).ToList();
-        var next = offset + limit < ordered.Count ? $"{DrApiClient.ApiUrl}{urn}/episodes?limit={limit}&offset={offset + limit}" : null;
-        var page = new EpisodesPage(items, next, ordered.Count);
+        var items = ordered.Skip(offset).Take(limit).Where(e => DropFromPage?.Invoke(limit, e) != true).ToList();
+        var next = offset + limit < Math.Min(ordered.Count, NextStopsAt ?? int.MaxValue) ? $"{DrApiClient.ApiUrl}{urn}/episodes?limit={limit}&offset={offset + limit}" : null;
+        var page = new EpisodesPage(items, next, ordered.Count, offset);
         return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(page, PodcastJsonContext.Default.EpisodesPage) };
     }
 

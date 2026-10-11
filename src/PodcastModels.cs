@@ -9,7 +9,7 @@ public partial class PodcastJsonContext : JsonSerializerContext
 {
 }
 
-public record EpisodesPage(List<Episode>? Items, string? Next, int? TotalSize);
+public record EpisodesPage(List<Episode>? Items, string? Next, int? TotalSize, int? Offset);
 
 public record FeedMetadata(string Slug, string Title, string? ImageUrl);
 
