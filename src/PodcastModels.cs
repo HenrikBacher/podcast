@@ -11,7 +11,17 @@ public partial class PodcastJsonContext : JsonSerializerContext
 
 public record EpisodesPage(List<Episode>? Items, string? Next, int? TotalSize, int? Offset);
 
-public record FeedMetadata(string Slug, string Title, string? ImageUrl);
+/// <summary>What the website lists about a feed. Compared by value to decide when index.html is rebuilt.</summary>
+public record FeedMetadata(
+    string Slug,
+    string Title,
+    string? ImageUrl,
+    string? Subtitle = null,
+    // Joined with '|' rather than a list, so record equality compares the contents.
+    string? Categories = null,
+    int? EpisodeCount = null,
+    string? LatestEpisodeTitle = null,
+    DateTime? LatestEpisodeUtc = null);
 
 public record GeneratorConfig(
     string OutputDir = "output",

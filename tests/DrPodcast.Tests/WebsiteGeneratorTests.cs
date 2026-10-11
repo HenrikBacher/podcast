@@ -148,4 +148,92 @@ public class WebsiteGeneratorTests : IDisposable
 
         (await File.ReadAllTextAsync(IndexPath(config))).Should().Be("previous");
     }
+
+    [Fact]
+    public async Task Generate_LinksEveryCardToTheUnchangedFeedUrl()
+    {
+        // Existing subscriptions point at {BASE_URL}/feeds/{slug}.xml; the page must hand out exactly that.
+        var config = CreateConfig();
+        WriteSiteSource(config);
+
+        await WebsiteGenerator.GenerateAsync([new FeedMetadata("slug-a", "Podcast A", null)], config);
+
+        var html = await File.ReadAllTextAsync(IndexPath(config));
+        html.Should().Contain("data-url=\"https://example.com/feeds/slug-a.xml\"")
+            .And.Contain("href=\"https://example.com/feeds/slug-a.xml\"")
+            .And.Contain("href=\"https://antennapod.org/deeplink/subscribe?url=https%3A%2F%2Fexample.com%2Ffeeds%2Fslug-a.xml&amp;title=Podcast%20A\"")
+            .And.Contain("href=\"pktc://subscribe/example.com/feeds/slug-a.xml\"");
+    }
+
+    [Fact]
+    public async Task Generate_ListsTheNewestEpisodeFirst()
+    {
+        var config = CreateConfig();
+        WriteSiteSource(config);
+
+        await WebsiteGenerator.GenerateAsync(
+        [
+            new FeedMetadata("older", "Aaa", null, LatestEpisodeUtc: new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)),
+            new FeedMetadata("newer", "Zzz", null, LatestEpisodeUtc: new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc)),
+        ], config);
+
+        var html = await File.ReadAllTextAsync(IndexPath(config));
+        html.IndexOf("feeds/newer.xml", StringComparison.Ordinal)
+            .Should().BeLessThan(html.IndexOf("feeds/older.xml", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Generate_RendersEpisodeDetailsAndCategories()
+    {
+        var config = CreateConfig();
+        WriteSiteSource(config);
+
+        await WebsiteGenerator.GenerateAsync(
+            [new FeedMetadata("a", "A", "https://asset.dr.dk/i", "En undertitel", "Dokumentar|Historie", 128, "Sidste afsnit",
+                new DateTime(2026, 10, 8, 3, 0, 0, DateTimeKind.Utc))], config);
+
+        var html = await File.ReadAllTextAsync(IndexPath(config));
+        html.Should().Contain("En undertitel")
+            .And.Contain("Seneste: <span class=\"episode\">Sidste afsnit</span>")
+            .And.Contain("<time datetime=\"2026-10-08T03:00:00Z\">8. okt. 2026</time>")
+            .And.Contain("128 afsnit")
+            .And.Contain("data-categories=\"Dokumentar|Historie\"")
+            .And.Contain("alt=\"\"");
+    }
+
+    [Theory]
+    [InlineData("2026-10-04T22:30:00Z", "5. okt. 2026")]  // 00:30 Danish summer time
+    [InlineData("2026-01-10T23:30:00Z", "11. jan. 2026")] // 00:30 Danish winter time
+    [InlineData("2026-03-29T00:30:00Z", "29. mar. 2026")] // just before the switch to summer time
+    [InlineData("2026-10-25T00:30:00Z", "25. okt. 2026")] // last hour of summer time
+    [InlineData("2026-12-31T22:59:00Z", "31. dec. 2026")]
+    public void FormatDanishDate_UsesDanishLocalTime(string utc, string expected)
+    {
+        WebsiteGenerator.FormatDanishDate(DateTime.Parse(utc, null, System.Globalization.DateTimeStyles.AdjustToUniversal))
+            .Should().Be(expected);
+    }
+
+    [Fact]
+    public async Task Generate_VersionsTheStylesheetAndScriptByContent()
+    {
+        var config = CreateConfig();
+        Directory.CreateDirectory(config.SiteSourceDir);
+        File.WriteAllText(Path.Combine(config.SiteSourceDir, "index.html"), "<link href=\"styles.css?v={{ASSET_VERSION}}\"><!-- BEGIN_FEEDS --><!-- END_FEEDS -->");
+        File.WriteAllText(Path.Combine(config.SiteSourceDir, "styles.css"), "body{}");
+
+        await WebsiteGenerator.GenerateAsync([], config);
+        var first = await File.ReadAllTextAsync(IndexPath(config));
+        File.WriteAllText(Path.Combine(config.SiteSourceDir, "styles.css"), "body{color:red}");
+        await WebsiteGenerator.GenerateAsync([], config);
+        var second = await File.ReadAllTextAsync(IndexPath(config));
+
+        first.Should().MatchRegex("styles\\.css\\?v=[0-9a-f]{10}\"").And.NotBe(second);
+    }
+
+    [Fact]
+    public void AppLinks_BaseUrlWithoutScheme_KeepsTheWholeHost()
+    {
+        WebsiteGenerator.AppLinks("podcasts.example.dk/feeds/x.xml", "X")
+            .Should().Contain(("Pocket Casts", "pktc://subscribe/podcasts.example.dk/feeds/x.xml"));
+    }
 }

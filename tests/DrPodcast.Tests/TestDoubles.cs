@@ -43,7 +43,8 @@ internal static class TestData
         Id: $"ep-{title}",
         PresentationUrl: null,
         DurationMilliseconds: 60000,
-        AudioAssets: audioAssets,
+        // An mp3 by default: episodes without a downloadable file are left out of feeds.
+        AudioAssets: audioAssets ?? [new AudioAsset("mp3", 128, $"https://example.com/{Uri.EscapeDataString(title)}.mp3", 1000)],
         Categories: categories,
         ImageAssets: imageAssets,
         EpisodeNumber: null,

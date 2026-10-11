@@ -13,18 +13,30 @@ public static class RssBuilder
         return string.Concat(s.AsSpan(0, i), s.AsSpan(i + 1));
     }
 
+    /// <summary>
+    /// A feed's public address. Podcatchers are subscribed to exactly this URL, so it must never change
+    /// shape; the feed's atom:self link and every link to the feed on the website take it from here.
+    /// </summary>
+    public static string FeedUrl(string baseUrl, string slug) => $"{baseUrl.TrimEnd('/')}/feeds/{slug}.xml";
+
     internal static bool TryParseFeedDate(string? raw, out DateTime utc) =>
         DateTime.TryParse(raw, CultureInfo.InvariantCulture, UtcParseStyles, out utc);
 
     public static string DetermineItunesType(Series? series) =>
         series?.PresentationType == "Show" ? "serial" : "episodic";
 
-    public static FeedMetadata BuildFeedMetadata(Podcast podcast, Series? series)
+    /// <param name="newestEpisode">The newest episode the feed contains, named on the website.</param>
+    public static FeedMetadata BuildFeedMetadata(Podcast podcast, Series? series, Episode? newestEpisode = null)
     {
         var imageUrl = PodcastHelpers.GetImageUrlFromAssets(series?.ImageAssets)
                        ?? PodcastHelpers.GetImageUrlFromAssets(podcast.ImageAssets);
         var title = series?.Title ?? podcast.Slug.Replace("-", " ");
-        return new FeedMetadata(podcast.Slug, StripTrailingFeedParenthetical(title), imageUrl);
+        var categories = series?.Categories?.Where(c => !string.IsNullOrEmpty(c)).ToList();
+        return new FeedMetadata(podcast.Slug, StripTrailingFeedParenthetical(title), imageUrl,
+            Subtitle: string.IsNullOrEmpty(series?.Punchline) ? null : series.Punchline,
+            Categories: categories is { Count: > 0 } ? string.Join('|', categories) : null,
+            LatestEpisodeTitle: newestEpisode?.Title,
+            LatestEpisodeUtc: TryParseFeedDate(newestEpisode?.StartTime ?? series?.LatestEpisodeStartTime, out var latest) ? latest : null);
     }
 
     // Strips a trailing parenthetical that mentions "feed", e.g. "Show name (RSS feed)" → "Show name".
@@ -43,7 +55,7 @@ public static class RssBuilder
         return title.Trim();
     }
 
-    public static (XElement rss, FeedMetadata metadata) BuildRssFeed(Series? series, List<Episode>? episodes, Podcast podcast, string baseUrl)
+    public static XElement BuildRssFeed(Series? series, List<Episode>? episodes, Podcast podcast, string baseUrl)
     {
         XNamespace atom = "http://www.w3.org/2005/Atom";
         XNamespace itunes = "http://www.itunes.com/dtds/podcast-1.0.dtd";
@@ -60,7 +72,7 @@ public static class RssBuilder
 
         var channel = new XElement("channel",
             new XElement(atom + "link",
-                new XAttribute("href", $"{baseUrl.TrimEnd('/')}/feeds/{podcast.Slug}.xml"),
+                new XAttribute("href", FeedUrl(baseUrl, podcast.Slug)),
                 new XAttribute("rel", "self"),
                 new XAttribute("type", "application/xml")),
             new XElement("title", series?.Title),
@@ -115,19 +127,17 @@ public static class RssBuilder
                 (false, false) => episodes.OrderByDescending(e => e.Order ?? long.MinValue),
             };
 
-            foreach (var episode in sorted)
+            foreach (var episode in sorted.Where(HasDownloadableAudio))
             {
                 channel.Add(BuildEpisodeItem(episode, metadata.ImageUrl, itunes));
             }
         }
 
-        var rss = new XElement("rss",
+        return new XElement("rss",
             new XAttribute("version", "2.0"),
             new XAttribute(XNamespace.Xmlns + "atom", atom),
             new XAttribute(XNamespace.Xmlns + "itunes", itunes),
             channel);
-
-        return (rss, metadata);
     }
 
     /// <summary>
@@ -145,6 +155,13 @@ public static class RssBuilder
         }
         return buffer.GetBuffer().AsMemory(0, (int)buffer.Length);
     }
+
+    /// <summary>
+    /// Whether an episode belongs in a feed: podcast apps need a file to download. DR offers some
+    /// episodes (mostly in music-heavy shows, presumably for rights reasons) only as an HLS stream,
+    /// and an item without an enclosure just shows up as an episode that can't be played.
+    /// </summary>
+    public static bool HasDownloadableAudio(Episode episode) => !string.IsNullOrEmpty(SelectAudioAsset(episode)?.Url);
 
     public static AudioAsset? SelectAudioAsset(Episode episode)
     {

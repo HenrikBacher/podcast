@@ -35,6 +35,11 @@ builder.Services.AddHostedService<FeedRefreshBackgroundService>();
 
 var app = builder.Build();
 
+// Every feed link (atom:self, the website's copy and app links) is built from BASE_URL, so a value
+// without a scheme quietly produces broken links. Say so at startup.
+if (!Uri.TryCreate(config.BaseUrl, UriKind.Absolute, out var baseUri) || (baseUri.Scheme != Uri.UriSchemeHttps && baseUri.Scheme != Uri.UriSchemeHttp))
+    app.Logger.LogWarning("BASE_URL '{BaseUrl}' isn't an absolute http(s) URL; feed links will be broken.", config.BaseUrl);
+
 // Liveness: process is up and serving. Keep this cheap so orchestrators
 // don't restart the container just because DR's API is down.
 app.MapGet("/health", () => Results.Text("ok"));

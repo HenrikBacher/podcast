@@ -159,6 +159,22 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
                 return null;
             }
 
+            // The newest episode feeds the audio-hash check and the website listing. Both can do without it,
+            // so a failed lookup is logged rather than failing the whole refresh.
+            Episode? latestEpisode = null;
+            try
+            {
+                latestEpisode = await apiClient.FetchLatestEpisodeAsync(podcast.Urn, series.LatestEpisodeStartTime, ct);
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                logger.LogWarning(ex, "Latest-episode lookup for {Urn} failed; continuing without it.", podcast.Urn);
+            }
+
+            // The website may only name an episode the feed contains, and stream-only ones are left out.
+            var newestPlayable = latestEpisode is { } candidate && RssBuilder.HasDownloadableAudio(candidate) ? candidate : null;
+            var known = _lastKnownMetadata.GetValueOrDefault(podcast.Slug);
+
             // Skip regeneration if the feed is already up-to-date, so Last-Modified stays stable.
             // On startup and the daily full refresh (forceRegenerate=true) this check is bypassed.
             string outputPath = Path.Combine(config.FeedsDir, $"{podcast.Slug}.xml");
@@ -168,36 +184,51 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
                 // episodes (re-encodes etc.) without bumping LatestEpisodeStartTime — leaving feeds
                 // pointing at 404'd URLs. Verify the latest episode's current asset hash is in the
                 // file before skipping.
-                var latestEpisode = await apiClient.FetchLatestEpisodeAsync(podcast.Urn, series.LatestEpisodeStartTime, ct);
                 if (latestEpisode is null || await FeedReferencesLatestAssetAsync(outputPath, latestEpisode, ct))
                 {
                     logger.LogDebug("Skipped (unchanged)");
-                    return new ProcessResult(RssBuilder.BuildFeedMetadata(podcast, series), Changed: false);
+                    // The feed file is unchanged, so its episode count and newest playable episode are what they
+                    // were when it was written; after a restart the count comes from the file, once.
+                    var unchanged = RssBuilder.BuildFeedMetadata(podcast, series, newestPlayable) with
+                    {
+                        EpisodeCount = known?.EpisodeCount ?? await CountItemsAsync(outputPath),
+                    };
+                    if (newestPlayable is null && known is not null)
+                        unchanged = unchanged with { LatestEpisodeTitle = known.LatestEpisodeTitle, LatestEpisodeUtc = known.LatestEpisodeUtc };
+                    return new ProcessResult(unchanged, Changed: false);
                 }
                 logger.LogDebug("Regenerating: latest episode's audio asset hash has rotated");
             }
 
             var (episodes, complete) = await apiClient.FetchAllEpisodesAsync(podcast.Urn, series.LatestEpisodeStartTime, ct);
 
-            // Never replace a populated feed with an empty one. An upstream hiccup that answers
-            // with zero items would otherwise wipe the whole back catalogue and report success.
-            // (A genuinely empty series with no file yet still gets its first, empty feed.)
-            if (episodes.Count == 0 && File.Exists(outputPath))
-            {
-                logger.LogWarning("DR API returned no episodes for {Urn}. Keeping the existing feed.", podcast.Urn);
-                return null;
-            }
+            // Only episodes with a downloadable file make it into the feed, so every guard below counts those.
+            var playable = episodes.Where(RssBuilder.HasDownloadableAudio).ToList();
 
-            // Likewise for a list DR itself reports as short: it doesn't replace a feed with more episodes.
-            // With as many or more it's written, since it may hold a new episode the old feed lacks.
-            if (!complete && File.Exists(outputPath) && await CountItemsAsync(outputPath) > episodes.Count)
+            // Never replace a populated feed with an empty one. An upstream hiccup that answers with zero
+            // items, or with items whose audio is missing, would otherwise wipe the whole back catalogue and
+            // report success. (A genuinely empty series with no file yet still gets its first, empty feed.)
+            if (playable.Count == 0 && File.Exists(outputPath))
             {
-                logger.LogWarning("Episode list for {Urn} is incomplete ({Count} episodes) and the existing feed has more. Keeping it.",
+                logger.LogWarning("DR API returned no episodes with downloadable audio for {Urn} ({Count} in total). Keeping the existing feed.",
                     podcast.Urn, episodes.Count);
                 return null;
             }
 
-            var (rss, metadata) = RssBuilder.BuildRssFeed(series, episodes, podcast, config.BaseUrl);
+            var newest = newestPlayable ?? playable.MaxBy(e => RssBuilder.TryParseFeedDate(e.StartTime ?? e.PublishTime, out var start) ? start : DateTime.MinValue);
+            var metadata = RssBuilder.BuildFeedMetadata(podcast, series, newest) with { EpisodeCount = playable.Count };
+            var playableCount = playable.Count;
+
+            // Likewise for a list DR itself reports as short: it doesn't replace a feed with more episodes.
+            // With as many or more it's written, since it may hold a new episode the old feed lacks.
+            if (!complete && File.Exists(outputPath) && await CountItemsAsync(outputPath) > playableCount)
+            {
+                logger.LogWarning("Episode list for {Urn} is incomplete ({Count} playable episodes) and the existing feed has more. Keeping it.",
+                    podcast.Urn, playableCount);
+                return null;
+            }
+
+            var rss = RssBuilder.BuildRssFeed(series, episodes, podcast, config.BaseUrl);
 
             // A regeneration that reproduces the file byte for byte must leave it alone: static-file
             // ETag and Last-Modified derive from the file's mtime and length, not its content, so a

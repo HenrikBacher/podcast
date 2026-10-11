@@ -43,7 +43,7 @@ The test suite includes:
 - **RssBuilderTests.cs**: RSS/iTunes XML construction, audio asset selection, date formatting, byte-exact serialization
 - **FeedGenerationServiceTests.cs**: Change detection, asset-hash verification
 - **FeedGenerationRunTests.cs**: Whole generation runs against an in-memory DR API (`TestDoubles.cs`): listing recovery after a restart, byte-identical regenerations left untouched, rotated hashes on `Asc` series, timeout attribution, incomplete lists never replacing a fuller feed
-- **WebsiteGeneratorTests.cs**: Template rendering, static-asset copying, feed sorting, HTML escaping
+- **WebsiteGeneratorTests.cs**: Template rendering, static-asset copying, feed sorting, HTML escaping, exact feed URLs and app links on the cards
 - **FileContainsAsciiTests.cs**: Chunked ASCII search, including needles straddling chunk boundaries
 - **DrApiClientTests.cs**: Pagination `next` links are only followed to the DR API host over HTTPS; targeted short-page refetch (failures keep the first pass, episodes without an id aren't duplicated); newest-first latest-episode lookup; incomplete-list warning; the registered client doesn't follow redirects
 - **FeedRefreshBackgroundServiceTests.cs**: Backoff schedule and overflow bounds; `GeneratorConfig` env parsing
@@ -74,7 +74,7 @@ The test suite includes:
 - **FeedRefreshBackgroundService.cs**: Background service — runs feed generation on startup and on a periodic timer with exponential backoff on failure
 - **PodcastModels.cs**: Data models and `GeneratorConfig`, with JSON source generation for NativeAOT compatibility
 - **PodcastHelpers.cs**: Image URL extraction with priority-based selection
-- **WebsiteGenerator.cs**: Generates the static website — copies static assets from `site/` and renders `index.html` from a template with the feed listing
+- **WebsiteGenerator.cs**: Generates the static website — copies static assets from `site/` (including the self-hosted fonts in `site/fonts/`) and renders `index.html` from a template: one card per feed with tagline, categories, newest episode, episode count, a copy button and "Åbn i app" links (AntennaPod, Apple Podcasts, Overcast, Pocket Casts), newest episode first. `site/script.js` adds search, topic filters, A–Å sorting with Danish collation and relative dates; the page works without it. Light/dark follows the system theme (`prefers-color-scheme`). `styles.css` and `script.js` are linked with a content hash (`{{ASSET_VERSION}}`) so their one-hour cache can't pair new markup with old assets. Dates are shown in Danish local time, computed by the EU summer-time rule because the container has no time-zone data. A failed newest-episode lookup is logged and skipped rather than failing the refresh
 - **MinimalContentTypeProvider.cs**: Small explicit MIME-type map for static file serving (trim-friendly)
 - **RegexCache.cs**: Source-generated regex for DR asset-URL parsing
 - **podcasts.json**: Configuration file containing podcast slugs and URNs to process (Danish podcasts)
@@ -84,9 +84,10 @@ The test suite includes:
 - **Resilient HTTP**: HttpClient configured via `Microsoft.Extensions.Http.Resilience` standard resilience handler (retries, timeouts, circuit breaker). Redirects are not followed: the API key is a custom header, which .NET keeps on a redirect to any host
 - **RSS Standards Compliance**: Generates feeds with iTunes and Atom namespaces
 - **Pagination Handling**: Fetches all episodes across multiple API pages (256 per page, capped at 100 pages per series). DR sometimes returns short pages while its `next` links still advance by the full page size (in Oct 2026 `tyran` came back with 51 of its 128 episodes), so every page that came back with fewer items than it should (judged against the API's `totalSize`) has its window refetched in 5-item pages, merged by episode id (title + start time for the rare episode without one). Windows the pagination never reached (it stopped before `totalSize`) are fetched the same way. If the refetch fails, what was already fetched is kept
+- **Stable Feed URLs**: Subscribers are subscribed to `{BASE_URL}/feeds/{slug}.xml`. `RssBuilder.FeedUrl` is the one place that builds it — for the feed's `atom:self`, the copy button and every app link — so never change its shape or rename a slug
 - **Atomic Writes**: Feeds and `index.html` are written to a `.tmp` file then renamed to avoid serving partial content. `site/index.html` is the *template* and is deliberately excluded from the static-asset copy, so the raw `{{...}}` placeholders are never published
 - **Unchanged Feeds Are Not Rewritten**: A regeneration that reproduces the existing file byte for byte leaves it untouched. Static-file ETag and Last-Modified derive from mtime and length, not content, so even an identical rewrite would make every podcatcher download the feed again
-- **Never Degrade a Good Feed**: A null series body or an empty episode list is treated as a failed refresh rather than written out — an upstream hiccup must not overwrite a populated feed with an empty one. Likewise, an episode list still short of `totalSize` after the refetch doesn't replace a feed that has more episodes
+- **Never Degrade a Good Feed**: A null series body, or an episode list with no downloadable episodes, is treated as a failed refresh rather than written out — an upstream hiccup must not overwrite a populated feed with an empty one. Likewise, an episode list still short of `totalSize` after the refetch doesn't replace a feed that has more episodes
 - **Response Compression**: Brotli/gzip for XML and HTML. Caddy does not compress unless `encode` is configured, so the app does it
 - **Constant-Memory Asset Check**: `FileContainsAsciiAsync` streams the feed in 64 KB pooled chunks (with carry-over across boundaries) instead of decoding it into a string. This runs for every unchanged podcast on every tick; the string version allocated ~4x the feed size per call, all of it on the Large Object Heap
 - **Compressed Upstream Fetches**: the DR API client sets `AutomaticDecompression`, which `HttpClient` does not enable by default — episode pages are large JSON and gzip well
@@ -144,7 +145,7 @@ When extracting image URLs from `ImageAssets` (`PodcastHelpers.cs`):
 In practice every series and episode carries a Podcast 1:1 image (checked Oct 2026), so steps 2–6 are defensive.
 
 ### Audio Asset Selection
-`RssBuilder.SelectAudioAsset` picks the highest-bitrate `mp3` asset as the enclosure audio (the format is matched **case-insensitively**).
+`RssBuilder.SelectAudioAsset` picks the highest-bitrate `mp3` asset as the enclosure audio (the format is matched **case-insensitively**). Episodes without one are left out of the feed (`RssBuilder.HasDownloadableAudio`): DR offers some episodes, mostly in music-heavy shows, only as an HLS stream, which podcast apps can't play from a feed. The episode count on the website counts the feed's items, not DR's total.
 
 ### CI/CD Workflows
 

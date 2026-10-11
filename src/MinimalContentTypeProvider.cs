@@ -13,6 +13,7 @@ internal sealed class MinimalContentTypeProvider : IContentTypeProvider
         [".png"] = "image/png",
         [".svg"] = "image/svg+xml",
         [".txt"] = "text/plain; charset=utf-8",
+        [".woff2"] = "font/woff2",
     };
 
     public bool TryGetContentType(string subpath, out string contentType)

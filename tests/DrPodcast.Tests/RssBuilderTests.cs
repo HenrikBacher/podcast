@@ -70,7 +70,7 @@ public class RssBuilderTests
         };
         var podcast = new Podcast("test", "urn:test", null);
 
-        var (rss, _) = RssBuilder.BuildRssFeed(series, episodes, podcast, "https://example.com");
+        var rss = RssBuilder.BuildRssFeed(series, episodes, podcast, "https://example.com");
 
         var items = rss.Descendants("item").Select(i => i.Element("title")?.Value).ToList();
         items.Should().Equal("S2E1", "S2E2", "S1E1", "S1E2");
@@ -89,7 +89,7 @@ public class RssBuilderTests
         };
         var podcast = new Podcast("test", "urn:test", null);
 
-        var (rss, _) = RssBuilder.BuildRssFeed(series, episodes, podcast, "https://example.com");
+        var rss = RssBuilder.BuildRssFeed(series, episodes, podcast, "https://example.com");
 
         var items = rss.Descendants("item").Select(i => i.Element("title")?.Value).ToList();
         items.Should().Equal("S2E2", "S2E1", "S1E2", "S1E1");
@@ -107,7 +107,7 @@ public class RssBuilderTests
         };
         var podcast = new Podcast("test", "urn:test", null);
 
-        var (rss, _) = RssBuilder.BuildRssFeed(series, episodes, podcast, "https://example.com");
+        var rss = RssBuilder.BuildRssFeed(series, episodes, podcast, "https://example.com");
 
         var items = rss.Descendants("item").Select(i => i.Element("title")?.Value).ToList();
         items.Should().Equal("Ep1", "Ep2", "Ep3");
@@ -125,7 +125,7 @@ public class RssBuilderTests
         };
         var podcast = new Podcast("test", "urn:test", null);
 
-        var (rss, _) = RssBuilder.BuildRssFeed(series, episodes, podcast, "https://example.com");
+        var rss = RssBuilder.BuildRssFeed(series, episodes, podcast, "https://example.com");
 
         var items = rss.Descendants("item").Select(i => i.Element("title")?.Value).ToList();
         items.Should().Equal("Ep3", "Ep2", "Ep1");
@@ -145,10 +145,25 @@ public class RssBuilderTests
         };
         var podcast = new Podcast("test", "urn:test", null);
 
-        var (rss, _) = RssBuilder.BuildRssFeed(series, episodes, podcast, "https://example.com");
+        var rss = RssBuilder.BuildRssFeed(series, episodes, podcast, "https://example.com");
 
         var items = rss.Descendants("item").Select(i => i.Element("title")?.Value).ToList();
         items.Should().Equal("S2E1", "S1E1", "S1E2");
+    }
+
+    [Fact]
+    public void BuildRssFeed_LeavesOutEpisodesWithoutADownloadableFile()
+    {
+        // DR offers some episodes only as an HLS stream; in a podcast app they'd be unplayable entries.
+        var episodes = new List<Episode>
+        {
+            CreateEpisode("Has mp3", order: 2, audioAssets: [new AudioAsset("mp3", 192, "https://example.com/a.mp3", 1)]),
+            CreateEpisode("Stream only", order: 1, audioAssets: [new AudioAsset("HLS", 0, "https://example.com/a.m3u8", null)]),
+        };
+
+        var rss = RssBuilder.BuildRssFeed(CreateSeries(), episodes, new Podcast("test", "urn:test", null), "https://example.com");
+
+        rss.Descendants("item").Select(i => i.Element("title")?.Value).Should().Equal("Has mp3");
     }
 
     [Fact]
@@ -158,7 +173,7 @@ public class RssBuilderTests
         XNamespace itunes = "http://www.itunes.com/dtds/podcast-1.0.dtd";
         var podcast = new Podcast("test", "urn:test", null);
 
-        var (rss, _) = RssBuilder.BuildRssFeed(CreateSeries(numberOfSeries: 3), [], podcast, "https://example.com");
+        var rss = RssBuilder.BuildRssFeed(CreateSeries(numberOfSeries: 3), [], podcast, "https://example.com");
 
         rss.Element("channel")!.Element(itunes + "season").Should().BeNull();
     }
@@ -169,7 +184,7 @@ public class RssBuilderTests
         var series = CreateSeries();
         var podcast = new Podcast("test", "urn:test", null);
 
-        var (rss, _) = RssBuilder.BuildRssFeed(series, null, podcast, "https://example.com");
+        var rss = RssBuilder.BuildRssFeed(series, null, podcast, "https://example.com");
 
         rss.Descendants("item").Should().BeEmpty();
     }
@@ -180,7 +195,7 @@ public class RssBuilderTests
         var series = CreateSeries();
         var podcast = new Podcast("my-show", "urn:test", null);
 
-        var (rss, _) = RssBuilder.BuildRssFeed(series, [], podcast, "https://feeds.example.com");
+        var rss = RssBuilder.BuildRssFeed(series, [], podcast, "https://feeds.example.com");
 
         XNamespace atom = "http://www.w3.org/2005/Atom";
         var link = rss.Descendants(atom + "link").FirstOrDefault();
@@ -214,7 +229,7 @@ public class RssBuilderTests
     public void BuildEpisodeItem_NoAudioAssets_NoEnclosure()
     {
         XNamespace itunes = "http://www.itunes.com/dtds/podcast-1.0.dtd";
-        var episode = CreateEpisode("Test", audioAssets: null);
+        var episode = CreateEpisode("Test") with { AudioAssets = null };
 
         var item = RssBuilder.BuildEpisodeItem(episode, null, itunes);
 
@@ -345,6 +360,34 @@ public class RssBuilderTests
         var item = RssBuilder.BuildEpisodeItem(episode, null, itunes);
 
         item.Element("pubDate")!.Value.Should().Contain("2024").And.Contain("Jan");
+    }
+
+    #endregion
+
+    #region FeedUrl and metadata
+
+    [Fact]
+    public void FeedUrl_KeepsTheShapeExistingSubscriptionsUse()
+    {
+        RssBuilder.FeedUrl("https://podcasts.example.dk/", "genstart").Should().Be("https://podcasts.example.dk/feeds/genstart.xml");
+        RssBuilder.FeedUrl("https://podcasts.example.dk", "genstart").Should().Be("https://podcasts.example.dk/feeds/genstart.xml");
+    }
+
+    [Fact]
+    public void BuildFeedMetadata_CarriesWhatTheWebsiteShows()
+    {
+        var series = CreateSeries(title: "Bakspejl") with
+        {
+            Punchline = "Afgørende nedslag i historien",
+            Categories = ["Dokumentar", "", "Historie"],
+            LatestEpisodeStartTime = "2026-10-05T05:00:00+02:00",
+        };
+
+        var metadata = RssBuilder.BuildFeedMetadata(new Podcast("bakspejl", "urn:test", null), series,
+            CreateEpisode("LA Riots 3:4") with { StartTime = "2026-10-05T05:00:00+02:00" });
+
+        metadata.Should().Be(new FeedMetadata("bakspejl", "Bakspejl", null, "Afgørende nedslag i historien", "Dokumentar|Historie", null,
+            "LA Riots 3:4", new DateTime(2026, 10, 5, 3, 0, 0, DateTimeKind.Utc)));
     }
 
     #endregion

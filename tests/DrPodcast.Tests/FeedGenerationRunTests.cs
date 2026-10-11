@@ -124,6 +124,45 @@ public class FeedGenerationRunTests : IDisposable
     }
 
     [Fact]
+    public async Task StreamOnlyEpisodes_AreLeftOutOfTheFeedAndTheListedCount()
+    {
+        var streamOnly = FakeDrApi.EpisodeNumber(3) with { AudioAssets = [new AudioAsset("HLS", 0, "https://api.dr.dk/stream.m3u8", null)] };
+        _api.Set(UrnA, FakeDrApi.SeriesWith("Alpha", latestEpisode: 3), [FakeDrApi.EpisodeNumber(1), FakeDrApi.EpisodeNumber(2), streamOnly]);
+        await NewService().GenerateFeedsAsync(_podcasts, _config, forceRegenerate: true);
+
+        File.ReadAllText(FeedPath("alpha")).Should().Contain("ep-2").And.NotContain("ep-3");
+        // The listing names the newest episode the feed actually has, not the stream-only one.
+        Listing().Should().Contain("2 afsnit").And.Contain(">Episode 2<").And.NotContain("Episode 3");
+
+        // After a restart the feed is skipped as unchanged, and the count comes from the file.
+        await NewService().GenerateFeedsAsync(_podcasts, _config);
+        Listing().Should().Contain("2 afsnit");
+    }
+
+    [Fact]
+    public async Task EpisodesThatAllLackAudio_DoNotEmptyAnExistingFeed()
+    {
+        await NewService().GenerateFeedsAsync(_podcasts, _config, forceRegenerate: true);
+
+        // A complete list, but DR's audio is missing from every episode for the moment.
+        _api.Set(UrnA, FakeDrApi.SeriesWith("Alpha", latestEpisode: 2),
+            [.. FakeDrApi.Episodes(2).Select(e => e with { AudioAssets = [new AudioAsset("HLS", 0, "https://api.dr.dk/s.m3u8", null)] })]);
+        await NewService().GenerateFeedsAsync(_podcasts, _config, forceRegenerate: true);
+
+        File.ReadAllText(FeedPath("alpha")).Should().Contain("ep-2");
+    }
+
+    [Fact]
+    public async Task FailedLatestEpisodeLookup_DoesNotFailTheRefresh()
+    {
+        _api.FailRequest = u => u.Query.Contains("sort=desc");
+
+        await NewService().GenerateFeedsAsync(_podcasts, _config, forceRegenerate: true);
+
+        File.ReadAllText(FeedPath("alpha")).Should().Contain("ep-2");
+    }
+
+    [Fact]
     public async Task AscendingSeries_RotatedAudioHashOnTheNewestEpisode_IsPickedUp()
     {
         // DR re-encodes published episodes without bumping latestEpisodeStartTime. For an "Asc" series
