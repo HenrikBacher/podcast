@@ -80,7 +80,9 @@ public static class RssBuilder
             new XElement(atom + "link",
                 new XAttribute("href", FeedUrl(baseUrl, podcast.Slug)),
                 new XAttribute("rel", "self"),
-                new XAttribute("type", "application/xml")),
+                // The feed's own media type, as the RSS best-practice profile gives it. (The file is still
+                // served as application/xml, which browsers display rather than download.)
+                new XAttribute("type", "application/rss+xml")),
             new XElement("title", series?.Title),
             new XElement("link", series?.PresentationUrl),
             new XElement("description", series?.Description),

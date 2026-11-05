@@ -218,6 +218,8 @@ public class RssBuilderTests
         var link = rss.Descendants(atom + "link").FirstOrDefault();
         link.Should().NotBeNull();
         link!.Attribute("href")!.Value.Should().Be("https://feeds.example.com/feeds/my-show.xml");
+        link.Attribute("rel")!.Value.Should().Be("self");
+        link.Attribute("type")!.Value.Should().Be("application/rss+xml");
     }
 
     #endregion
