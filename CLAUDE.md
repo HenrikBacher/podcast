@@ -154,8 +154,8 @@ In practice every series and episode carries a Podcast 1:1 image (checked Oct 20
 ### CI/CD Workflows
 
 #### build-and-release.yml
-- **Triggers**: Pushes/PRs to main affecting `src/`, `tests/`, `site/`, or `Dockerfile`; weekly scheduled run
+- **Triggers**: Pushes/PRs to main affecting `src/`, `tests/`, `site/`, or `Dockerfile`; weekly scheduled run (Wednesday 02:00 UTC), which publishes a patch release of `main` so base-image security updates reach the published image
 - **Versioning**: Determined by PR body checkboxes — Major / Minor / Patch
-- **Docker**: Builds and pushes image to `ghcr.io/{repository}` on merge to main
-- **Release**: Creates a GitHub Release tagged with the new version on merge to main
+- **Docker**: Builds and pushes image to `ghcr.io/{repository}` on merge to main and on the weekly run (base images pulled afresh)
+- **Release**: Creates a GitHub Release tagged with the new version on merge to main and on the weekly run
 - **PRs**: Build and test only — no push, no release

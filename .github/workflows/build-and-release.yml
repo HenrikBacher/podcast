@@ -114,6 +114,12 @@ jobs:
 
             $version = Get-NextVersion $major $minor $patch $bumpType
             Write-Host "Release: v$version ($bumpType)"
+          } elseif ($env:EVENT_NAME -eq "schedule") {
+            # The weekly rebuild exists to ship base-image and SDK security updates, so it publishes:
+            # a patch release of main, keeping every pushed image under its own immutable version tag.
+            $isRelease = "true"
+            $version = Get-NextVersion $major $minor $patch "patch"
+            Write-Host "Scheduled rebuild: v$version"
           } else {
             $prNumber = $env:PR_NUMBER
             if (-not $prNumber) { $prNumber = "0" }
@@ -171,7 +177,7 @@ jobs:
           sbom: true
           provenance: mode=max
 
-  # Push to main only: the sole job holding write-scoped permissions.
+  # Push to main and the weekly rebuild only: the sole job holding write-scoped permissions.
   release:
     needs: [determine-version, test]
     if: needs.determine-version.outputs.is-release == 'true'
@@ -211,6 +217,8 @@ jobs:
         with:
           context: .
           push: true
+          # Always resolve the base images afresh, so a rebuild picks up their latest patches.
+          pull: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
@@ -232,6 +240,8 @@ jobs:
           name: Release ${{ needs.determine-version.outputs.version-tag }}
           body: |
             ## Release ${{ needs.determine-version.outputs.version }}
+
+            ${{ github.event_name == 'schedule' && 'Scheduled weekly rebuild of `main`, picking up updated base images.' || '' }}
 
             ### Docker
 
