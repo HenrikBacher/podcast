@@ -12,7 +12,9 @@ services:
       - TZ=Europe/Copenhagen
     read_only: true
     tmpfs:
-      - /app/output
+      # Writable by the non-root app user (99:100). Docker already defaults tmpfs to 1777;
+      # podman mounts it root-owned 755 unless told, and the app then can't create _site/.
+      - /app/output:mode=1777
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
       interval: 30s
