@@ -98,18 +98,18 @@ jobs:
           if ($env:EVENT_NAME -eq "push" -and $env:GIT_REF -eq "refs/heads/main") {
             $isRelease = "true"
 
-            $commitMsg = git log -1 --pretty=%B
-            $prMatch = $commitMsg -match '#(\d+)'
-            if ($prMatch -and $matches -and $matches.Count -gt 1) {
-              $prNumber = $matches[1]
-              Write-Host "Merged PR #$prNumber"
-
-              try {
-                $prData = gh pr view $prNumber --json body --jq '.body' 2>$null
-                if ($prData) { $bumpType = Get-BumpTypeFromBody $prData }
-              } catch {
-                Write-Host "Could not read PR, using PATCH (default)"
-              }
+            # Ask GitHub which merged PR this commit came from, rather than parsing the commit
+            # message: that works for merge, squash and rebase merges alike. (The message parsing
+            # broke on multi-line messages: git's output is an array of lines, -match on an array
+            # filters instead of setting $matches, and every release silently fell back to PATCH.)
+            $prJson = gh api "repos/$env:GITHUB_REPOSITORY/commits/$env:GITHUB_SHA/pulls" `
+              --jq 'map(select(.merged_at != null)) | .[0] // empty | {number, body}' 2>$null
+            if ($LASTEXITCODE -eq 0 -and $prJson) {
+              $pr = $prJson | ConvertFrom-Json
+              $bumpType = Get-BumpTypeFromBody $pr.body
+              Write-Host "Merged PR #$($pr.number)"
+            } else {
+              Write-Host "No merged PR found for $env:GITHUB_SHA, using PATCH (default)"
             }
 
             $version = Get-NextVersion $major $minor $patch $bumpType
