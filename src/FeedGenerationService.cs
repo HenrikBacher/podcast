@@ -26,6 +26,10 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
     // so it would otherwise stay missing from the page. DR title and cover edits get through the same way.
     private IReadOnlyList<FeedMetadata>? _renderedListing;
 
+    // Series with nothing downloadable, by slug, with the latest-episode time they were checked at. They
+    // never get a feed file, so without this every run would fetch their whole episode list again.
+    private readonly ConcurrentDictionary<string, string?> _nothingPlayable = new();
+
     private long _lastSuccessfulRunUtcTicks;
     public DateTime? LastSuccessfulRunUtc
     {
@@ -203,6 +207,9 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
             string outputPath = Path.Combine(config.FeedsDir, $"{podcast.Slug}.xml");
             var known = _lastKnownMetadata.GetValueOrDefault(podcast.Slug);
 
+            if (!forceRegenerate && _nothingPlayable.TryGetValue(podcast.Slug, out var checkedAt) && checkedAt == series.LatestEpisodeStartTime)
+                return new ProcessResult(podcast.Slug, null, Changed: false);
+
             // Skip regeneration if the feed is already up-to-date, so Last-Modified stays stable.
             // On startup and the daily full refresh (forceRegenerate=true) this check is bypassed.
             var upToDate = !forceRegenerate && File.Exists(outputPath) && !await HasNewerEpisodesAsync(outputPath, series, ct);
@@ -269,6 +276,7 @@ public sealed class FeedGenerationService(DrApiClient apiClient, ILogger<FeedGen
             {
                 // Typically a music show DR offers only as a stream. Nothing to publish, and nothing wrong.
                 logger.LogDebug("No episodes with downloadable audio; not published.");
+                _nothingPlayable[podcast.Slug] = series.LatestEpisodeStartTime;
                 return new ProcessResult(podcast.Slug, null, Changed: false);
             }
             if (playable.Count == 0)

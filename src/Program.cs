@@ -5,7 +5,9 @@ using Microsoft.AspNetCore.ResponseCompression;
 var builder = WebApplication.CreateBuilder(args);
 builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
 builder.Logging.AddFilter("System.Net.Http.HttpClient", LogLevel.Warning);
-builder.Logging.AddFilter("Polly", LogLevel.Warning);
+// Polly logs every timed-out or retried attempt with a stack trace, even when the retry succeeds.
+// A request that fails for good is logged by the caller.
+builder.Logging.AddFilter("Polly", LogLevel.None);
 builder.Logging.AddSimpleConsole(options =>
 {
     options.SingleLine = true;

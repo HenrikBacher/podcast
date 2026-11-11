@@ -58,6 +58,23 @@ public class FeedGenerationRunTests : IDisposable
     }
 
     [Fact]
+    public async Task SeriesWithNothingDownloadable_IsNotFetchedAgainUntilItChanges()
+    {
+        _api.Set(UrnA, FakeDrApi.SeriesWith("Alpha", latestEpisode: 2), [.. FakeDrApi.Episodes(2).Select(e => e with { AudioAssets = [] })]);
+        var service = NewService();
+        await service.GenerateFeedsAsync(_podcasts, _config, forceRegenerate: true);
+        var before = _api.Requests.Count(r => r.AbsoluteUri.Contains($"{UrnA}/episodes"));
+
+        await service.GenerateFeedsAsync(_podcasts, _config);
+        _api.Requests.Count(r => r.AbsoluteUri.Contains($"{UrnA}/episodes")).Should().Be(before);
+
+        // A new episode, now downloadable, gets its feed.
+        _api.Set(UrnA, FakeDrApi.SeriesWith("Alpha", latestEpisode: 3), FakeDrApi.Episodes(3));
+        await service.GenerateFeedsAsync(_podcasts, _config);
+        File.Exists(FeedPath("alpha")).Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Regeneration_WithIdenticalContent_LeavesTheFileUntouched()
     {
         await NewService().GenerateFeedsAsync(_podcasts, _config, forceRegenerate: true);
