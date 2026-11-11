@@ -27,7 +27,8 @@ public sealed class DrApiClient(IHttpClientFactory httpClientFactory, ILogger<Dr
         services.AddHttpClient(HttpClientName, client =>
             {
                 client.DefaultRequestHeaders.Add("X-Apikey", apiKey);
-                client.Timeout = TimeSpan.FromSeconds(30);
+                // Outermost bound, wrapping every retry; kept above the handler's total timeout below.
+                client.Timeout = TimeSpan.FromSeconds(100);
                 // GetAsync buffers the whole body (after decompression) before returning, so this caps
                 // what a single response can cost in memory — a decompression bomb or runaway upstream
                 // fails that podcast's refresh instead of exhausting the container. A full 256-episode
@@ -43,7 +44,16 @@ public sealed class DrApiClient(IHttpClientFactory httpClientFactory, ILogger<Dr
                 // to any host — the leak ResolveNextUrl guards against for pagination links.
                 AllowAutoRedirect = false,
             })
-            .AddStandardResilienceHandler();
+            .AddStandardResilienceHandler(options =>
+            {
+                // The default 10 s per attempt is too tight for a full 256-episode page (several MB)
+                // while other podcasts download in parallel: on startup DR regularly took longer, so the
+                // attempt was cancelled and the page fetched again from scratch.
+                options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(30);
+                options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(90);
+                // Options validation requires the breaker's sampling window to be at least twice the attempt timeout.
+                options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(60);
+            });
 
         services.AddSingleton<DrApiClient>();
     }
